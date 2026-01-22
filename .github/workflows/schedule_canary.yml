@@ -3,7 +3,7 @@ name: Schedule Canary
 on:
   schedule:
     - cron: "*/10 * * * *"   # every 10 minutes
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   ping:
