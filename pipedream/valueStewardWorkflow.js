@@ -18,47 +18,69 @@ export default defineComponent({
 
     const githubToken = process.env.GITHUB_TOKEN;
 
-    // 1) Tick: perceive & log
+    // --- NEW: market-hours guardrail ---
+    const alpaca = new Alpaca(alpacaConfig);
+    const clock = await alpaca.getClock();
+
+    if (!clock.is_open) {
+      const now = new Date().toISOString();
+      const policy = await loadPolicy(githubToken);
+
+      const result = {
+        ranAt: now,
+        accountStatus: "MARKET_CLOSED",
+        equity: null,
+        buyingPower: null,
+        mode: policy.mode,
+        risk_level: policy.risk_level,
+        targetCashFraction: 1 - policy.risk_level,
+      };
+
+      const training = {
+        updated: false,
+        reason: "market_closed",
+      };
+
+      console.log("Value Steward skipped (market closed):", {
+        policy,
+        result,
+        training,
+      });
+
+      return { policy, result, training };
+    }
+    // --- END NEW ---
+
+    // Re-use the alpaca instance when calling runTick
     const { policy, result } = await runTick({
-      alpacaConfig,
+      alpaca,
       githubToken,
     });
 
-    // 2) Train: update policy based on accumulated history (with guardrails)
     const training = await trainPolicyFromHistory({
       githubToken,
       minHistory: 10,
-      equityDeltaThreshold: 0,
-      maxStep: 0.01,
-      minRisk: 0.1,
-      maxRisk: 0.9,
+      // other trainer params...
     });
 
-    console.log("Value Steward executed:", {
-      policy,
-      result,
-      training,
-    });
+    console.log("Value Steward executed:", { policy, result, training });
 
     return { policy, result, training };
   },
 });
 
+
 // ---------------- TICK RUNNER ----------------
 
-async function runTick({ alpacaConfig, githubToken }) {
-  const alpaca = new Alpaca(alpacaConfig);
-
+async function runTick({ alpaca, githubToken }) {
   const policy = await loadPolicy(githubToken);
 
   const result = await runValueSteward({ alpaca, policy });
 
-  const entry = {
+  await appendHistory(githubToken, {
     ...result,
     policyVersion: policy.version,
-  };
-
-  await appendHistory(githubToken, entry);
+  });
 
   return { policy, result };
 }
