@@ -1,9 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "mode": "read-only",
   "risk_level": 0.5,
   "max_positions": 3,
   "rebalance_threshold": 0.02,
-  "lastTrainedAt": null,
+  "lastTrainedAt": "2026-01-22T17:52:39.855Z",
   "lastEquityDelta": 0
 }
