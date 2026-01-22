@@ -26,8 +26,9 @@
 - Training hyperparameters (minHistory, maxStep, bounds) live in the Pipedream script for easy tuning.
 
 ## Per-tick perception
-- Each history entry now includes account and timing context captured via read-only Alpaca endpoints.
-- Account fields: `equity`, `buyingPower`, `cashUtilization`, `equityToBuyingPower`.
-- Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`.
+- Each history entry now captures an EOD snapshot (run near market close) via read-only Alpaca endpoints.
+- Account fields: `equity`, `buyingPower`, `cash`, `portfolioValue`, `patternDayTrader`, `marginMultiplier`, `cashUtilization`, `equityToBuyingPower`.
+- Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`, `grossExposure`, `netExposure`, `maxPositionWeight`, and `positions[]` summaries.
 - Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
+- Placeholder context: `worldContext` (empty for now; reserved for future signals).
 - All of this data is collected read-only; no orders are placed during ticks or training.
