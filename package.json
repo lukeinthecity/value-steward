@@ -1,0 +1,12 @@
+{
+  "name": "value-steward",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "train:policy": "node scripts/trainPolicy.js"
+  },
+  "dependencies": {
+    "@alpacahq/alpaca-trade-api": "^3.2.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "mode": "read-only",
+  "risk_level": 0.5,
+  "max_positions": 3,
+  "rebalance_threshold": 0.02,
+  "lastTrainedAt": null,
+  "lastEquityDelta": 0
+}
