@@ -1,0 +1,58 @@
+name: Value Steward Tick
+
+on:
+  schedule:
+    # Every 30 minutes; adjust later if needed
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run Value Steward tick
+        env:
+          # Alpaca paper trading settings
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER_BASE_URL: ${{ secrets.ALPACA_PAPER_BASE_URL }}
+
+          # Steward mode & safety
+          VS_MODE: ${{ secrets.VS_MODE }}
+          VS_SHADOW_MODE: ${{ secrets.VS_SHADOW_MODE }}
+          VS_EXECUTION_ARMED: ${{ secrets.VS_EXECUTION_ARMED }}
+
+          # Risk tuning (optional; can fall back to code defaults)
+          TARGET_RISK_EXPOSURE_PCT_LOW: ${{ secrets.TARGET_RISK_EXPOSURE_PCT_LOW }}
+          REBALANCE_BUFFER_PCT: ${{ secrets.REBALANCE_BUFFER_PCT }}
+
+          # Dollar caps
+          MAX_EFFECTIVE_CAPITAL_DOLLARS: ${{ secrets.MAX_EFFECTIVE_CAPITAL_DOLLARS }}
+          MAX_TRADE_NOTIONAL_DOLLARS: ${{ secrets.MAX_TRADE_NOTIONAL_DOLLARS }}
+          MIN_TRADE_NOTIONAL_DOLLARS: ${{ secrets.MIN_TRADE_NOTIONAL_DOLLARS }}
+        run: |
+          mkdir -p logs
+          python -m valuesteward.cli tick
+
+      - name: Upload intent log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intent-log
+          path: logs/intent_log.jsonl
+          if-no-files-found: ignore

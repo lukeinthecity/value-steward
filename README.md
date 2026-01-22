@@ -20,3 +20,28 @@ Quickstart:
 5) Run a basic smoke command:
    - `python -m valuesteward.cli status`
    - `python -m valuesteward.cli tick`
+
+## GitHub Actions deployment (optional)
+
+This repo ships with a basic GitHub Actions workflow that can run a single
+Value Steward `tick` on a schedule (every 30 minutes by default).
+
+To enable it:
+
+1. Add the following secrets in your GitHub repository settings:
+
+   - `ALPACA_API_KEY_ID` (paper key)
+   - `ALPACA_SECRET_KEY` (paper secret)
+   - `ALPACA_PAPER_BASE_URL` = `https://paper-api.alpaca.markets`
+
+   - `VS_MODE` = `LOW`
+   - `VS_SHADOW_MODE` = `true` (start in shadow mode)
+   - `VS_EXECUTION_ARMED` = `false`
+
+   - `MAX_EFFECTIVE_CAPITAL_DOLLARS` = `20`
+   - `MAX_TRADE_NOTIONAL_DOLLARS` = `10`
+   - `MIN_TRADE_NOTIONAL_DOLLARS` = `1`
+
+2. Go to the GitHub Actions tab, select \"Value Steward Tick\", and run the
+   workflow manually to verify it works in shadow mode before enabling the
+   schedule for real.
