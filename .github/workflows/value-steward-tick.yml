@@ -25,6 +25,17 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Debug env presence
+        run: |
+          echo "VS_MODE=${VS_MODE}"
+          echo "VS_SHADOW_MODE=${VS_SHADOW_MODE}"
+          echo "VS_EXECUTION_ARMED=${VS_EXECUTION_ARMED}"
+          echo "TARGET_RISK_EXPOSURE_PCT_LOW=${TARGET_RISK_EXPOSURE_PCT_LOW}"
+          echo "REBALANCE_BUFFER_PCT=${REBALANCE_BUFFER_PCT}"
+          echo "MAX_EFFECTIVE_CAPITAL_DOLLARS=${MAX_EFFECTIVE_CAPITAL_DOLLARS}"
+          echo "MAX_TRADE_NOTIONAL_DOLLARS=${MAX_TRADE_NOTIONAL_DOLLARS}"
+          echo "MIN_TRADE_NOTIONAL_DOLLARS=${MIN_TRADE_NOTIONAL_DOLLARS}"
+
       - name: Run Value Steward tick
         env:
           # Alpaca paper trading settings
