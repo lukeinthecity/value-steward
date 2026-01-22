@@ -18,68 +18,26 @@ export default defineComponent({
 
     const githubToken = process.env.GITHUB_TOKEN;
 
-    // --- NEW: market-hours guardrail ---
     const alpaca = new Alpaca(alpacaConfig);
     const clock = await alpaca.getClock();
-
-    if (!clock.is_open) {
-      const now = new Date().toISOString();
-      const policy = await loadPolicy(githubToken);
-
-      const worldContext = { summary: null, tags: [], sources: [] };
-      const result = {
-        ranAt: now,
-        accountStatus: "MARKET_CLOSED",
-        equity: null,
-        buyingPower: null,
-        cash: null,
-        portfolioValue: null,
-        patternDayTrader: null,
-        marginMultiplier: null,
-        mode: policy.mode,
-        risk_level: policy.risk_level,
-        targetCashFraction: 1 - policy.risk_level,
-        equityToBuyingPower: null,
-        cashUtilization: null,
-        numPositions: 0,
-        longMarketValue: 0,
-        shortMarketValue: 0,
-        grossExposure: 0,
-        netExposure: 0,
-        maxPositionWeight: null,
-        positions: [],
-        isMarketOpen: false,
-        nextOpen: clock.next_open ?? null,
-        nextClose: clock.next_close ?? null,
-        worldContext,
-      };
-
-      const training = {
-        updated: false,
-        reason: "market_closed",
-      };
-
-      console.log("Value Steward skipped (market closed):", {
-        policy,
-        result,
-        training,
-      });
-
-      return { policy, result, training };
-    }
-    // --- END NEW ---
+    const marketOpen = !!clock.is_open;
 
     // Re-use the alpaca instance when calling runTick
     const { policy, result } = await runTick({
       alpaca,
       githubToken,
+      marketOpen,
+      clock,
     });
 
-    const training = await trainPolicyFromHistory({
-      githubToken,
-      minHistory: 10,
-      // other trainer params...
-    });
+  const training = await trainPolicyFromHistory({
+    githubToken,
+    minHistory: 10,
+    equityDeltaThreshold: 0,
+    maxStep: 0.01,
+    minRisk: 0.1,
+    maxRisk: 0.9,
+  });
 
     console.log("Value Steward executed:", { policy, result, training });
 
@@ -90,10 +48,10 @@ export default defineComponent({
 
 // ---------------- TICK RUNNER ----------------
 
-async function runTick({ alpaca, githubToken }) {
+async function runTick({ alpaca, githubToken, marketOpen, clock }) {
   const policy = await loadPolicy(githubToken);
 
-  const result = await runValueSteward({ alpaca, policy });
+  const result = await runValueSteward({ alpaca, policy, marketOpen, clock });
 
   await appendHistory(githubToken, {
     ...result,
@@ -103,7 +61,7 @@ async function runTick({ alpaca, githubToken }) {
   return { policy, result };
 }
 
-async function runValueSteward({ alpaca, policy }) {
+async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
   const now = new Date().toISOString();
   const account = await alpaca.getAccount();
 
@@ -163,18 +121,9 @@ async function runValueSteward({ alpaca, policy }) {
     console.error("Error fetching positions:", err?.message ?? err);
   }
 
-  let isMarketOpen = null;
-  let nextOpen = null;
-  let nextClose = null;
-
-  try {
-    const clock = await alpaca.getClock();
-    isMarketOpen = !!clock.is_open;
-    nextOpen = clock.next_open ?? null;
-    nextClose = clock.next_close ?? null;
-  } catch (err) {
-    console.error("Error fetching clock:", err?.message ?? err);
-  }
+  const isMarketOpen = typeof marketOpen === "boolean" ? marketOpen : null;
+  const nextOpen = clock?.next_open ?? null;
+  const nextClose = clock?.next_close ?? null;
 
   const equityToBuyingPower =
     buyingPowerNum && buyingPowerNum > 0 && equityNum !== null
@@ -204,7 +153,8 @@ async function runValueSteward({ alpaca, policy }) {
 
   return {
     ranAt: now,
-    accountStatus: account.status,
+    marketOpen: isMarketOpen,
+    accountStatus: isMarketOpen ? account.status : "MARKET_CLOSED",
     equity: equityNum,
     buyingPower: buyingPowerNum,
     cash,
@@ -350,6 +300,157 @@ async function loadHistoryText(token) {
   return { text, sha: data.sha };
 }
 
+async function appendTrainingLogEntry(token, entry) {
+  const path = "data/training-log.jsonl";
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+
+  let sha = null;
+  let existing = "";
+
+  const getRes = await fetch(url, { headers: githubHeaders(token) });
+  if (getRes.status === 200) {
+    const data = await getRes.json();
+    sha = data.sha;
+    existing = Buffer.from(data.content, "base64").toString("utf8");
+  } else if (getRes.status !== 404) {
+    throw new Error(
+      `Error reading training log: ${getRes.status} ${await getRes.text()}`
+    );
+  }
+
+  const line = JSON.stringify(entry) + "\n";
+  const newContent = existing + line;
+  const encoded = Buffer.from(newContent).toString("base64");
+
+  const body = {
+    message: `Train policy at ${entry.ranAt}`,
+    content: encoded,
+    ...(sha ? { sha } : {}),
+  };
+
+  const putRes = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(token),
+    body: JSON.stringify(body),
+  });
+
+  if (!putRes.ok) {
+    throw new Error(
+      `Error writing training log: ${putRes.status} ${await putRes.text()}`
+    );
+  }
+
+  const data = await putRes.json();
+  return { sha: data.content.sha, commitSha: data.commit.sha };
+}
+
+function evaluateHistoryMetrics(historyEntries) {
+  const entries = Array.isArray(historyEntries) ? historyEntries : [];
+  const equities = entries
+    .map((h) => parseFloat(h.equity))
+    .filter((n) => !Number.isNaN(n));
+
+  const sampleCount = entries.length;
+  const equityFirst = equities.length ? equities[0] : null;
+  const equityLast = equities.length ? equities[equities.length - 1] : null;
+  const equityReturn =
+    equityFirst && equityLast && equityFirst !== 0
+      ? (equityLast - equityFirst) / equityFirst
+      : null;
+
+  const returns = [];
+  for (let i = 1; i < equities.length; i += 1) {
+    const prev = equities[i - 1];
+    const curr = equities[i];
+    if (prev === 0) continue;
+    returns.push((curr - prev) / prev);
+  }
+
+  const equityVolatility = returns.length >= 2 ? stdDev(returns) : null;
+
+  let maxDrawdown = null;
+  if (equities.length >= 2) {
+    let peak = equities[0];
+    let worst = 0;
+    for (const value of equities) {
+      if (value > peak) peak = value;
+      if (peak > 0) {
+        const drawdown = (value - peak) / peak;
+        if (drawdown < worst) worst = drawdown;
+      }
+    }
+    maxDrawdown = Math.abs(worst);
+  }
+
+  const avgCashUtilization = mean(
+    entries
+      .map((h) =>
+        typeof h.cashUtilization === "number" ? h.cashUtilization : null
+      )
+      .filter((n) => n !== null)
+  );
+
+  const avgGrossExposureRatio = mean(
+    entries
+      .map((h) => {
+        const gross =
+          typeof h.grossExposure === "number" ? h.grossExposure : null;
+        const pv =
+          typeof h.portfolioValue === "number" ? h.portfolioValue : null;
+        if (gross === null || pv === null || pv === 0) return null;
+        return gross / pv;
+      })
+      .filter((n) => n !== null)
+  );
+
+  const avgMaxPositionWeight = mean(
+    entries
+      .map((h) =>
+        typeof h.maxPositionWeight === "number" ? h.maxPositionWeight : null
+      )
+      .filter((n) => n !== null)
+  );
+
+  const isUptrend = equityReturn !== null ? equityReturn > 0 : false;
+  const isDowntrend = equityReturn !== null ? equityReturn < 0 : false;
+  const isHighVol = equityVolatility !== null ? equityVolatility > 0.03 : false;
+  const isUnderinvested =
+    avgCashUtilization !== null ? avgCashUtilization < 0.2 : false;
+  const isOverconcentrated =
+    avgMaxPositionWeight !== null ? avgMaxPositionWeight > 0.3 : false;
+
+  return {
+    sampleCount,
+    equityFirst,
+    equityLast,
+    equityReturn,
+    equityVolatility,
+    maxDrawdown,
+    avgCashUtilization,
+    avgGrossExposureRatio,
+    avgMaxPositionWeight,
+    isUptrend,
+    isDowntrend,
+    isHighVol,
+    isUnderinvested,
+    isOverconcentrated,
+  };
+}
+
+function mean(values) {
+  if (!values.length) return null;
+  const sum = values.reduce((acc, val) => acc + val, 0);
+  return sum / values.length;
+}
+
+function stdDev(values) {
+  if (values.length < 2) return null;
+  const avg = values.reduce((acc, val) => acc + val, 0) / values.length;
+  const variance =
+    values.reduce((acc, val) => acc + (val - avg) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
 // ---------------- TRAINER ----------------
 
 async function trainPolicyFromHistory({
@@ -379,11 +480,31 @@ async function trainPolicyFromHistory({
   );
 
   if (currentPolicy.mode !== "read-only") {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "non_read_only_mode",
+      metrics: null,
+    });
     return { updated: false, reason: "non_read_only_mode" };
   }
 
   const { text: historyText } = await loadHistoryText(githubToken);
   if (!historyText.trim()) {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "no_history",
+      metrics: null,
+    });
     return { updated: false, reason: "no_history" };
   }
 
@@ -393,6 +514,16 @@ async function trainPolicyFromHistory({
     .filter(Boolean);
 
   if (lines.length < minHistory) {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "not_enough_history",
+      metrics: null,
+    });
     return {
       updated: false,
       reason: "not_enough_history",
@@ -401,35 +532,101 @@ async function trainPolicyFromHistory({
   }
 
   const history = lines.map((line) => JSON.parse(line));
+  const metrics = evaluateHistoryMetrics(history);
 
-  const equities = history
-    .map((h) => parseFloat(h.equity))
-    .filter((n) => !Number.isNaN(n));
-
-  if (equities.length < 2) {
+  if (metrics.equityFirst === null || metrics.equityLast === null) {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "not_enough_equity_points",
+      metrics,
+    });
     return { updated: false, reason: "not_enough_equity_points" };
   }
 
-  const first = equities[0];
-  const last = equities[equities.length - 1];
-  const equityDelta = last - first;
+  const equityDelta = metrics.equityLast - metrics.equityFirst;
 
   if (Math.abs(equityDelta) <= equityDeltaThreshold) {
-    return { updated: false, reason: "equity_delta_small", equityDelta };
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "equity_delta_small",
+      metrics,
+    });
+    return {
+      updated: false,
+      reason: "equity_delta_small",
+      equityDelta,
+      metrics,
+    };
   }
 
   const oldRisk = currentPolicy.risk_level ?? 0.5;
 
-  const direction = equityDelta > 0 ? 1 : -1;
-  const step =
-    Math.min(maxStep, Math.abs(equityDelta) / Math.max(1, Math.abs(first))) *
-    direction;
+  let direction = 0;
+  if (metrics.isUptrend && !metrics.isHighVol && !metrics.isOverconcentrated) {
+    direction += 1;
+  }
+  if (metrics.isDowntrend || metrics.isHighVol || (metrics.maxDrawdown ?? 0) > 0.1) {
+    direction -= 1;
+  }
+  if (
+    metrics.isUptrend &&
+    !metrics.isHighVol &&
+    metrics.avgCashUtilization !== null &&
+    metrics.avgCashUtilization < 0.3
+  ) {
+    direction += 1;
+  }
+  if (metrics.isOverconcentrated && (!metrics.isUptrend || metrics.isHighVol)) {
+    direction -= 1;
+  }
+
+  if (direction === 0) {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk: currentPolicy.risk_level ?? null,
+      newRisk: currentPolicy.risk_level ?? null,
+      decision: "no_update",
+      reason: "no_strong_signal",
+      metrics,
+    });
+    return { updated: false, reason: "no_strong_signal", metrics };
+  }
+
+  const baseStep = maxStep;
+  const strength = Math.min(1, Math.abs(metrics.equityReturn ?? 0) / 0.1);
+  let step = direction * baseStep * strength;
+
+  if (metrics.equityVolatility !== null && metrics.equityVolatility > 0.03) {
+    step *= 0.5;
+  }
 
   let newRisk = oldRisk + step;
   newRisk = Math.max(minRisk, Math.min(maxRisk, newRisk));
 
   if (newRisk === oldRisk) {
-    return { updated: false, reason: "risk_clamped", equityDelta };
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: currentPolicy.version ?? 1,
+      policyVersionAfter: currentPolicy.version ?? 1,
+      oldRisk,
+      newRisk,
+      decision: "no_update",
+      reason: "risk_clamped",
+      metrics,
+    });
+    return { updated: false, reason: "risk_clamped", metrics, equityDelta };
   }
 
   const newPolicy = {
@@ -438,9 +635,30 @@ async function trainPolicyFromHistory({
     risk_level: newRisk,
     lastTrainedAt: new Date().toISOString(),
     lastEquityDelta: equityDelta,
+    lastMetricsSummary: {
+      sampleCount: metrics.sampleCount,
+      equityReturn: metrics.equityReturn,
+      equityVolatility: metrics.equityVolatility,
+      maxDrawdown: metrics.maxDrawdown,
+      avgCashUtilization: metrics.avgCashUtilization,
+      avgGrossExposureRatio: metrics.avgGrossExposureRatio,
+      avgMaxPositionWeight: metrics.avgMaxPositionWeight,
+    },
+    lastTrainingReason: "update",
   };
 
   await savePolicy(githubToken, newPolicy, policyData.sha);
+
+  await appendTrainingLogEntry(githubToken, {
+    ranAt: new Date().toISOString(),
+    policyVersionBefore: currentPolicy.version ?? 1,
+    policyVersionAfter: newPolicy.version,
+    oldRisk,
+    newRisk,
+    decision: "update",
+    reason: "update",
+    metrics,
+  });
 
   return {
     updated: true,
@@ -448,5 +666,6 @@ async function trainPolicyFromHistory({
     newRisk,
     equityDelta,
     policyVersion: newPolicy.version,
+    metrics,
   };
 }

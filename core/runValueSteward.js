@@ -1,4 +1,4 @@
-export async function runValueSteward({ alpaca, policy }) {
+export async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
   const now = new Date().toISOString();
 
   // 1. Read account info from Alpaca (READ-ONLY)
@@ -61,18 +61,9 @@ export async function runValueSteward({ alpaca, policy }) {
     console.error("Error fetching positions:", err?.message ?? err);
   }
 
-  let isMarketOpen = null;
-  let nextOpen = null;
-  let nextClose = null;
-
-  try {
-    const clock = await alpaca.getClock();
-    isMarketOpen = !!clock.is_open;
-    nextOpen = clock.next_open ?? null;
-    nextClose = clock.next_close ?? null;
-  } catch (err) {
-    console.error("Error fetching clock:", err?.message ?? err);
-  }
+  const isMarketOpen = typeof marketOpen === "boolean" ? marketOpen : null;
+  const nextOpen = clock?.next_open ?? null;
+  const nextClose = clock?.next_close ?? null;
 
   const equityToBuyingPower =
     buyingPowerNum && buyingPowerNum > 0 && equityNum !== null
@@ -102,7 +93,8 @@ export async function runValueSteward({ alpaca, policy }) {
 
   const result = {
     ranAt: now,
-    accountStatus: account.status,
+    marketOpen: isMarketOpen,
+    accountStatus: isMarketOpen ? account.status : "MARKET_CLOSED",
     equity: equityNum,
     buyingPower: buyingPowerNum,
     cash,

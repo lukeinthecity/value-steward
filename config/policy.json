@@ -5,5 +5,7 @@
   "max_positions": 3,
   "rebalance_threshold": 0.02,
   "lastTrainedAt": "2026-01-22T17:52:39.855Z",
-  "lastEquityDelta": 0
+  "lastEquityDelta": 0,
+  "lastMetricsSummary": null,
+  "lastTrainingReason": null
 }

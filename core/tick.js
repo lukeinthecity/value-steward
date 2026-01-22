@@ -5,7 +5,7 @@ import { loadJsonFile, appendJsonl } from "./githubFiles.js";
 const POLICY_PATH = "config/policy.json";
 const HISTORY_PATH = "data/history.jsonl";
 
-export async function runTick({ alpacaConfig, githubToken }) {
+export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) {
   const alpaca = new Alpaca(alpacaConfig);
 
   const { content: policy } = await loadJsonFile({
@@ -22,7 +22,12 @@ export async function runTick({ alpacaConfig, githubToken }) {
     },
   });
 
-  const result = await runValueSteward({ alpaca, policy });
+  const result = await runValueSteward({
+    alpaca,
+    policy,
+    marketOpen,
+    clock,
+  });
 
   const historyEntry = {
     ...result,

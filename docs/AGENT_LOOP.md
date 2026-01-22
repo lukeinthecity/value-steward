@@ -24,9 +24,15 @@
 - It adjusts `risk_level` within bounds, updates `version`, and sets `lastTrainedAt`/`lastEquityDelta`.
 - You can still run the local trainer via `npm run train:policy` and revert policy.json via Git history.
 - Training hyperparameters (minHistory, maxStep, bounds) live in the Pipedream script for easy tuning.
+- The trainer now evaluates trend, volatility, cash utilization, exposure, and concentration metrics.
+- Each training run logs a decision record to `data/training-log.jsonl` with metrics and rationale.
+- It still only updates `risk_level` within hard bounds, in small steps capped by `maxStep`.
+- No orders are ever placed as part of training.
 
 ## Per-tick perception
-- Each history entry now captures an EOD snapshot (run near market close) via read-only Alpaca endpoints.
+- Each history entry captures an EOD snapshot (run near market close) via read-only Alpaca endpoints.
+- Even when the market is closed, the agent still fetches account and positions data and logs a full snapshot.
+- In those cases, `marketOpen` is false and `accountStatus` is `MARKET_CLOSED`, but all other fields are populated.
 - Account fields: `equity`, `buyingPower`, `cash`, `portfolioValue`, `patternDayTrader`, `marginMultiplier`, `cashUtilization`, `equityToBuyingPower`.
 - Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`, `grossExposure`, `netExposure`, `maxPositionWeight`, and `positions[]` summaries.
 - Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.

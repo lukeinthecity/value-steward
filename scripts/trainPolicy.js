@@ -2,11 +2,14 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { trainPolicyWithMetrics } from "../core/deepTrainer.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const POLICY_PATH = path.join(__dirname, "..", "config", "policy.json");
 const HISTORY_PATH = path.join(__dirname, "..", "data", "history.jsonl");
+const TRAINING_LOG_PATH = path.join(__dirname, "..", "data", "training-log.jsonl");
 
 function loadPolicy() {
   const raw = fs.readFileSync(POLICY_PATH, "utf8");
@@ -26,36 +29,46 @@ function loadHistory() {
     .map((line) => JSON.parse(line));
 }
 
-function computeEquityDelta(history) {
-  if (history.length < 2) return 0;
-  const equities = history.map((h) => parseFloat(h.equity));
-  return equities[equities.length - 1] - equities[0];
+function appendTrainingLog(entry) {
+  fs.mkdirSync(path.dirname(TRAINING_LOG_PATH), { recursive: true });
+  fs.appendFileSync(TRAINING_LOG_PATH, `${JSON.stringify(entry)}\n`);
 }
 
 async function main() {
   const history = loadHistory();
   const policy = loadPolicy();
 
-  const equityDelta = computeEquityDelta(history);
+  const training = trainPolicyWithMetrics({
+    history,
+    policy,
+    minHistory: 10,
+    equityDeltaThreshold: 0,
+    maxStep: 0.01,
+    minRisk: 0.1,
+    maxRisk: 0.9,
+  });
 
-  let newRisk = policy.risk_level;
-  if (equityDelta > 0) {
-    newRisk = Math.min(1, policy.risk_level + 0.01);
-  } else if (equityDelta < 0) {
-    newRisk = Math.max(0, policy.risk_level - 0.01);
-  }
-
-  const newPolicy = {
-    ...policy,
-    version: (policy.version || 1) + 1,
-    risk_level: newRisk,
-    lastTrainedAt: new Date().toISOString(),
-    lastEquityDelta: equityDelta,
+  const entry = {
+    ranAt: new Date().toISOString(),
+    policyVersionBefore: policy.version ?? 1,
+    policyVersionAfter: training.updated
+      ? training.policyVersion
+      : policy.version ?? 1,
+    oldRisk: training.oldRisk ?? policy.risk_level,
+    newRisk: training.newRisk ?? policy.risk_level,
+    decision: training.updated ? "update" : "no_update",
+    reason: training.reason,
+    metrics: training.metrics ?? null,
   };
 
-  savePolicy(newPolicy);
+  appendTrainingLog(entry);
 
-  console.log("Updated policy:", newPolicy);
+  if (training.updated && training.newPolicy) {
+    savePolicy(training.newPolicy);
+    console.log("Updated policy:", training.newPolicy);
+  } else {
+    console.log("No policy update:", training.reason);
+  }
 }
 
 main().catch((err) => {
