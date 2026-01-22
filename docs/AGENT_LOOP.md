@@ -17,3 +17,10 @@
 ## Pipedream scheduling
 - `pipedream/valueStewardWorkflow.js` is a template to copy into a Pipedream Node.js step.
 - Required env vars: `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `ALPACA_BASE_URL`, `GITHUB_TOKEN`.
+
+## Automatic trainer
+- The Pipedream workflow now runs two phases every tick: a read-only tick and an auto-train pass.
+- The trainer only runs when `mode` is `"read-only"` and never changes `mode`.
+- It adjusts `risk_level` within bounds, updates `version`, and sets `lastTrainedAt`/`lastEquityDelta`.
+- You can still run the local trainer via `npm run train:policy` and revert policy.json via Git history.
+- Training hyperparameters (minHistory, maxStep, bounds) live in the Pipedream script for easy tuning.
