@@ -1,0 +1,7 @@
+alpaca-py
+pydantic
+pydantic-settings
+python-dotenv
+click
+rich
+pytest

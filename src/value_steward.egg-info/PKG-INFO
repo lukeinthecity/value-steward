@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: value-steward
+Version: 0.1.0
+Summary: Risk-aware portfolio steward using Alpaca paper trading
+Author-email: Placeholder Name <placeholder@example.com>
+Requires-Python: >=3.10

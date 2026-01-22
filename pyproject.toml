@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "value-steward"
+version = "0.1.0"
+description = "Risk-aware portfolio steward using Alpaca paper trading"
+authors = [{ name = "Placeholder Name", email = "placeholder@example.com" }]
+requires-python = ">=3.10"
+
+[project.scripts]
+valuesteward = "valuesteward.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
