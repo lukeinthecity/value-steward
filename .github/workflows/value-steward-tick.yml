@@ -3,7 +3,7 @@ name: Value Steward Tick
 on:
   schedule:
     # Every 30 minutes; adjust later if needed
-    - cron: "*/1 * * * *"
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 jobs:
