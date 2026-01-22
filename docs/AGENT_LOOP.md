@@ -24,3 +24,10 @@
 - It adjusts `risk_level` within bounds, updates `version`, and sets `lastTrainedAt`/`lastEquityDelta`.
 - You can still run the local trainer via `npm run train:policy` and revert policy.json via Git history.
 - Training hyperparameters (minHistory, maxStep, bounds) live in the Pipedream script for easy tuning.
+
+## Per-tick perception
+- Each history entry now includes account and timing context captured via read-only Alpaca endpoints.
+- Account fields: `equity`, `buyingPower`, `cashUtilization`, `equityToBuyingPower`.
+- Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`.
+- Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
+- All of this data is collected read-only; no orders are placed during ticks or training.
