@@ -29,6 +29,12 @@
 - It still only updates `risk_level` within hard bounds, in small steps capped by `maxStep`.
 - No orders are ever placed as part of training.
 
+## Notifications
+- When the trainer updates `policy.risk_level`, the agent attempts to send a summary email via SMTP.
+- The email includes policy changes, training reason, key metrics, and snapshot context.
+- Required env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`.
+- If any are missing, the agent logs a warning and skips email without affecting the EOD loop.
+
 ## Per-tick perception
 - Each history entry captures an EOD snapshot (run near market close) via read-only Alpaca endpoints.
 - Even when the market is closed, the agent still fetches account and positions data and logs a full snapshot.

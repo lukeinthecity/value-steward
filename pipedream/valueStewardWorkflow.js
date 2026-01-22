@@ -2,6 +2,7 @@
 // Expected env vars: ALPACA_API_KEY, ALPACA_API_SECRET, ALPACA_BASE_URL, GITHUB_TOKEN.
 
 import Alpaca from "@alpacahq/alpaca-trade-api";
+import { sendLessonEmail } from "../core/emailNotifications.js";
 
 const OWNER = "lukeinthecity";
 const REPO = "value-steward";
@@ -30,14 +31,25 @@ export default defineComponent({
       clock,
     });
 
-  const training = await trainPolicyFromHistory({
-    githubToken,
-    minHistory: 10,
-    equityDeltaThreshold: 0,
-    maxStep: 0.01,
-    minRisk: 0.1,
-    maxRisk: 0.9,
-  });
+    const training = await trainPolicyFromHistory({
+      githubToken,
+      minHistory: 10,
+      equityDeltaThreshold: 0,
+      maxStep: 0.01,
+      minRisk: 0.1,
+      maxRisk: 0.9,
+    });
+
+    if (training && training.updated) {
+      try {
+        await sendLessonEmail({ policy, result, training });
+      } catch (err) {
+        console.error(
+          "[ValueSteward] Failed to send lesson email:",
+          err?.message ?? err
+        );
+      }
+    }
 
     console.log("Value Steward executed:", { policy, result, training });
 
@@ -490,7 +502,15 @@ async function trainPolicyFromHistory({
       reason: "non_read_only_mode",
       metrics: null,
     });
-    return { updated: false, reason: "non_read_only_mode" };
+    return {
+      updated: false,
+      reason: "non_read_only_mode",
+      equityDelta: null,
+      oldRisk: currentPolicy.risk_level ?? 0.5,
+      newRisk: currentPolicy.risk_level ?? 0.5,
+      policyVersion: currentPolicy.version ?? 1,
+      metrics: null,
+    };
   }
 
   const { text: historyText } = await loadHistoryText(githubToken);
@@ -505,7 +525,15 @@ async function trainPolicyFromHistory({
       reason: "no_history",
       metrics: null,
     });
-    return { updated: false, reason: "no_history" };
+    return {
+      updated: false,
+      reason: "no_history",
+      equityDelta: null,
+      oldRisk: currentPolicy.risk_level ?? 0.5,
+      newRisk: currentPolicy.risk_level ?? 0.5,
+      policyVersion: currentPolicy.version ?? 1,
+      metrics: null,
+    };
   }
 
   const lines = historyText
@@ -545,7 +573,15 @@ async function trainPolicyFromHistory({
       reason: "not_enough_equity_points",
       metrics,
     });
-    return { updated: false, reason: "not_enough_equity_points" };
+    return {
+      updated: false,
+      reason: "not_enough_equity_points",
+      equityDelta: null,
+      oldRisk: currentPolicy.risk_level ?? 0.5,
+      newRisk: currentPolicy.risk_level ?? 0.5,
+      policyVersion: currentPolicy.version ?? 1,
+      metrics,
+    };
   }
 
   const equityDelta = metrics.equityLast - metrics.equityFirst;
@@ -565,6 +601,9 @@ async function trainPolicyFromHistory({
       updated: false,
       reason: "equity_delta_small",
       equityDelta,
+      oldRisk: currentPolicy.risk_level ?? 0.5,
+      newRisk: currentPolicy.risk_level ?? 0.5,
+      policyVersion: currentPolicy.version ?? 1,
       metrics,
     };
   }
@@ -601,7 +640,15 @@ async function trainPolicyFromHistory({
       reason: "no_strong_signal",
       metrics,
     });
-    return { updated: false, reason: "no_strong_signal", metrics };
+    return {
+      updated: false,
+      reason: "no_strong_signal",
+      equityDelta,
+      oldRisk: currentPolicy.risk_level ?? 0.5,
+      newRisk: currentPolicy.risk_level ?? 0.5,
+      policyVersion: currentPolicy.version ?? 1,
+      metrics,
+    };
   }
 
   const baseStep = maxStep;
@@ -626,7 +673,15 @@ async function trainPolicyFromHistory({
       reason: "risk_clamped",
       metrics,
     });
-    return { updated: false, reason: "risk_clamped", metrics, equityDelta };
+    return {
+      updated: false,
+      reason: "risk_clamped",
+      equityDelta,
+      oldRisk,
+      newRisk,
+      policyVersion: currentPolicy.version ?? 1,
+      metrics,
+    };
   }
 
   const newPolicy = {
@@ -662,6 +717,7 @@ async function trainPolicyFromHistory({
 
   return {
     updated: true,
+    reason: "update",
     oldRisk,
     newRisk,
     equityDelta,
