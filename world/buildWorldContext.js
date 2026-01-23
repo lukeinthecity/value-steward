@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
 
+import { makeMacroDigest } from "./makeMacroDigest.js";
+import { filterRecent, validateContext } from "./contextUtils.js";
+
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
@@ -41,26 +44,6 @@ function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function validateContext(entry) {
-  if (!/\d{4}-\d{2}-\d{2}/.test(entry.date)) return false;
-  if (!entry.generated_at) return false;
-  if (!entry.tags) return false;
-  const requiredTags = [
-    "macro_risk",
-    "rate_hawkishness",
-    "geopolitical_tension",
-    "energy_shock_risk",
-    "recession_fear",
-  ];
-  for (const tag of requiredTags) {
-    if (!(tag in entry.tags)) return false;
-  }
-  if (!Array.isArray(entry.sources_used)) return false;
-  if (typeof entry.raw_count !== "number") return false;
-  if (!Array.isArray(entry.errors)) return false;
-  return true;
-}
-
 function buildStubContext({ entries, date }) {
   const sourcesUsed = Array.from(
     new Set(entries.map((entry) => entry.source_id).filter(Boolean))
@@ -84,14 +67,7 @@ function buildStubContext({ entries, date }) {
   };
 }
 
-function filterRecent(entries, cutoffMs) {
-  return entries.filter((entry) => {
-    const ts = Date.parse(entry.ts);
-    return Number.isNaN(ts) ? false : ts >= cutoffMs;
-  });
-}
-
-function main() {
+async function main() {
   const inbox = loadInbox();
   const hydrated = loadHydrated();
   const context = loadContext();
@@ -107,9 +83,9 @@ function main() {
   const hydratedRecent = filterRecent(hydrated, cutoff);
   const hydratedOk = hydratedRecent.filter((entry) => entry.ok === true);
   const hydratedFailed = hydratedRecent.filter((entry) => entry.ok === false);
-  const worldContext = buildStubContext({ entries: recent, date });
+  const stubContext = buildStubContext({ entries: recent, date });
 
-  worldContext.hydration = {
+  stubContext.hydration = {
     inbox_recent: recent.length,
     hydrated_recent_ok: hydratedOk.length,
     hydrated_recent_failed: hydratedFailed.length,
@@ -128,17 +104,43 @@ function main() {
     }));
 
   if (corpusPreview.length) {
-    worldContext.corpus_preview = corpusPreview;
+    stubContext.corpus_preview = corpusPreview;
   }
 
-  if (!validateContext(worldContext)) {
-    throw new Error("world context validation failed");
-  }
+  try {
+    const { context, digest } = await makeMacroDigest({
+      stubContext,
+      hydratedEntries: hydrated,
+    });
 
-  appendContext(worldContext);
-  console.log(
-    `[world] context built date=${date} sources=${worldContext.sources_used.length} raw=${worldContext.raw_count}`
-  );
+    if (!validateContext(context)) {
+      console.error("[world] context validation failed; falling back to stub");
+      const fallback = {
+        ...stubContext,
+        notes: "stub world context (LLM validation failed)",
+      };
+      appendContext(fallback);
+      console.log(
+        `[world] context built date=${date} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+      );
+      return;
+    }
+
+    appendContext(context);
+    console.log(
+      `[world] context built date=${date} sources=${context.sources_used.length} raw=${context.raw_count} digest=${digest}`
+    );
+  } catch (err) {
+    console.error("[world] macro digest error:", err?.message ?? err);
+    const fallback = {
+      ...stubContext,
+      notes: "stub world context (LLM call failed)",
+    };
+    appendContext(fallback);
+    console.log(
+      `[world] context built date=${date} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+    );
+  }
 }
 
 main();

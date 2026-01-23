@@ -8,7 +8,7 @@
     "world:fetch": "node world/fetchRss.js",
     "world:hydrate": "node world/hydrateLinks.js",
     "world:build": "node world/buildWorldContext.js",
-    "world:run": "node world/fetchRss.js && node world/hydrateLinks.js && node world/buildWorldContext.js"
+    "world:run": "npm run world:fetch && npm run world:hydrate && npm run world:build"
   },
   "dependencies": {
     "@alpacahq/alpaca-trade-api": "^3.2.0",
