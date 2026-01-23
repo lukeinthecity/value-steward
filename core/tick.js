@@ -1,12 +1,51 @@
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { runValueSteward } from "./runValueSteward.js";
 import { loadJsonFile, appendJsonl } from "./githubFiles.js";
+import { loadAgentState, saveAgentState, transitionMode } from "./agentState.js";
+import { MODES } from "./modes.js";
+import { computeCanTrade } from "./tradeGate.js";
 
 const POLICY_PATH = "config/policy.json";
 const HISTORY_PATH = "data/history.jsonl";
 
 export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) {
   const alpaca = new Alpaca(alpacaConfig);
+  const now = new Date().toISOString();
+  const agentState = await loadAgentState();
+  const lastRun = agentState.last_run_wall_clock
+    ? Date.parse(agentState.last_run_wall_clock)
+    : null;
+  const downtimeSeconds =
+    lastRun !== null ? Math.max(0, (Date.parse(now) - lastRun) / 1000) : null;
+  const marketOpenFlag = typeof marketOpen === "boolean" ? marketOpen : false;
+
+  let nextMode = agentState.current_mode || MODES.INACTIVE;
+  let transitionReason = null;
+
+  if (!agentState.last_run_wall_clock) {
+    nextMode = MODES.INACTIVE;
+    transitionReason = "initial_boot";
+    console.log(`[VS] boot @ ${now} mode=${nextMode}`);
+  } else if (marketOpenFlag && downtimeSeconds !== null && downtimeSeconds > 300) {
+    nextMode = MODES.RECOVERY;
+    transitionReason = "downtime_detected";
+  } else {
+    nextMode = MODES.LIVE;
+    transitionReason = "normal";
+  }
+
+  if (nextMode !== agentState.current_mode) {
+    await transitionMode({
+      from: agentState.current_mode,
+      to: nextMode,
+      reason: transitionReason,
+      now,
+      state: agentState,
+    });
+    agentState.current_mode = nextMode;
+    agentState.last_mode_transition_reason = transitionReason;
+    agentState.status_indicator = nextMode;
+  }
 
   const { content: policy } = await loadJsonFile({
     token: githubToken,
@@ -25,12 +64,27 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
   const result = await runValueSteward({
     alpaca,
     policy,
+    mode: agentState.current_mode,
     marketOpen,
     clock,
+    nowOverride: now,
   });
 
-  const historyEntry = {
+  const tradeGate = computeCanTrade({
+    mode: agentState.current_mode,
+    internetOk: true,
+    brokerOk: true,
+  });
+
+  const tickResult = {
     ...result,
+    downtimeSeconds,
+    tradeGate,
+    agentMode: agentState.current_mode,
+  };
+
+  const historyEntry = {
+    ...tickResult,
     policyVersion: policy.version,
   };
 
@@ -40,5 +94,17 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
     entry: historyEntry,
   });
 
-  return { policy, result };
+  agentState.last_run_wall_clock = now;
+  agentState.last_market_timestamp = result.marketTimestamp;
+  agentState.last_known_positions = result.positions || [];
+  agentState.open_orders_snapshot = [];
+  await saveAgentState(agentState);
+
+  console.log(
+    `[VS] tick @ ${now} mode=${agentState.current_mode} marketOpen=${marketOpenFlag} ` +
+      `canTrade=${tradeGate.canTrade} tradingEnabled=${tradeGate.tradingEnabled} ` +
+      `downtimeSeconds=${downtimeSeconds ?? "n/a"}`
+  );
+
+  return { policy, result: tickResult };
 }

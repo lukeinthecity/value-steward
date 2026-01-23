@@ -8,6 +8,14 @@ const OWNER = "lukeinthecity";
 const REPO = "value-steward";
 const POLICY_PATH = "config/policy.json";
 const HISTORY_PATH = "data/history.jsonl";
+const AGENT_STATE_PATH = "data/agent-state.json";
+
+const MODES = {
+  INACTIVE: "INACTIVE",
+  RECOVERY: "RECOVERY",
+  LIVE: "LIVE",
+  ERROR: "ERROR",
+};
 
 export default defineComponent({
   async run({ steps, $ }) {
@@ -61,20 +69,93 @@ export default defineComponent({
 // ---------------- TICK RUNNER ----------------
 
 async function runTick({ alpaca, githubToken, marketOpen, clock }) {
+  const now = new Date().toISOString();
+  const agentState = await loadAgentState(githubToken);
+  const lastRun = agentState.last_run_wall_clock
+    ? Date.parse(agentState.last_run_wall_clock)
+    : null;
+  const downtimeSeconds =
+    lastRun !== null ? Math.max(0, (Date.parse(now) - lastRun) / 1000) : null;
+  const marketOpenFlag = typeof marketOpen === "boolean" ? marketOpen : false;
+
+  let nextMode = agentState.current_mode || MODES.INACTIVE;
+  let transitionReason = null;
+
+  if (!agentState.last_run_wall_clock) {
+    nextMode = MODES.INACTIVE;
+    transitionReason = "initial_boot";
+    console.log(`[VS] boot @ ${now} mode=${nextMode}`);
+  } else if (marketOpenFlag && downtimeSeconds !== null && downtimeSeconds > 300) {
+    nextMode = MODES.RECOVERY;
+    transitionReason = "downtime_detected";
+  } else {
+    nextMode = MODES.LIVE;
+    transitionReason = "normal";
+  }
+
+  if (nextMode !== agentState.current_mode) {
+    const updatedState = await transitionMode({
+      from: agentState.current_mode,
+      to: nextMode,
+      reason: transitionReason,
+      now,
+      state: agentState,
+      githubToken,
+    });
+    agentState.current_mode = updatedState.current_mode;
+    agentState.last_mode_transition_reason =
+      updatedState.last_mode_transition_reason;
+    agentState.status_indicator = updatedState.status_indicator;
+    agentState._sha = updatedState._sha ?? agentState._sha;
+  }
+
   const policy = await loadPolicy(githubToken);
 
-  const result = await runValueSteward({ alpaca, policy, marketOpen, clock });
+  const result = await runValueSteward({
+    alpaca,
+    policy,
+    mode: agentState.current_mode,
+    marketOpen,
+    clock,
+    nowOverride: now,
+  });
+
+  const tradeGate = computeCanTrade({
+    mode: agentState.current_mode,
+    internetOk: true,
+    brokerOk: true,
+  });
+
+  const tickResult = {
+    ...result,
+    downtimeSeconds,
+    tradeGate,
+    agentMode: agentState.current_mode,
+  };
 
   await appendHistory(githubToken, {
-    ...result,
+    ...tickResult,
     policyVersion: policy.version,
   });
 
-  return { policy, result };
+  agentState.last_run_wall_clock = now;
+  agentState.last_market_timestamp = result.marketTimestamp;
+  agentState.last_known_positions = result.positions || [];
+  agentState.open_orders_snapshot = [];
+  const saved = await saveAgentState(githubToken, agentState, agentState._sha);
+  agentState._sha = saved.sha;
+
+  console.log(
+    `[VS] tick @ ${now} mode=${agentState.current_mode} marketOpen=${marketOpenFlag} ` +
+      `canTrade=${tradeGate.canTrade} tradingEnabled=${tradeGate.tradingEnabled} ` +
+      `downtimeSeconds=${downtimeSeconds ?? "n/a"}`
+  );
+
+  return { policy, result: tickResult };
 }
 
-async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
-  const now = new Date().toISOString();
+async function runValueSteward({ alpaca, policy, mode, marketOpen, clock, nowOverride }) {
+  const now = nowOverride ?? new Date().toISOString();
   const account = await alpaca.getAccount();
 
   const equityParsed = parseFloat(account.equity);
@@ -174,6 +255,7 @@ async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
     patternDayTrader,
     marginMultiplier: Number.isNaN(marginMultiplier) ? null : marginMultiplier,
     mode: policy.mode,
+    agentMode: mode ?? null,
     risk_level: policy.risk_level,
     targetCashFraction,
     equityToBuyingPower,
@@ -189,6 +271,7 @@ async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
     nextOpen,
     nextClose,
     worldContext,
+    marketTimestamp: now,
   };
 }
 
@@ -199,6 +282,30 @@ function githubHeaders(token) {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
     "User-Agent": "value-steward-agent",
+  };
+}
+
+function isValidMode(mode) {
+  return Object.values(MODES).includes(mode);
+}
+
+function getTradingEnabled() {
+  const flag = process.env.TRADING_ENABLED;
+  if (!flag) return false;
+  return String(flag).toLowerCase() === "true";
+}
+
+function computeCanTrade({ mode, internetOk, brokerOk }) {
+  const tradingEnabled = getTradingEnabled();
+  const canTrade =
+    tradingEnabled && internetOk && brokerOk && mode === MODES.LIVE;
+
+  return {
+    canTrade,
+    tradingEnabled,
+    internetOk,
+    brokerOk,
+    mode,
   };
 }
 
@@ -225,6 +332,95 @@ async function loadPolicy(token) {
 
   const data = await res.json();
   return JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
+}
+
+async function loadAgentState(token) {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${AGENT_STATE_PATH}`;
+
+  const res = await fetch(url, { headers: githubHeaders(token) });
+
+  if (res.status === 404) {
+    return {
+      last_run_wall_clock: null,
+      last_market_timestamp: null,
+      last_known_positions: [],
+      open_orders_snapshot: [],
+      current_mode: MODES.INACTIVE,
+      last_mode_transition_reason: "initial_boot",
+      status_indicator: MODES.INACTIVE,
+      _sha: null,
+    };
+  }
+
+  if (!res.ok) {
+    throw new Error(`Error loading agent state: ${res.status} ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  const parsed = JSON.parse(
+    Buffer.from(data.content, "base64").toString("utf8")
+  );
+  return {
+    last_run_wall_clock: null,
+    last_market_timestamp: null,
+    last_known_positions: [],
+    open_orders_snapshot: [],
+    current_mode: MODES.INACTIVE,
+    last_mode_transition_reason: "initial_boot",
+    status_indicator: MODES.INACTIVE,
+    ...parsed,
+    _sha: data.sha,
+  };
+}
+
+async function saveAgentState(token, state, shaHint = null) {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${AGENT_STATE_PATH}`;
+
+  const encoded = Buffer.from(JSON.stringify(state, null, 2)).toString("base64");
+
+  const body = {
+    message: `Update agent state at ${state.last_run_wall_clock ?? "unknown"}`,
+    content: encoded,
+    ...(shaHint ? { sha: shaHint } : {}),
+  };
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(token),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error saving agent state: ${res.status} ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  return { sha: data.content.sha, commitSha: data.commit.sha };
+}
+
+async function transitionMode({ from, to, reason, now, state, githubToken }) {
+  if (!isValidMode(to)) {
+    console.warn(`[VS] Invalid mode transition target: ${to}`);
+    return state;
+  }
+
+  if (from !== state.current_mode) {
+    console.warn(
+      `[VS] Mode transition mismatch: expected ${from}, actual ${state.current_mode}`
+    );
+  }
+
+  const updated = {
+    ...state,
+    current_mode: to,
+    last_mode_transition_reason: reason,
+    status_indicator: to,
+  };
+
+  console.log(`[VS] mode transition ${state.current_mode} -> ${to} reason=${reason}`);
+
+  const saved = await saveAgentState(githubToken, updated, state._sha ?? null);
+  return { ...updated, _sha: saved.sha };
 }
 
 async function savePolicy(token, policy, shaHint = null) {
@@ -479,10 +675,25 @@ async function trainPolicyFromHistory({
   });
 
   if (!policyRes.ok) {
+    await appendTrainingLogEntry(githubToken, {
+      ranAt: new Date().toISOString(),
+      policyVersionBefore: null,
+      policyVersionAfter: null,
+      oldRisk: null,
+      newRisk: null,
+      decision: "no_update",
+      reason: "policy_load_failed",
+      metrics: null,
+    });
     return {
       updated: false,
       reason: "policy_load_failed",
       status: policyRes.status,
+      equityDelta: null,
+      oldRisk: null,
+      newRisk: null,
+      policyVersion: null,
+      metrics: null,
     };
   }
 

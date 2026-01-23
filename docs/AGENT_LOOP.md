@@ -44,3 +44,14 @@
 - Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
 - Placeholder context: `worldContext` (empty for now; reserved for future signals).
 - All of this data is collected read-only; no orders are placed during ticks or training.
+
+## Operational modes and trade gate
+- Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.
+- Trade gate invariant: `can_trade = trading_enabled && internet_ok && broker_ok && mode == LIVE`.
+- `trading_enabled` is currently sourced from `process.env.TRADING_ENABLED` and defaults to false.
+
+## Agent state file
+- `data/agent-state.json` stores the latest operational snapshot:
+  - `last_run_wall_clock`, `last_market_timestamp`
+  - `last_known_positions`, `open_orders_snapshot`
+  - `current_mode`, `last_mode_transition_reason`, `status_indicator`

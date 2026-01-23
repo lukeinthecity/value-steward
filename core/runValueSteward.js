@@ -1,5 +1,12 @@
-export async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
-  const now = new Date().toISOString();
+export async function runValueSteward({
+  alpaca,
+  policy,
+  mode,
+  marketOpen,
+  clock,
+  nowOverride,
+}) {
+  const now = nowOverride ?? new Date().toISOString();
 
   // 1. Read account info from Alpaca (READ-ONLY)
   const account = await alpaca.getAccount();
@@ -102,6 +109,7 @@ export async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
     patternDayTrader,
     marginMultiplier: Number.isNaN(marginMultiplier) ? null : marginMultiplier,
     mode: policy.mode,
+    agentMode: mode ?? null,
     risk_level: policy.risk_level,
     targetCashFraction,
     equityToBuyingPower,
@@ -117,6 +125,7 @@ export async function runValueSteward({ alpaca, policy, marketOpen, clock }) {
     nextOpen,
     nextClose,
     worldContext,
+    marketTimestamp: now,
   };
 
   return result;

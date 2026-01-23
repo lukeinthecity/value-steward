@@ -1,0 +1,9 @@
+{
+  "last_run_wall_clock": null,
+  "last_market_timestamp": null,
+  "last_known_positions": [],
+  "open_orders_snapshot": [],
+  "current_mode": "INACTIVE",
+  "last_mode_transition_reason": "initial_boot",
+  "status_indicator": "INACTIVE"
+}
