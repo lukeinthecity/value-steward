@@ -1,0 +1,86 @@
+import fs from "fs";
+import path from "path";
+import Parser from "rss-parser";
+
+const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
+const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
+const RETAIN_DAYS = 7;
+
+function loadFeeds() {
+  const raw = fs.readFileSync(FEEDS_PATH, "utf8");
+  return JSON.parse(raw);
+}
+
+function loadInbox() {
+  if (!fs.existsSync(INBOX_PATH)) return [];
+  const raw = fs.readFileSync(INBOX_PATH, "utf8");
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function saveInbox(entries) {
+  const lines = entries.map((entry) => JSON.stringify(entry));
+  fs.writeFileSync(INBOX_PATH, lines.join("\n") + (lines.length ? "\n" : ""));
+}
+
+function buildKey(entry) {
+  if (entry.link) return `${entry.source_id}|${entry.link}`;
+  return `${entry.source_id}|${entry.title}|${entry.published}`;
+}
+
+function normalizeItem({ sourceId, item }) {
+  return {
+    ts: new Date().toISOString(),
+    source_id: sourceId,
+    title: item.title ?? "",
+    link: item.link ?? null,
+    published: item.isoDate ?? item.pubDate ?? null,
+    summary: item.contentSnippet ?? item.content ?? null,
+    content_text: null,
+  };
+}
+
+function pruneOld(entries) {
+  const cutoff = Date.now() - RETAIN_DAYS * 24 * 60 * 60 * 1000;
+  return entries.filter((entry) => {
+    const ts = Date.parse(entry.ts);
+    return Number.isNaN(ts) ? false : ts >= cutoff;
+  });
+}
+
+async function main() {
+  const feeds = loadFeeds();
+  const parser = new Parser();
+  const existing = loadInbox();
+  const existingKeys = new Set(existing.map(buildKey));
+
+  let added = 0;
+  for (const source of feeds.sources ?? []) {
+    if (!source.enabled) continue;
+    try {
+      const feed = await parser.parseURL(source.rss_url);
+      for (const item of feed.items ?? []) {
+        const normalized = normalizeItem({ sourceId: source.id, item });
+        const key = buildKey(normalized);
+        if (existingKeys.has(key)) continue;
+        existing.push(normalized);
+        existingKeys.add(key);
+        added += 1;
+      }
+    } catch (err) {
+      console.error(`[world] fetch failed for ${source.id}:`, err?.message ?? err);
+    }
+  }
+
+  const pruned = pruneOld(existing);
+  saveInbox(pruned);
+
+  console.log(`[world] fetched sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`);
+}
+
+main().catch((err) => {
+  console.error("[world] fetch failed:", err?.message ?? err);
+  process.exit(1);
+});

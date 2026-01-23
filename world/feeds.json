@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "reuters_markets",
+      "name": "Reuters Markets",
+      "rss_url": "https://example.com/rss",
+      "enabled": true,
+      "tags": ["markets", "macro"]
+    }
+  ]
+}

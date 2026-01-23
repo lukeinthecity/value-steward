@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorldContext",
+  "type": "object",
+  "required": [
+    "date",
+    "generated_at",
+    "summary",
+    "tags",
+    "sources_used",
+    "raw_count",
+    "notes",
+    "errors"
+  ],
+  "properties": {
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "summary": {
+      "type": ["string", "null"]
+    },
+    "tags": {
+      "type": "object",
+      "required": [
+        "macro_risk",
+        "rate_hawkishness",
+        "geopolitical_tension",
+        "energy_shock_risk",
+        "recession_fear"
+      ],
+      "properties": {
+        "macro_risk": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "rate_hawkishness": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "geopolitical_tension": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "energy_shock_risk": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "recession_fear": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "sources_used": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "raw_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "notes": {
+      "type": ["string", "null"]
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "train:policy": "node scripts/trainPolicy.js"
+    "train:policy": "node scripts/trainPolicy.js",
+    "world:fetch": "node world/fetchRss.js",
+    "world:build": "node world/buildWorldContext.js",
+    "world:run": "node world/fetchRss.js && node world/buildWorldContext.js"
   },
   "dependencies": {
     "@alpacahq/alpaca-trade-api": "^3.2.0",
-    "nodemailer": "^6.9.13"
+    "nodemailer": "^6.9.13",
+    "rss-parser": "^3.13.0"
   }
 }
