@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
+const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
 function loadInbox() {
@@ -16,6 +17,15 @@ function loadInbox() {
 function loadContext() {
   if (!fs.existsSync(CONTEXT_PATH)) return [];
   const raw = fs.readFileSync(CONTEXT_PATH, "utf8");
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function loadHydrated() {
+  if (!fs.existsSync(HYDRATED_PATH)) return [];
+  const raw = fs.readFileSync(HYDRATED_PATH, "utf8");
   return raw
     .split("\n")
     .filter(Boolean)
@@ -83,6 +93,7 @@ function filterRecent(entries, cutoffMs) {
 
 function main() {
   const inbox = loadInbox();
+  const hydrated = loadHydrated();
   const context = loadContext();
   const date = todayDate();
 
@@ -93,7 +104,32 @@ function main() {
 
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const recent = filterRecent(inbox, cutoff);
+  const hydratedRecent = filterRecent(hydrated, cutoff);
+  const hydratedOk = hydratedRecent.filter((entry) => entry.ok === true);
+  const hydratedFailed = hydratedRecent.filter((entry) => entry.ok === false);
   const worldContext = buildStubContext({ entries: recent, date });
+
+  worldContext.hydration = {
+    inbox_recent: recent.length,
+    hydrated_recent_ok: hydratedOk.length,
+    hydrated_recent_failed: hydratedFailed.length,
+  };
+
+  const corpusPreview = hydratedOk
+    .filter((entry) => entry.content_text)
+    .slice(0, 10)
+    .map((entry) => ({
+      source_id: entry.source_id,
+      title: entry.title ?? null,
+      link: entry.link ?? null,
+      published: entry.published ?? null,
+      extractor: entry.extractor ?? null,
+      excerpt: entry.content_text.slice(0, 600),
+    }));
+
+  if (corpusPreview.length) {
+    worldContext.corpus_preview = corpusPreview;
+  }
 
   if (!validateContext(worldContext)) {
     throw new Error("world context validation failed");
