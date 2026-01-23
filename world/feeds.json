@@ -1,12 +1,62 @@
 {
   "version": 1,
-  "sources": [
+  "updatedAt": "2026-01-23T00:00:00.000Z",
+  "feeds": [
     {
-      "id": "reuters_markets",
-      "name": "Reuters Markets",
-      "rss_url": "https://example.com/rss",
-      "enabled": true,
-      "tags": ["markets", "macro"]
-    }
+      "id": "fed-press",
+      "label": "Federal Reserve (Press Releases)",
+      "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+      "tags": ["macro", "rates", "central-bank", "usa"],
+      "weight": 1.0
+    },
+    {
+      "id": "fed-speeches",
+      "label": "Federal Reserve (Speeches)",
+      "url": "https://www.federalreserve.gov/feeds/speeches.xml",
+      "tags": ["macro", "rates", "central-bank", "usa"],
+      "weight": 0.8
+    },
+    {
+      "id": "ecb-press",
+      "label": "ECB (Press Releases)",
+      "url": "https://www.ecb.europa.eu/rss/press.html",
+      "tags": ["macro", "rates", "central-bank", "europe"],
+      "weight": 0.9
+    },
+    {
+      "id": "boe-news",
+      "label": "Bank of England (News)",
+      "url": "https://www.bankofengland.co.uk/rss/news",
+      "tags": ["macro", "rates", "central-bank", "uk"],
+      "weight": 0.7
+    },
+    {
+      "id": "treasury-press",
+      "label": "US Treasury (Press Releases)",
+      "url": "https://home.treasury.gov/rss/press-releases",
+      "tags": ["macro", "fiscal", "usa"],
+      "weight": 0.7
+    },
+    {
+      "id": "bea-releases",
+      "label": "US BEA (News Releases)",
+      "url": "https://www.bea.gov/rss/rss.xml",
+      "tags": ["macro", "data", "usa"],
+      "weight": 0.6
+    },
+    {
+      "id": "bls-news",
+      "label": "US BLS (News Releases)",
+      "url": "https://www.bls.gov/feed/bls_latest.rss",
+      "tags": ["macro", "labor", "data", "usa"],
+      "weight": 0.6
+    },
+    {
+      "id": "eia-today",
+      "label": "US EIA (Today in Energy)",
+      "url": "https://www.eia.gov/rss/todayinenergy.xml",
+      "tags": ["energy", "oil", "commodities", "macro"],
+      "weight": 0.6
+    },
   ]
 }
