@@ -30,6 +30,18 @@ Edit `world/feeds.json` and add a new source entry:
 - `npm run world:hydrate`: fetch and extract full text for new links.
 - `npm run world:build`: build a daily world context entry with macro digest.
 - `npm run world:run`: fetch + hydrate + build in sequence.
+- `npm run world:inspect`: inspect the latest world context and a corpus preview.
+
+## Inspecting the latest world context
+For a quick human-readable summary of the latest world context entry and a small
+preview of the hydrated corpus, run:
+
+```bash
+npm run world:inspect
+```
+
+This shows the most recent date, raw_count, sources_used, tag status (stub vs
+populated), and up to 5 items from the current corpus_preview.
 
 ## Hydration settings
 Environment variables (with defaults):
