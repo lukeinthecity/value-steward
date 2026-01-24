@@ -59,6 +59,12 @@ Environment variables (with defaults):
 - At this stage, `world-context.jsonl` is read-only from the perspective of trading
   and risk logic. It is a macro diary and future teaching substrate.
 
+## Agent integration
+- `world/loadLatestWorldContext.js` is the single entry point for loading the
+  most recent valid context (local file or GitHub if a token is provided).
+- The EOD tick attaches `worldContext` to each result, and the lesson email
+  includes key macro tags + summary when available.
+
 ## Notes
 The builder emits a stub world context when the LLM command is not configured
 or fails, with null tags and a short note for auditability.

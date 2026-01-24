@@ -32,6 +32,7 @@
 ## Notifications
 - When the trainer updates `policy.risk_level`, the agent attempts to send a summary email via SMTP.
 - The email includes policy changes, training reason, key metrics, and snapshot context.
+- When available, the email also includes key macro tags and the world context summary.
 - Required env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`.
 - If any are missing, the agent logs a warning and skips email without affecting the EOD loop.
 
@@ -44,6 +45,7 @@
 - Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
 - Placeholder context: `worldContext` (empty for now; reserved for future signals).
 - All of this data is collected read-only; no orders are placed during ticks or training.
+- Each tick result includes a `worldContext` field when a macro digest is available.
 
 ## Operational modes and trade gate
 - Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.

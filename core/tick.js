@@ -4,6 +4,7 @@ import { loadJsonFile, appendJsonl } from "./githubFiles.js";
 import { loadAgentState, saveAgentState, transitionMode } from "./agentState.js";
 import { MODES } from "./modes.js";
 import { computeCanTrade } from "./tradeGate.js";
+import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
 const POLICY_PATH = "config/policy.json";
 const HISTORY_PATH = "data/history.jsonl";
@@ -70,6 +71,15 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
     nowOverride: now,
   });
 
+  const worldContext =
+    (await loadLatestWorldContext({ githubToken }).catch((err) => {
+      console.error(
+        "[world] failed to load latest world context:",
+        err?.message ?? err
+      );
+      return null;
+    })) ?? null;
+
   const tradeGate = computeCanTrade({
     mode: agentState.current_mode,
     internetOk: true,
@@ -81,6 +91,7 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
     downtimeSeconds,
     tradeGate,
     agentMode: agentState.current_mode,
+    worldContext: result.worldContext ?? worldContext,
   };
 
   const historyEntry = {

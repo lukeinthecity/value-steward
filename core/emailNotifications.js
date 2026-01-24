@@ -12,7 +12,7 @@ import nodemailer from "nodemailer";
  *   EMAIL_FROM
  *   EMAIL_TO
  */
-export async function sendLessonEmail({ policy, result, training }) {
+export async function sendLessonEmail({ policy, result, training, worldContext }) {
   const {
     SMTP_HOST,
     SMTP_PORT,
@@ -84,9 +84,39 @@ export async function sendLessonEmail({ policy, result, training }) {
     `- Gross exposure: ${result.grossExposure}`,
     `- Net exposure: ${result.netExposure}`,
     "",
-    "—",
-    "This email was generated automatically by Value Steward’s EOD lesson loop.",
+    "World Context:",
   ];
+
+  if (!worldContext) {
+    bodyLines.push(
+      "- Status: no digest available (stub mode or pipeline not run yet)."
+    );
+  } else {
+    bodyLines.push(
+      `- Date: ${worldContext.date ?? "n/a"}`,
+      `- Macro risk: ${worldContext.tags?.macro_risk ?? "n/a"}`,
+      `- Rate stance: ${worldContext.tags?.rate_hawkishness ?? "n/a"}`,
+      `- Geopolitics: ${worldContext.tags?.geopolitical_tension ?? "n/a"}`,
+      `- Energy shock risk: ${worldContext.tags?.energy_shock_risk ?? "n/a"}`,
+      `- Recession fear: ${worldContext.tags?.recession_fear ?? "n/a"}`,
+      `- Sources used: ${
+        Array.isArray(worldContext.sources_used)
+          ? worldContext.sources_used.length
+          : "n/a"
+      }`,
+      `- Raw items in window: ${worldContext.raw_count ?? "n/a"}`
+    );
+
+    if (worldContext.summary) {
+      bodyLines.push("", "Macro digest summary:", worldContext.summary);
+    }
+  }
+
+  bodyLines.push(
+    "",
+    "—",
+    "This email was generated automatically by Value Steward’s EOD lesson loop."
+  );
 
   const mailOptions = {
     from: EMAIL_FROM,

@@ -3,6 +3,7 @@
 
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { sendLessonEmail } from "../core/emailNotifications.js";
+import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
 const OWNER = "lukeinthecity";
 const REPO = "value-steward";
@@ -48,9 +49,28 @@ export default defineComponent({
       maxRisk: 0.9,
     });
 
+    const worldContext =
+      (await loadLatestWorldContext({ githubToken }).catch((err) => {
+        console.error(
+          "[world] failed to load latest world context:",
+          err?.message ?? err
+        );
+        return null;
+      })) ?? null;
+
+    const resultWithWorld = {
+      ...result,
+      worldContext: result.worldContext ?? worldContext,
+    };
+
     if (training && training.updated) {
       try {
-        await sendLessonEmail({ policy, result, training });
+        await sendLessonEmail({
+          policy,
+          result: resultWithWorld,
+          training,
+          worldContext: resultWithWorld.worldContext ?? worldContext,
+        });
       } catch (err) {
         console.error(
           "[ValueSteward] Failed to send lesson email:",
@@ -59,9 +79,13 @@ export default defineComponent({
       }
     }
 
-    console.log("Value Steward executed:", { policy, result, training });
+    console.log("Value Steward executed:", {
+      policy,
+      result: resultWithWorld,
+      training,
+    });
 
-    return { policy, result, training };
+    return { policy, result: resultWithWorld, training };
   },
 });
 
