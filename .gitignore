@@ -2,7 +2,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+node_modules
 .env
+.env.*
+npm-debug.log*
 .idea/
 .vscode/
 *.pyc
