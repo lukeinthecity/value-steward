@@ -11,10 +11,10 @@
     "world:run": "npm run world:fetch && npm run world:hydrate && npm run world:build"
   },
   "dependencies": {
-    "@alpacahq/alpaca-trade-api": "^3.2.0",
-    "nodemailer": "^6.9.13",
-    "rss-parser": "^3.13.0",
-    "@mozilla/readability": "^0.5.0",
-    "jsdom": "^24.0.0"
+    "@alpacahq/alpaca-trade-api": "^1.4.2",
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^24.0.0",
+    "nodemailer": "^7.0.12",
+    "rss-parser": "^3.13.0"
   }
 }
