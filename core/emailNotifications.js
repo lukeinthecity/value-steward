@@ -92,13 +92,26 @@ export async function sendLessonEmail({ policy, result, training, worldContext }
       "- Status: no digest available (stub mode or pipeline not run yet)."
     );
   } else {
+    const macroView = worldContext.macro_view ?? null;
+    const macroScore = macroView?.macro_score;
+    const macroLabel = macroView?.macro_label;
+    const macroLine =
+      macroScore !== null && macroScore !== undefined
+        ? `${Number(macroScore).toFixed(2)} (${macroLabel ?? "n/a"})`
+        : "n/a (no tags yet)";
+
+    const tags = worldContext.tags ?? {};
+    const macroTags = [
+      `macro_risk=${formatTag(tags.macro_risk)}`,
+      `recession_fear=${formatTag(tags.recession_fear)}`,
+      `rate_hawkishness=${formatTag(tags.rate_hawkishness)}`,
+    ].join(", ");
+
     bodyLines.push(
       `- Date: ${worldContext.date ?? "n/a"}`,
-      `- Macro risk: ${worldContext.tags?.macro_risk ?? "n/a"}`,
-      `- Rate stance: ${worldContext.tags?.rate_hawkishness ?? "n/a"}`,
-      `- Geopolitics: ${worldContext.tags?.geopolitical_tension ?? "n/a"}`,
-      `- Energy shock risk: ${worldContext.tags?.energy_shock_risk ?? "n/a"}`,
-      `- Recession fear: ${worldContext.tags?.recession_fear ?? "n/a"}`,
+      `- Macro: ${macroLine} · ${macroTags}`,
+      `- Geopolitics: ${formatTag(tags.geopolitical_tension)}`,
+      `- Energy shock risk: ${formatTag(tags.energy_shock_risk)}`,
       `- Sources used: ${
         Array.isArray(worldContext.sources_used)
           ? worldContext.sources_used.length
@@ -126,4 +139,9 @@ export async function sendLessonEmail({ policy, result, training, worldContext }
   };
 
   await transporter.sendMail(mailOptions);
+}
+
+function formatTag(value) {
+  if (value === null || value === undefined) return "n/a";
+  return Number(value).toFixed(2);
 }

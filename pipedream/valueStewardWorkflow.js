@@ -40,14 +40,15 @@ export default defineComponent({
       clock,
     });
 
-    const training = await trainPolicyFromHistory({
-      githubToken,
-      minHistory: 10,
-      equityDeltaThreshold: 0,
-      maxStep: 0.01,
-      minRisk: 0.1,
-      maxRisk: 0.9,
-    });
+  const training = await trainPolicyFromHistory({
+    githubToken,
+    minHistory: 10,
+    equityDeltaThreshold: 0,
+    maxStep: 0.01,
+    minRisk: 0.1,
+    maxRisk: 0.9,
+    worldContext: resultWithWorld.worldContext ?? worldContext,
+  });
 
     const worldContext =
       (await loadLatestWorldContext({ githubToken }).catch((err) => {
@@ -687,6 +688,7 @@ function stdDev(values) {
 
 async function trainPolicyFromHistory({
   githubToken,
+  worldContext,
   minHistory = 10,
   equityDeltaThreshold = 0,
   maxStep = 0.01,
@@ -708,6 +710,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "policy_load_failed",
       metrics: null,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -736,6 +746,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "non_read_only_mode",
       metrics: null,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -759,6 +777,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "no_history",
       metrics: null,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -786,6 +812,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "not_enough_history",
       metrics: null,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -807,6 +841,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "not_enough_equity_points",
       metrics,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -831,6 +873,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "equity_delta_small",
       metrics,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -874,6 +924,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "no_strong_signal",
       metrics,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -907,6 +965,14 @@ async function trainPolicyFromHistory({
       decision: "no_update",
       reason: "risk_clamped",
       metrics,
+      worldMacroSnapshot: worldContext
+        ? {
+            date: worldContext.date ?? null,
+            macro_label: worldContext.macro_view?.macro_label ?? null,
+            macro_score: worldContext.macro_view?.macro_score ?? null,
+            tags: worldContext.tags ?? null,
+          }
+        : null,
     });
     return {
       updated: false,
@@ -948,6 +1014,14 @@ async function trainPolicyFromHistory({
     decision: "update",
     reason: "update",
     metrics,
+    worldMacroSnapshot: worldContext
+      ? {
+          date: worldContext.date ?? null,
+          macro_label: worldContext.macro_view?.macro_label ?? null,
+          macro_score: worldContext.macro_view?.macro_score ?? null,
+          tags: worldContext.tags ?? null,
+        }
+      : null,
   });
 
   return {
@@ -958,5 +1032,13 @@ async function trainPolicyFromHistory({
     equityDelta,
     policyVersion: newPolicy.version,
     metrics,
+    worldMacroSnapshot: worldContext
+      ? {
+          date: worldContext.date ?? null,
+          macro_label: worldContext.macro_view?.macro_label ?? null,
+          macro_score: worldContext.macro_view?.macro_score ?? null,
+          tags: worldContext.tags ?? null,
+        }
+      : null,
   };
 }

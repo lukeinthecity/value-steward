@@ -46,6 +46,7 @@
 - Placeholder context: `worldContext` (empty for now; reserved for future signals).
 - All of this data is collected read-only; no orders are placed during ticks or training.
 - Each tick result includes a `worldContext` field when a macro digest is available.
+- When present, `worldContext.macro_view` summarizes the smoothed macro score and label.
 
 ## Operational modes and trade gate
 - Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.

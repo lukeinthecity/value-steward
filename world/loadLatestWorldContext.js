@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 
+import { classifyMacroFromTags } from "./contextUtils.js";
+
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
 async function loadFromGitHub({ githubToken }) {
@@ -43,12 +45,18 @@ export async function loadLatestWorldContext({ githubToken } = {}) {
   try {
     if (githubToken) {
       const raw = await loadFromGitHub({ githubToken });
-      return raw ? parseLatest(raw) : null;
+      const parsed = raw ? parseLatest(raw) : null;
+      if (!parsed) return null;
+      const macroView = classifyMacroFromTags(parsed.tags ?? null);
+      return { ...parsed, macro_view: macroView };
     }
 
     if (!fs.existsSync(CONTEXT_PATH)) return null;
     const raw = fs.readFileSync(CONTEXT_PATH, "utf8");
-    return parseLatest(raw);
+    const parsed = parseLatest(raw);
+    if (!parsed) return null;
+    const macroView = classifyMacroFromTags(parsed.tags ?? null);
+    return { ...parsed, macro_view: macroView };
   } catch (err) {
     console.error(
       "[world] loadLatestWorldContext failed:",

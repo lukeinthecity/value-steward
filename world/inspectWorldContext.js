@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 
+import { summarizeMacroLine } from "./contextUtils.js";
+
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
 function loadJsonl(filePath) {
@@ -87,6 +89,7 @@ function main() {
   console.log(`- generated_at: ${latest.generated_at ?? "(missing)"}`);
   console.log(`- raw_count: ${latest.raw_count ?? "(missing)"}`);
   console.log(`- sources_used: ${sourcesUsed}`);
+  console.log(`- macro: ${summarizeMacroLine(latest)}`);
   if (!hasNonNullTags) {
     console.log("- tags: all null (no rule-based signal)");
   } else {
