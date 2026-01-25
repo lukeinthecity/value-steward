@@ -50,6 +50,11 @@ function tagsHaveValues(tags) {
   return keys.some((key) => tags[key] !== null && tags[key] !== undefined);
 }
 
+function formatTag(value) {
+  if (value === null || value === undefined) return "null";
+  return Number(value).toFixed(2);
+}
+
 function main() {
   const entries = loadJsonl(CONTEXT_PATH);
   if (!entries.length) {
@@ -77,9 +82,19 @@ function main() {
   console.log(`- generated_at: ${latest.generated_at ?? "(missing)"}`);
   console.log(`- raw_count: ${latest.raw_count ?? "(missing)"}`);
   console.log(`- sources_used: ${sourcesUsed}`);
-  console.log(
-    `- tags status: ${hasNonNullTags ? "some set" : "all null (stub)"}`
-  );
+  if (!hasNonNullTags) {
+    console.log("- tags: all null (no rule-based signal)");
+  } else {
+    const tags = latest.tags ?? {};
+    const tagLine = [
+      `macro_risk=${formatTag(tags.macro_risk)}`,
+      `rate_hawkishness=${formatTag(tags.rate_hawkishness)}`,
+      `geopolitical_tension=${formatTag(tags.geopolitical_tension)}`,
+      `energy_shock_risk=${formatTag(tags.energy_shock_risk)}`,
+      `recession_fear=${formatTag(tags.recession_fear)}`,
+    ].join(", ");
+    console.log(`- tags: ${tagLine}`);
+  }
   if (latest.notes) {
     console.log(`- notes: ${latest.notes}`);
   }

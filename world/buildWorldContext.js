@@ -3,6 +3,7 @@ import path from "path";
 
 import { makeMacroDigest } from "./makeMacroDigest.js";
 import { filterRecent, validateContext } from "./contextUtils.js";
+import { scoreWorldTags } from "./ruleBasedTags.js";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
@@ -113,6 +114,25 @@ async function main() {
       hydratedEntries: hydrated,
     });
 
+    const { tags, debugNote } = scoreWorldTags({ hydratedEntries: hydrated });
+    const baseNote = "rule-based world context (no LLM yet)";
+    const tagsValid =
+      tags &&
+      Object.values(tags).every(
+        (val) => val === null || (val >= 0 && val <= 1)
+      );
+
+    if (tagsValid) {
+      context.tags = tags;
+      context.notes = context.notes
+        ? `${context.notes} | ${baseNote}: ${debugNote}`
+        : `${baseNote}: ${debugNote}`;
+    } else {
+      context.notes = context.notes
+        ? `${context.notes} | rule-v1 failed, tags left null`
+        : "rule-v1 failed, tags left null";
+    }
+
     if (!validateContext(context)) {
       console.error("[world] context validation failed; falling back to stub");
       const fallback = {
@@ -127,8 +147,14 @@ async function main() {
     }
 
     appendContext(context);
+    const tagSummary = Object.entries(context.tags || {})
+      .map(([key, value]) =>
+        value === null ? `${key}=null` : `${key}=${value.toFixed(2)}`
+      )
+      .join(",");
+    const tagsNote = tagSummary ? ` tags=${tagSummary}` : " tags=all null";
     console.log(
-      `[world] context built date=${date} sources=${context.sources_used.length} raw=${context.raw_count} digest=${digest}`
+      `[world] context built date=${date} sources=${context.sources_used.length} raw=${context.raw_count} digest=${digest}${tagsNote}`
     );
   } catch (err) {
     console.error("[world] macro digest error:", err?.message ?? err);

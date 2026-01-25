@@ -71,6 +71,17 @@ Environment variables (with defaults):
 - At this stage, `world-context.jsonl` is read-only from the perspective of trading
   and risk logic. It is a macro diary and future teaching substrate.
 
+## Phase 1: Rule-based macro tags (no LLM)
+- Tags are now filled using simple keyword rules over the last ~48h of hydrated news.
+- Each tag is a bounded score in [0.0, 1.0], where 0 means no signal and 1 means elevated risk.
+- This layer is deterministic, auditable, and safe for local or Pi runs.
+- Run the full pipeline locally:
+  - `npm run world:fetch`
+  - `npm run world:hydrate`
+  - `npm run world:build`
+  - `npm run world:inspect`
+If relevant headlines exist, `world:inspect` should show non-null tag values.
+
 ## Agent integration
 - `world/loadLatestWorldContext.js` is the single entry point for loading the
   most recent valid context (local file or GitHub if a token is provided).
