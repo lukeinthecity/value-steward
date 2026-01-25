@@ -55,6 +55,11 @@ function formatTag(value) {
   return Number(value).toFixed(2);
 }
 
+function formatRaw(value) {
+  if (value === null || value === undefined) return " (raw n/a)";
+  return ` (raw ${Number(value).toFixed(2)})`;
+}
+
 function main() {
   const entries = loadJsonl(CONTEXT_PATH);
   if (!entries.length) {
@@ -86,12 +91,13 @@ function main() {
     console.log("- tags: all null (no rule-based signal)");
   } else {
     const tags = latest.tags ?? {};
+    const raw = latest.tags_raw ?? {};
     const tagLine = [
-      `macro_risk=${formatTag(tags.macro_risk)}`,
-      `rate_hawkishness=${formatTag(tags.rate_hawkishness)}`,
-      `geopolitical_tension=${formatTag(tags.geopolitical_tension)}`,
-      `energy_shock_risk=${formatTag(tags.energy_shock_risk)}`,
-      `recession_fear=${formatTag(tags.recession_fear)}`,
+      `macro_risk=${formatTag(tags.macro_risk)}${formatRaw(raw.macro_risk)}`,
+      `rate_hawkishness=${formatTag(tags.rate_hawkishness)}${formatRaw(raw.rate_hawkishness)}`,
+      `geopolitical_tension=${formatTag(tags.geopolitical_tension)}${formatRaw(raw.geopolitical_tension)}`,
+      `energy_shock_risk=${formatTag(tags.energy_shock_risk)}${formatRaw(raw.energy_shock_risk)}`,
+      `recession_fear=${formatTag(tags.recession_fear)}${formatRaw(raw.recession_fear)}`,
     ].join(", ");
     console.log(`- tags: ${tagLine}`);
   }

@@ -82,6 +82,12 @@ Environment variables (with defaults):
   - `npm run world:inspect`
 If relevant headlines exist, `world:inspect` should show non-null tag values.
 
+## Stability & calibration
+- tags_raw: single-day rule-based scores in [0, 1].
+- tags: smoothed values using an exponential blend over recent days.
+- Smoothing uses alpha=0.4 and clamps daily movement to maxDelta=0.15.
+- Scale guide: 0.0–0.3 low, 0.3–0.7 neutral, 0.7–1.0 high.
+
 ## Agent integration
 - `world/loadLatestWorldContext.js` is the single entry point for loading the
   most recent valid context (local file or GitHub if a token is provided).

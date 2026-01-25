@@ -4,6 +4,7 @@ import path from "path";
 import { makeMacroDigest } from "./makeMacroDigest.js";
 import { filterRecent, validateContext } from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
+import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
@@ -123,7 +124,15 @@ async function main() {
       );
 
     if (tagsValid) {
-      context.tags = tags;
+      const tagKeys = Object.keys(tags);
+      const smoothedTags = computeSmoothedTags({
+        history: context,
+        latestRawTags: tags,
+        tagKeys,
+        ...SMOOTHING_DEFAULTS,
+      });
+      context.tags_raw = tags;
+      context.tags = smoothedTags;
       context.notes = context.notes
         ? `${context.notes} | ${baseNote}: ${debugNote}`
         : `${baseNote}: ${debugNote}`;
