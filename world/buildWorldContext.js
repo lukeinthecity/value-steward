@@ -1,8 +1,16 @@
+// world/buildWorldContext.js
+
 import fs from "fs";
 import path from "path";
 
 import { makeMacroDigest } from "./makeMacroDigest.js";
-import { filterRecent, validateContext } from "./contextUtils.js";
+import {
+  filterRecent,
+  validateContext,
+  classifyMacroFromTags,
+  summarizeMacroLine,
+  toWorldDateString,
+} from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
 
@@ -42,8 +50,13 @@ function appendContext(entry) {
   fs.appendFileSync(CONTEXT_PATH, line + "\n");
 }
 
+/**
+ * Return YYYY-MM-DD in the configured "world" time zone.
+ * This uses toWorldDateString so the calendar day matches the
+ * trading locale (system TZ or WORLD_TIMEZONE override).
+ */
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toWorldDateString(new Date());
 }
 
 function buildStubContext({ entries, date }) {
@@ -110,7 +123,7 @@ async function main() {
   }
 
   try {
-    const { context, digest } = await makeMacroDigest({
+    const { context: builtContext, digest } = await makeMacroDigest({
       stubContext,
       hydratedEntries: hydrated,
     });
@@ -123,6 +136,8 @@ async function main() {
         (val) => val === null || (val >= 0 && val <= 1)
       );
 
+    let contextToUse = builtContext;
+
     if (tagsValid) {
       const tagKeys = Object.keys(tags);
       const smoothedTags = computeSmoothedTags({
@@ -131,39 +146,44 @@ async function main() {
         tagKeys,
         ...SMOOTHING_DEFAULTS,
       });
-      context.tags_raw = tags;
-      context.tags = smoothedTags;
-      context.notes = context.notes
-        ? `${context.notes} | ${baseNote}: ${debugNote}`
+      contextToUse.tags_raw = tags;
+      contextToUse.tags = smoothedTags;
+      contextToUse.notes = contextToUse.notes
+        ? `${contextToUse.notes} | ${baseNote}: ${debugNote}`
         : `${baseNote}: ${debugNote}`;
     } else {
-      context.notes = context.notes
-        ? `${context.notes} | rule-v1 failed, tags left null`
+      contextToUse.notes = contextToUse.notes
+        ? `${contextToUse.notes} | rule-v1 failed, tags left null`
         : "rule-v1 failed, tags left null";
     }
 
-    if (!validateContext(context)) {
+    if (!validateContext(contextToUse)) {
       console.error("[world] context validation failed; falling back to stub");
       const fallback = {
         ...stubContext,
         notes: "stub world context (LLM validation failed)",
       };
       appendContext(fallback);
+      const logDate = fallback.date ?? date;
       console.log(
-        `[world] context built date=${date} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+        `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
       );
       return;
     }
 
-    appendContext(context);
-    const tagSummary = Object.entries(context.tags || {})
+    appendContext(contextToUse);
+
+    const tagSummary = Object.entries(contextToUse.tags || {})
       .map(([key, value]) =>
         value === null ? `${key}=null` : `${key}=${value.toFixed(2)}`
       )
       .join(",");
     const tagsNote = tagSummary ? ` tags=${tagSummary}` : " tags=all null";
+
+    const logDate = contextToUse.date ?? date;
+
     console.log(
-      `[world] context built date=${date} sources=${context.sources_used.length} raw=${context.raw_count} digest=${digest}${tagsNote}`
+      `[world] context built date=${logDate} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
     );
   } catch (err) {
     console.error("[world] macro digest error:", err?.message ?? err);
@@ -172,8 +192,9 @@ async function main() {
       notes: "stub world context (LLM call failed)",
     };
     appendContext(fallback);
+    const logDate = fallback.date ?? date;
     console.log(
-      `[world] context built date=${date} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+      `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
     );
   }
 }
