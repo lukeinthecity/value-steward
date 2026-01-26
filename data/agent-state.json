@@ -3,8 +3,8 @@
   "last_market_timestamp": "2026-01-26T20:32:56.108Z",
   "last_known_positions": [],
   "open_orders_snapshot": [],
-  "current_mode": "RECOVERY",
-  "last_mode_transition_reason": "downtime_detected",
-  "status_indicator": "RECOVERY",
-  "_sha": "b2626346b93997ec3b18c4b389b4cf6f51a50dc1"
+  "current_mode": "LIVE",
+  "last_mode_transition_reason": "normal",
+  "status_indicator": "LIVE",
+  "_sha": "24bc7595b8d6f984b7cafeaa374a7f86276da9ca"
 }
