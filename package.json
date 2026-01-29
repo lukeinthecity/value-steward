@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "train:policy": "node scripts/trainPolicy.js",
+    "local:tick": "node local/runValueStewardTick.js",
     "world:fetch": "node world/fetchRss.js",
     "world:hydrate": "node world/hydrateLinks.js",
     "world:build": "node world/buildWorldContext.js",
@@ -14,6 +15,7 @@
   "dependencies": {
     "@alpacahq/alpaca-trade-api": "^1.4.2",
     "@mozilla/readability": "^0.6.0",
+    "dotenv": "^16.0.0",
     "jsdom": "^24.0.0",
     "nodemailer": "^7.0.12",
     "rss-parser": "^3.13.0"
