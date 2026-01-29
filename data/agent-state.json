@@ -1,10 +1,10 @@
 {
-  "last_run_wall_clock": "2026-01-28T21:05:20.468Z",
-  "last_market_timestamp": "2026-01-28T21:05:20.468Z",
+  "last_run_wall_clock": "2026-01-29T18:30:47.989Z",
+  "last_market_timestamp": "2026-01-29T18:30:47.989Z",
   "last_known_positions": [],
   "open_orders_snapshot": [],
   "current_mode": "RECOVERY",
   "last_mode_transition_reason": "downtime_detected",
   "status_indicator": "RECOVERY",
-  "_sha": "2c849abf1428de784f93b9f5ec46e59f87c6b026"
+  "_sha": "ab2a1fe09f9537693016e8ea68d6cdcf413ff7d5"
 }
