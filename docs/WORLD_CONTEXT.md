@@ -71,6 +71,16 @@ Environment variables (with defaults):
 - At this stage, `world-context.jsonl` is read-only from the perspective of trading
   and risk logic. It is a macro diary and future teaching substrate.
 
+## World time zone normalization
+- World context dates are normalized to a single "world time zone."
+- Resolution order:
+  - `WORLD_TIMEZONE` (explicit override)
+  - `TZ` (system-level time zone)
+  - `Intl.DateTimeFormat().resolvedOptions().timeZone`
+  - fallback to `UTC`
+- This ensures `worldContext.date` reflects the intended local trading day even
+  when RSS items are timestamped in UTC or foreign time zones.
+
 ## Phase 1: Rule-based macro tags (no LLM)
 - Tags are now filled using simple keyword rules over the last ~48h of hydrated news.
 - Each tag is a bounded score in [0.0, 1.0], where 0 means no signal and 1 means elevated risk.

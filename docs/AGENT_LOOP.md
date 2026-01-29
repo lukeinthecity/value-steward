@@ -47,6 +47,9 @@
 - All of this data is collected read-only; no orders are placed during ticks or training.
 - Each tick result includes a `worldContext` field when a macro digest is available.
 - When present, `worldContext.macro_view` summarizes the smoothed macro score and label.
+- Agents may observe `macro_view`, but MUST NOT trade based on `macro_view` alone.
+- `macro_view` is advisory, not directive; trading behavior remains unchanged.
+- No trade behavior is altered by macro tagging or macro_view.
 
 ## Operational modes and trade gate
 - Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.
@@ -58,3 +61,8 @@
   - `last_run_wall_clock`, `last_market_timestamp`
   - `last_known_positions`, `open_orders_snapshot`
   - `current_mode`, `last_mode_transition_reason`, `status_indicator`
+
+## Macro view examples
+- calm: `2026-01-24 · macro=0.22 (calm) · inputs=4/5 · nulls=1 · confidence=0.80 (moderate)`
+- watchful: `2026-01-24 · macro=0.48 (watchful) · inputs=5/5 · nulls=0 · confidence=1.00 (robust)`
+- stressed: `2026-01-24 · macro=0.67 (stressed) · inputs=3/5 · nulls=2 · confidence=0.60 (moderate)`
