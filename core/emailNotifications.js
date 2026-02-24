@@ -22,16 +22,19 @@ export async function sendLessonEmail({ policy, result, training, worldContext }
     EMAIL_TO,
   } = process.env;
 
-  if (
-    !SMTP_HOST ||
-    !SMTP_PORT ||
-    !SMTP_USER ||
-    !SMTP_PASS ||
-    !EMAIL_FROM ||
-    !EMAIL_TO
-  ) {
+  const missing = [];
+  if (!SMTP_HOST) missing.push("SMTP_HOST");
+  if (!SMTP_PORT) missing.push("SMTP_PORT");
+  if (!SMTP_USER) missing.push("SMTP_USER");
+  if (!SMTP_PASS) missing.push("SMTP_PASS");
+  if (!EMAIL_FROM) missing.push("EMAIL_FROM");
+  if (!EMAIL_TO) missing.push("EMAIL_TO");
+
+  if (missing.length) {
     console.warn(
-      "[ValueSteward] Email config incomplete, skipping lesson email."
+      `[ValueSteward] Email config incomplete (missing: ${missing.join(
+        ", "
+      )}), skipping lesson email.`
     );
     return;
   }

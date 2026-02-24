@@ -101,18 +101,29 @@ async function main() {
   });
 
   if (training && training.updated) {
-    try {
-      await sendLessonEmail({
-        policy,
-        result: resultWithWorld,
-        training,
-        worldContext: resultWithWorld.worldContext ?? worldContext,
-      });
-    } catch (err) {
-      console.error(
-        "[ValueSteward] Failed to send lesson email:",
-        err?.message ?? err
+    const emailEnabled = !["0", "false", "no", "off"].includes(
+      String(process.env.VS_EMAIL_POLICY_UPDATES ?? "true").toLowerCase()
+    );
+    if (!emailEnabled) {
+      console.log(
+        "[ValueSteward] Lesson email disabled (VS_EMAIL_POLICY_UPDATES=false)."
       );
+    } else {
+      try {
+        const policyForEmail = training.newPolicy ?? policy;
+        await sendLessonEmail({
+          policy: policyForEmail,
+          result: resultWithWorld,
+          training,
+          worldContext: resultWithWorld.worldContext ?? worldContext,
+        });
+        console.log("[ValueSteward] Lesson email sent.");
+      } catch (err) {
+        console.error(
+          "[ValueSteward] Failed to send lesson email:",
+          err?.message ?? err
+        );
+      }
     }
   }
 
