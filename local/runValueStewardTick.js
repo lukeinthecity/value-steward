@@ -3,6 +3,7 @@ import Alpaca from "@alpacahq/alpaca-trade-api";
 import { runTick } from "../core/tick.js";
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import { sendLessonEmail } from "../core/emailNotifications.js";
+import { loadAgentState, saveAgentState } from "../core/agentState.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
 async function fetchLastOrder(alpaca) {
@@ -51,6 +52,26 @@ function getExchangeTimeParts(date = new Date()) {
     hour: Number(map.hour),
     minute: Number(map.minute),
   };
+}
+
+function getExchangeDateString(date = new Date()) {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return fmt.format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+function isWithinEodWindow(hour, minute, windowMinutes) {
+  const closeMinutes = 16 * 60;
+  const nowMinutes = hour * 60 + minute;
+  return Math.abs(nowMinutes - closeMinutes) <= windowMinutes;
 }
 
 function getWorldContextAgeMinutes(worldContext) {
@@ -117,9 +138,14 @@ async function main() {
   const lastOrder = await fetchLastOrder(alpaca);
 
   const { hour, minute } = getExchangeTimeParts();
-  const isFinalDecision = hour === 16 && minute === 0;
+  const exchangeDate = getExchangeDateString();
+  const windowMinutes = Number(process.env.VS_EMAIL_EOD_WINDOW_MINUTES ?? 5);
+  const inEodWindow = isWithinEodWindow(hour, minute, windowMinutes);
+  const isFinalDecision = inEodWindow;
   if (isFinalDecision) {
-    console.log("[VS] final_decision_tick true (EOD world context applied)");
+    console.log(
+      `[VS] final_decision_tick true (EOD window ±${windowMinutes}m)`
+    );
   }
   resultWithWorld.finalDecision = isFinalDecision;
   resultWithWorld.worldContextAgeMinutes =
@@ -147,8 +173,21 @@ async function main() {
         "[ValueSteward] Lesson email disabled (VS_EMAIL_POLICY_UPDATES=false)."
       );
     } else {
-    const shouldSendSummary = isFinalDecision;
-    const shouldSendUpdate = training.updated && !eodOnly;
+      let shouldSendSummary = isFinalDecision;
+      let agentState = null;
+      if (shouldSendSummary) {
+        agentState = await loadAgentState();
+        const lastSummaryDate = agentState.last_eod_email_date ?? null;
+        if (lastSummaryDate === exchangeDate) {
+          shouldSendSummary = false;
+          console.log(
+            "[ValueSteward] EOD summary already sent for",
+            exchangeDate
+          );
+        }
+      }
+
+      const shouldSendUpdate = training.updated && !eodOnly;
 
       if (shouldSendSummary || shouldSendUpdate) {
         try {
@@ -166,6 +205,11 @@ async function main() {
               ? "[ValueSteward] EOD summary email sent."
               : "[ValueSteward] Lesson email sent."
           );
+          if (shouldSendSummary) {
+            const updated = agentState ?? (await loadAgentState());
+            updated.last_eod_email_date = exchangeDate;
+            await saveAgentState(updated);
+          }
         } catch (err) {
           console.error(
             "[ValueSteward] Failed to send lesson email:",

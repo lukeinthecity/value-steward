@@ -388,29 +388,6 @@ class DecisionEngine:
         if signal_result:
             self._prefetch_sectors(signal_result.signals)
 
-        if require_signal and not selected_signal:
-            return IntentRecord(
-                mode=mode,
-                action_type="NO_ACTION",
-                core_symbol=self.settings.core_symbol,
-                target_exposure_pct=target,
-                buffer_pct=buffer,
-                reason_code="NO_SIGNAL",
-                pre_risk_exposure_pct=snapshot.risk_exposure_pct,
-                post_risk_exposure_pct=snapshot.risk_exposure_pct,
-                target_risk_exposure_pct=target,
-                rebalance_buffer_pct=buffer,
-                world_tags=world_tags,
-                patterns_consulted=[],
-                explanation=(
-                    "No eligible signal available; skipping trades."
-                    + (f" {macro_note}" if macro_note else "")
-                    + (f" {signal_note}" if signal_note else "")
-                    + risk_note
-                ),
-                **signal_meta,
-            )
-
         signal_meta = {
             "signal_symbol": selected_signal.symbol if selected_signal else None,
             "signal_sector": self.sector_map.get(selected_signal.symbol)
@@ -437,6 +414,29 @@ class DecisionEngine:
             "risk_off": risk_off,
             "risk_off_reason": risk_off_note,
         }
+
+        if require_signal and not selected_signal:
+            return IntentRecord(
+                mode=mode,
+                action_type="NO_ACTION",
+                core_symbol=self.settings.core_symbol,
+                target_exposure_pct=target,
+                buffer_pct=buffer,
+                reason_code="NO_SIGNAL",
+                pre_risk_exposure_pct=snapshot.risk_exposure_pct,
+                post_risk_exposure_pct=snapshot.risk_exposure_pct,
+                target_risk_exposure_pct=target,
+                rebalance_buffer_pct=buffer,
+                world_tags=world_tags,
+                patterns_consulted=[],
+                explanation=(
+                    "No eligible signal available; skipping trades."
+                    + (f" {macro_note}" if macro_note else "")
+                    + (f" {signal_note}" if signal_note else "")
+                    + risk_note
+                ),
+                **signal_meta,
+            )
 
         max_target = float(os.getenv("VS_MAX_TARGET_EXPOSURE_PCT", "0.30"))
         target = min(target, max_target)

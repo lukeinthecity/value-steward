@@ -49,7 +49,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     nextMode = MODES.INACTIVE;
     transitionReason = "initial_boot";
     console.log(`[VS] boot @ ${now} mode=${nextMode}`);
-  } else if (marketOpenFlag && lastRunExchange && lastRunExchange !== todayExchange) {
+  } else if (lastRunExchange && lastRunExchange !== todayExchange) {
     nextMode = MODES.CATCHUP;
     transitionReason = "new_trading_day";
   } else if (
