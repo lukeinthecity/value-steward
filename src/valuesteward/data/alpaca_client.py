@@ -9,6 +9,8 @@ from typing import List, Literal
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockSnapshotRequest
 
 from valuesteward.config import ValueStewardSettings, get_settings
 from valuesteward.models import PortfolioSnapshot, Position
@@ -30,11 +32,36 @@ class AlpacaClient:
             paper=True,
             url_override=self.settings.alpaca_base_url,
         )
+        self._data_client = StockHistoricalDataClient(
+            self.settings.alpaca_api_key_id,
+            self.settings.alpaca_secret_key,
+        )
 
     def get_account(self):
         """Return raw account info from Alpaca."""
 
         return self._trading_client.get_account()
+
+    def get_all_assets(self):
+        """Return all assets from Alpaca."""
+
+        return self._trading_client.get_all_assets()
+
+    def list_tradable_symbols(self) -> List[str]:
+        """Return tradable, active US equity symbols."""
+
+        symbols: List[str] = []
+        for asset in self.get_all_assets():
+            if getattr(asset, "tradable", False) is not True:
+                continue
+            if getattr(asset, "status", "").lower() != "active":
+                continue
+            if getattr(asset, "asset_class", "").lower() != "us_equity":
+                continue
+            symbol = getattr(asset, "symbol", None)
+            if symbol:
+                symbols.append(symbol)
+        return symbols
 
     def get_positions(self) -> List[Position]:
         """Return current positions as Position models."""
@@ -50,6 +77,17 @@ class AlpacaClient:
                 )
             )
         return positions
+
+    def get_clock(self):
+        """Return Alpaca market clock (open/close state)."""
+
+        return self._trading_client.get_clock()
+
+    def get_snapshots(self, symbols: List[str]):
+        """Return snapshots for the given symbols."""
+
+        request = StockSnapshotRequest(symbol_or_symbols=symbols)
+        return self._data_client.get_stock_snapshot(request)
 
     def get_portfolio_snapshot(self) -> PortfolioSnapshot:
         """Build a basic PortfolioSnapshot from Alpaca account data."""

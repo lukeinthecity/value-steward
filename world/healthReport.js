@@ -1,0 +1,348 @@
+import fs from "fs";
+import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
+const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
+const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
+const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
+const STATE_PATH = path.join(process.cwd(), "data", "world-health.json");
+const STALE_HOURS = Number(process.env.WORLD_FEED_STALE_HOURS ?? 72);
+const STALE_MAX = Number(process.env.WORLD_FEED_STALE_MAX ?? 3);
+const AUTO_DISABLE =
+  String(process.env.WORLD_FEED_AUTO_DISABLE ?? "true").toLowerCase() === "true";
+
+const execAsync = promisify(exec);
+
+function loadJson(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const raw = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(raw);
+}
+
+function loadJsonl(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  const raw = fs.readFileSync(filePath, "utf8");
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function sortByTimestamp(a, b, key) {
+  const at = Date.parse(a?.[key] ?? 0);
+  const bt = Date.parse(b?.[key] ?? 0);
+  return at - bt;
+}
+
+function getAgeHours(value) {
+  if (!value) return null;
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return null;
+  return (Date.now() - ts) / (1000 * 60 * 60);
+}
+
+function summarizeInbox(entries, sources) {
+  const bySource = new Map();
+  for (const entry of entries) {
+    const sourceId = entry.source_id ?? "unknown";
+    const current = bySource.get(sourceId) || {
+      count: 0,
+      last_ts: null,
+      last_published: null,
+    };
+    current.count += 1;
+    if (!current.last_ts || Date.parse(entry.ts) > Date.parse(current.last_ts)) {
+      current.last_ts = entry.ts ?? current.last_ts;
+    }
+    if (
+      entry.published &&
+      (!current.last_published ||
+        Date.parse(entry.published) > Date.parse(current.last_published))
+    ) {
+      current.last_published = entry.published;
+    }
+    bySource.set(sourceId, current);
+  }
+
+  const rows = [];
+  for (const source of sources) {
+    const data = bySource.get(source.id);
+    const lastActivity = data?.last_published ?? data?.last_ts ?? null;
+    const ageHours = getAgeHours(lastActivity);
+    const stale =
+      source.enabled !== false &&
+      (ageHours === null ? true : ageHours > STALE_HOURS);
+    rows.push({
+      id: source.id,
+      label: source.label,
+      enabled: source.enabled !== false,
+      count: data?.count ?? 0,
+      last_ts: data?.last_ts ?? null,
+      last_published: data?.last_published ?? null,
+      age_hours: ageHours,
+      stale,
+    });
+  }
+
+  return rows;
+}
+
+function summarizeHydration(entries) {
+  const total = entries.length;
+  const ok = entries.filter((entry) => entry.ok === true).length;
+  const failed = entries.filter((entry) => entry.ok === false).length;
+  const last = entries.slice().sort((a, b) => sortByTimestamp(a, b, "ts")).at(-1);
+  return {
+    total,
+    ok,
+    failed,
+    last_ts: last?.ts ?? null,
+  };
+}
+
+function summarizeContext(entries) {
+  if (!entries.length) return null;
+  const sorted = entries
+    .slice()
+    .sort((a, b) => {
+      if (a.date !== b.date) return String(a.date).localeCompare(String(b.date));
+      return sortByTimestamp(a, b, "generated_at");
+    });
+  const latest = sorted.at(-1);
+  const bySlot = new Map();
+  for (const entry of sorted) {
+    const key = entry.slot ?? "unknown";
+    const existing = bySlot.get(key);
+    if (!existing || Date.parse(entry.generated_at) > Date.parse(existing.generated_at)) {
+      bySlot.set(key, entry);
+    }
+  }
+  return {
+    latest,
+    bySlot,
+  };
+}
+
+function formatDate(value) {
+  if (!value) return "n/a";
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return value;
+  return new Date(ts).toISOString();
+}
+
+function formatAge(value) {
+  if (value === null || value === undefined) return "n/a";
+  return Number(value).toFixed(1);
+}
+
+function shouldColor() {
+  return process.stdout.isTTY && !process.env.NO_COLOR;
+}
+
+function color(text, code) {
+  if (!shouldColor()) return text;
+  return `\u001b[${code}m${text}\u001b[0m`;
+}
+
+function red(text) {
+  return color(text, "31");
+}
+
+function yellow(text) {
+  return color(text, "33");
+}
+
+function green(text) {
+  return color(text, "32");
+}
+
+function bold(text) {
+  return color(text, "1");
+}
+
+async function runWorldPipeline() {
+  console.log("[world:health] Running world:run to refresh feeds...");
+  await execAsync("npm run world:run", { cwd: process.cwd() });
+}
+
+function loadState() {
+  const feeds = loadJson(FEEDS_PATH);
+  const inbox = loadJsonl(INBOX_PATH);
+  const hydrated = loadJsonl(HYDRATED_PATH);
+  const context = loadJsonl(CONTEXT_PATH);
+  const health =
+    loadJson(STATE_PATH) ?? { last_checked: null, sources: {} };
+  return { feeds, inbox, hydrated, context, health };
+}
+
+function saveHealthState(state) {
+  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+  fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+function updateHealthState(summary, health) {
+  const next = health ?? { last_checked: null, sources: {} };
+  next.sources = next.sources ?? {};
+  const now = new Date().toISOString();
+
+  for (const row of summary) {
+    const entry = next.sources[row.id] || {
+      stale_streak: 0,
+      last_checked: null,
+      last_seen: null,
+      last_age_hours: null,
+    };
+    entry.stale_streak = row.stale ? (entry.stale_streak ?? 0) + 1 : 0;
+    entry.last_checked = now;
+    entry.last_seen = row.last_published ?? row.last_ts ?? null;
+    entry.last_age_hours = row.age_hours ?? null;
+    next.sources[row.id] = entry;
+  }
+
+  next.last_checked = now;
+  return next;
+}
+
+function autoDisableFeeds(feeds, summary, health) {
+  if (!AUTO_DISABLE) {
+    return { feeds, changed: false, disabled: [] };
+  }
+  const disabled = [];
+  let changed = false;
+  const sources = feeds.sources ?? [];
+  const byId = new Map(summary.map((row) => [row.id, row]));
+  for (const source of sources) {
+    if (source.enabled === false) continue;
+    const row = byId.get(source.id);
+    if (!row || !row.stale) continue;
+    const streak = health.sources?.[source.id]?.stale_streak ?? 0;
+    if (streak >= STALE_MAX) {
+      source.enabled = false;
+      source.disabled_reason = "auto_stale";
+      source.disabled_at = new Date().toISOString();
+      disabled.push(source.id);
+      changed = true;
+    }
+  }
+  if (changed) {
+    feeds.updatedAt = new Date().toISOString();
+    fs.writeFileSync(FEEDS_PATH, JSON.stringify(feeds, null, 2));
+  }
+  return { feeds, changed, disabled };
+}
+
+async function main() {
+  const args = new Set(process.argv.slice(2));
+  const refresh = args.has("--refresh");
+  const refreshIfStale = args.has("--refresh-if-stale");
+
+  let { feeds, inbox, hydrated, context, health } = loadState();
+
+  if (!feeds) {
+    console.log("[world:health] Missing feeds.json");
+    process.exit(1);
+  }
+
+  let inboxSummary = summarizeInbox(inbox, feeds.sources ?? []);
+  let staleSources = inboxSummary.filter((row) => row.stale);
+
+  if (refresh || (refreshIfStale && staleSources.length > 0)) {
+    await runWorldPipeline();
+    ({ feeds, inbox, hydrated, context, health } = loadState());
+    inboxSummary = summarizeInbox(inbox, feeds.sources ?? []);
+    staleSources = inboxSummary.filter((row) => row.stale);
+  }
+
+  health = updateHealthState(inboxSummary, health);
+  const disableResult = autoDisableFeeds(feeds, inboxSummary, health);
+  if (disableResult.changed) {
+    inboxSummary = summarizeInbox(inbox, disableResult.feeds.sources ?? []);
+    staleSources = inboxSummary.filter((row) => row.stale);
+    console.log(
+      `[world:health] auto-disabled feeds: ${disableResult.disabled.join(", ")}`
+    );
+  }
+  saveHealthState(health);
+
+  console.log("[world:health] Feed health report");
+  console.log(`- feeds: ${feeds.sources?.length ?? 0}`);
+  console.log(`- inbox entries: ${inbox.length}`);
+  console.log(`- hydrated entries: ${hydrated.length}`);
+  console.log(`- context entries: ${context.length}`);
+  console.log(`- stale threshold: ${STALE_HOURS}h`);
+  console.log(`- stale max: ${STALE_MAX}`);
+  console.log(`- auto-disable: ${AUTO_DISABLE}`);
+  console.log(`- stale sources: ${staleSources.length}`);
+  console.log("");
+
+  console.log("[world:health] Inbox by source");
+  inboxSummary.forEach((row) => {
+    const state = health.sources?.[row.id];
+    const streak = state?.stale_streak ?? 0;
+    const status = row.stale
+      ? red(bold("STALE"))
+      : row.enabled
+        ? green("OK")
+        : yellow("DISABLED");
+    console.log(
+      `- ${row.id} (${row.label}): ${status} count=${row.count} last_ts=${formatDate(
+        row.last_ts
+      )} last_published=${formatDate(row.last_published)} age_h=${formatAge(
+        row.age_hours
+      )} streak=${streak} enabled=${row.enabled}`
+    );
+  });
+
+  console.log("");
+  const hydration = summarizeHydration(hydrated);
+  console.log("[world:health] Hydration");
+  console.log(
+    `- total=${hydration.total} ok=${hydration.ok} failed=${hydration.failed} last_ts=${formatDate(
+      hydration.last_ts
+    )}`
+  );
+
+  console.log("");
+  const contextSummary = summarizeContext(context);
+  if (!contextSummary) {
+    console.log("[world:health] No world context entries yet.");
+    return;
+  }
+  console.log("[world:health] Latest context");
+  console.log(
+    `- date=${contextSummary.latest?.date ?? "n/a"} slot=${
+      contextSummary.latest?.slot ?? "n/a"
+    } generated_at=${formatDate(contextSummary.latest?.generated_at)}`
+  );
+  console.log(
+    `- sources_used=${contextSummary.latest?.sources_used?.length ?? 0} raw_count=${
+      contextSummary.latest?.raw_count ?? 0
+    }`
+  );
+
+  console.log("");
+  console.log("[world:health] Latest context by slot");
+  for (const [slot, entry] of contextSummary.bySlot.entries()) {
+    console.log(
+      `- ${slot}: date=${entry.date ?? "n/a"} generated_at=${formatDate(
+        entry.generated_at
+      )} sources_used=${entry.sources_used?.length ?? 0} raw_count=${
+        entry.raw_count ?? 0
+      }`
+    );
+  }
+}
+
+main().catch((err) => {
+  console.error("[world:health] Error:", err?.message ?? err);
+  process.exit(1);
+});

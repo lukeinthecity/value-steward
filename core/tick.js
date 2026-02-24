@@ -1,15 +1,16 @@
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { runValueSteward } from "./runValueSteward.js";
-import { loadJsonFile, appendJsonl } from "./githubFiles.js";
+import { loadJsonFile, appendJsonl } from "./localFiles.js";
 import { loadAgentState, saveAgentState, transitionMode } from "./agentState.js";
 import { MODES } from "./modes.js";
 import { computeCanTrade } from "./tradeGate.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
+import { validatePolicy } from "./policyValidator.js";
 
 const POLICY_PATH = "config/policy.json";
 const HISTORY_PATH = "data/history.jsonl";
 
-export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) {
+export async function runTick({ alpacaConfig, marketOpen, clock }) {
   const alpaca = new Alpaca(alpacaConfig);
   const now = new Date().toISOString();
   const agentState = await loadAgentState();
@@ -49,7 +50,6 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
   }
 
   const { content: policy } = await loadJsonFile({
-    token: githubToken,
     path: POLICY_PATH,
     defaultValue: {
       version: 1,
@@ -61,6 +61,12 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
       lastEquityDelta: 0,
     },
   });
+  const policyValidation = validatePolicy(policy);
+  if (!policyValidation.valid) {
+    console.warn(
+      `[VS] policy validation warnings: ${policyValidation.warnings.join("; ")}`
+    );
+  }
 
   const result = await runValueSteward({
     alpaca,
@@ -72,7 +78,7 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
   });
 
   const worldContext =
-    (await loadLatestWorldContext({ githubToken }).catch((err) => {
+    (await loadLatestWorldContext().catch((err) => {
       console.error(
         "[world] failed to load latest world context:",
         err?.message ?? err
@@ -91,7 +97,7 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
     downtimeSeconds,
     tradeGate,
     agentMode: agentState.current_mode,
-    worldContext: result.worldContext ?? worldContext,
+    worldContext: worldContext ?? result.worldContext,
   };
 
   const historyEntry = {
@@ -100,7 +106,6 @@ export async function runTick({ alpacaConfig, githubToken, marketOpen, clock }) 
   };
 
   await appendJsonl({
-    token: githubToken,
     path: HISTORY_PATH,
     entry: historyEntry,
   });

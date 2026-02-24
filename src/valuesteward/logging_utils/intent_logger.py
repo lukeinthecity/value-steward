@@ -27,9 +27,70 @@ class IntentLogger:
         extras = ""
         if target is not None and buffer is not None:
             extras = f" target={target:.2f} buffer={buffer:.2f}"
+        policy_meta = ""
+        if (
+            intent.policy_schema_version is not None
+            or intent.policy_version is not None
+            or intent.policy_risk_level is not None
+            or intent.policy_mode is not None
+        ):
+            policy_meta = (
+                " policy_schema="
+                f"{intent.policy_schema_version if intent.policy_schema_version is not None else '-'}"
+                " policy_v="
+                f"{intent.policy_version if intent.policy_version is not None else '-'}"
+                " policy_risk="
+                f"{intent.policy_risk_level if intent.policy_risk_level is not None else '-'}"
+                " policy_mode="
+                f"{intent.policy_mode if intent.policy_mode is not None else '-'}"
+            )
+        gate = ""
+        if intent.policy_force_no_trade is not None:
+            gate = f" policy_force_no_trade={intent.policy_force_no_trade}"
+        macro = ""
+        if intent.world_macro_label is not None or intent.world_macro_score is not None:
+            score = (
+                f"{intent.world_macro_score:.2f}"
+                if intent.world_macro_score is not None
+                else "n/a"
+            )
+            macro = f" world_macro={intent.world_macro_label or '-'} score={score}"
+
+        risk_off = ""
+        if intent.risk_off is not None:
+            risk_off = f" risk_off={intent.risk_off}"
+            if intent.risk_off_reason:
+                risk_off += f" reason={intent.risk_off_reason}"
+
+        signal = ""
+        if intent.signal_symbol is not None or intent.signal_score is not None:
+            score = (
+                f"{intent.signal_score:.4f}"
+                if intent.signal_score is not None
+                else "n/a"
+            )
+            if intent.signal_score_raw is not None:
+                raw_score = f"{intent.signal_score_raw:.4f}"
+                if raw_score != score:
+                    score = f"{score} raw={raw_score}"
+            day_ret = (
+                f"{intent.signal_day_return:.2%}"
+                if intent.signal_day_return is not None
+                else "n/a"
+            )
+            sector = intent.signal_sector or "-"
+            signal = (
+                f" signal={intent.signal_symbol or '-'} sector={sector} "
+                f"score={score} day_return={day_ret}"
+            )
+
+        plan = ""
+        if intent.actions:
+            total = sum(action.notional for action in intent.actions)
+            plan = f" plan_actions={len(intent.actions)} plan_notional=${total:.2f}"
 
         print(
             f"[INTENT] {timestamp} mode={intent.mode} action={intent.action_type} "
             f"symbol={intent.symbol} risk={intent.pre_risk_exposure_pct:.2f}"
-            f"->{intent.post_risk_exposure_pct:.2f}{extras}"
+            f"->{intent.post_risk_exposure_pct:.2f}{extras}{policy_meta}{gate}{macro}{risk_off}{signal}{plan}"
         )

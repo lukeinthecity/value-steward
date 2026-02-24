@@ -1,11 +1,26 @@
 {
-  "version": 2,
+  "schema_version": 1,
+  "version": 16,
   "mode": "read-only",
-  "risk_level": 0.5,
+  "risk_level": 0.20000027999999986,
+  "target_risk_exposure_pct_low": 0.2,
+  "rebalance_buffer_pct": 0.02,
+  "trade_gate_overrides": {
+    "force_no_trade": false,
+    "reason": null
+  },
   "max_positions": 3,
   "rebalance_threshold": 0.02,
-  "lastTrainedAt": "2026-01-22T17:52:39.855Z",
-  "lastEquityDelta": 0,
-  "lastMetricsSummary": null,
-  "lastTrainingReason": null
+  "lastTrainedAt": "2026-02-24T18:30:02.189Z",
+  "lastEquityDelta": 0.00999999999476131,
+  "lastMetricsSummary": {
+    "sampleCount": 55,
+    "equityReturn": 9.99999999476131e-8,
+    "equityVolatility": 2.3497365000632796e-8,
+    "maxDrawdown": 9.999998994761412e-8,
+    "avgCashUtilization": 0,
+    "avgGrossExposureRatio": 0.000006780037564284796,
+    "avgMaxPositionWeight": 0.00001610258921517639
+  },
+  "lastTrainingReason": "update"
 }

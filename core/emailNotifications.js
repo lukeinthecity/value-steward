@@ -89,7 +89,7 @@ export async function sendLessonEmail({ policy, result, training, worldContext }
 
   if (!worldContext) {
     bodyLines.push(
-      "- Status: no digest available (stub mode or pipeline not run yet)."
+      "- Status: no digest available (pipeline not run yet)."
     );
   } else {
     const macroView = worldContext.macro_view ?? null;

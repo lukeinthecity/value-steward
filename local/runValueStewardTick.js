@@ -1,34 +1,72 @@
 import "dotenv/config";
 import Alpaca from "@alpacahq/alpaca-trade-api";
-import {
-  runTick,
-  trainPolicyFromHistory,
-  loadWorldContextFromGitHub,
-  sendLessonEmail,
-} from "../core/valueStewardAgent.js";
+import { runTick } from "../core/tick.js";
+import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
+import { sendLessonEmail } from "../core/emailNotifications.js";
+import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
+
+function getExchangeTimeParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(
+    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value])
+  );
+  return {
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+  };
+}
+
+function getWorldContextAgeMinutes(worldContext) {
+  if (!worldContext?.generated_at) return null;
+  const ts = Date.parse(worldContext.generated_at);
+  if (Number.isNaN(ts)) return null;
+  return (Date.now() - ts) / 60000;
+}
+
+function describeWorldContext(worldContext) {
+  if (!worldContext) return "none";
+  const date = worldContext.date ?? "unknown";
+  const generatedAt = worldContext.generated_at ?? "unknown";
+  const macroLabel = worldContext.macro_view?.macro_label ?? "unknown";
+  const macroScore = worldContext.macro_view?.macro_score ?? null;
+  const sources = Array.isArray(worldContext.sources_used)
+    ? worldContext.sources_used.length
+    : null;
+  const rawCount = worldContext.raw_count ?? null;
+  const ageMinutes = getWorldContextAgeMinutes(worldContext);
+  const macroScoreText =
+    typeof macroScore === "number" ? macroScore.toFixed(2) : "n/a";
+  const sourcesText = sources !== null ? sources : "n/a";
+  const rawText = rawCount !== null ? rawCount : "n/a";
+  const ageText =
+    typeof ageMinutes === "number" ? ageMinutes.toFixed(1) : "n/a";
+  return `date=${date} generated_at=${generatedAt} age_min=${ageText} macro=${macroLabel} score=${macroScoreText} sources=${sourcesText} raw=${rawText}`;
+}
 
 async function main() {
   const alpacaConfig = {
-    keyId: process.env.ALPACA_API_KEY,
-    secretKey: process.env.ALPACA_API_SECRET,
-    baseUrl: process.env.ALPACA_BASE_URL,
+    keyId: process.env.ALPACA_API_KEY || process.env.ALPACA_API_KEY_ID,
+    secretKey: process.env.ALPACA_API_SECRET || process.env.ALPACA_SECRET_KEY,
+    baseUrl: process.env.ALPACA_BASE_URL || process.env.ALPACA_PAPER_BASE_URL,
   };
 
-  const githubToken = process.env.GITHUB_TOKEN;
   const alpaca = new Alpaca(alpacaConfig);
-
   const clock = await alpaca.getClock();
   const marketOpen = !!clock.is_open;
 
   const { policy, result } = await runTick({
-    alpaca,
-    githubToken,
+    alpacaConfig,
     marketOpen,
     clock,
   });
 
   const worldContext =
-    (await loadWorldContextFromGitHub(githubToken).catch((err) => {
+    (await loadLatestWorldContext().catch((err) => {
       console.error(
         "[world] failed to load latest world context:",
         err?.message ?? err
@@ -40,9 +78,20 @@ async function main() {
     ...result,
     worldContext: result.worldContext ?? worldContext,
   };
+  const worldUsed = resultWithWorld.worldContext ?? null;
+  const worldAgeMinutes = getWorldContextAgeMinutes(worldUsed);
+  console.log(`[VS] world_context_used ${describeWorldContext(worldUsed)}`);
 
-  const training = await trainPolicyFromHistory({
-    githubToken,
+  const { hour, minute } = getExchangeTimeParts();
+  const isFinalDecision = hour === 16 && minute === 0;
+  if (isFinalDecision) {
+    console.log("[VS] final_decision_tick true (EOD world context applied)");
+  }
+  resultWithWorld.finalDecision = isFinalDecision;
+  resultWithWorld.worldContextAgeMinutes =
+    typeof worldAgeMinutes === "number" ? Number(worldAgeMinutes.toFixed(2)) : null;
+
+  const training = await trainPolicyFromHistoryLocal({
     minHistory: 10,
     equityDeltaThreshold: 0,
     maxStep: 0.01,
@@ -71,6 +120,9 @@ async function main() {
     policy,
     result: resultWithWorld,
     training,
+    finalDecision: isFinalDecision,
+    worldContextAgeMinutes:
+      typeof worldAgeMinutes === "number" ? Number(worldAgeMinutes.toFixed(2)) : null,
   });
 }
 

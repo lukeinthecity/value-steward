@@ -129,6 +129,7 @@ export function trainPolicyWithMetrics({
 
   const newPolicy = {
     ...policy,
+    schema_version: policy.schema_version ?? 1,
     version: (policy.version ?? 1) + 1,
     risk_level: newRisk,
     lastTrainedAt: new Date().toISOString(),

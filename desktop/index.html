@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Value Steward Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar" id="topbar">
+        <div>
+          <h1>Value Steward Console</h1>
+          <p class="subtitle">World context, policy, and tick status in one place.</p>
+          <div class="header-actions">
+            <button id="refresh-data">Refresh Data</button>
+            <span id="refresh-status" class="muted"></span>
+          </div>
+        </div>
+        <div class="tick-card">
+          <div class="tick-title">Next Tick</div>
+          <div class="tick-time" id="next-tick">--:--</div>
+          <div class="tick-countdown" id="tick-countdown">--:--</div>
+          <div class="tick-meta" id="tick-meta">--</div>
+        </div>
+      </header>
+
+      <div class="menu-handle" id="menu-handle">MENU</div>
+
+      <main class="grid">
+        <section class="panel">
+          <h2>Policy</h2>
+          <div class="policy-grid" id="policy-summary"></div>
+          <div class="policy-controls">
+            <label>
+              Risk Level
+              <input type="number" id="policy-risk" min="0" max="1" step="0.01" />
+            </label>
+            <label>
+              Target Exposure (LOW)
+              <input type="number" id="policy-target" min="0" max="1" step="0.01" />
+            </label>
+            <label>
+              Rebalance Buffer
+              <input type="number" id="policy-buffer" min="0" max="1" step="0.01" />
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="policy-force-no-trade" />
+              Force No-Trade
+            </label>
+            <button id="save-policy">Save Policy</button>
+            <span id="policy-status" class="muted"></span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>World Context</h2>
+          <div id="world-summary" class="summary"></div>
+          <div class="tag-grid" id="world-tags"></div>
+          <div class="list" id="world-sources"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Market Snapshot</h2>
+          <div id="market-summary" class="summary"></div>
+          <div class="list" id="market-positions"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Training</h2>
+          <div id="training-summary" class="summary"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Data Status</h2>
+          <div id="data-status" class="summary"></div>
+        </section>
+
+        <section class="panel wide">
+          <h2>RSS Inbox</h2>
+          <div class="ticker" id="rss-ticker"></div>
+        </section>
+
+        <section class="panel wide">
+          <h2>Tick Log</h2>
+          <div id="tick-log-meta" class="summary"></div>
+          <pre id="tick-log" class="log"></pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

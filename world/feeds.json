@@ -1,20 +1,28 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-23T00:00:00.000Z",
+  "updatedAt": "2026-02-23T00:00:00.000Z",
   "sources": [
     {
-      "id": "fed-press",
-      "label": "Federal Reserve (Press Releases)",
-      "rss_url": "https://www.federalreserve.gov/feeds/press_all.xml",
-      "tags": ["macro", "rates", "central-bank", "usa"],
-      "weight": 1.0,
+      "id": "un-news",
+      "label": "UN News (All)",
+      "rss_url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+      "tags": ["geopolitics", "global", "un"],
+      "weight": 0.9,
       "enabled": true
     },
     {
-      "id": "fed-speeches",
-      "label": "Federal Reserve (Speeches)",
-      "rss_url": "https://www.federalreserve.gov/feeds/speeches.xml",
-      "tags": ["macro", "rates", "central-bank", "usa"],
+      "id": "wto-news",
+      "label": "WTO (Latest News)",
+      "rss_url": "https://www.wto.org/library/rss/latest_news_e.xml",
+      "tags": ["geopolitics", "trade", "global"],
+      "weight": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "bis-press",
+      "label": "BIS (All Categories)",
+      "rss_url": "https://www.bis.org/doclist/rss_all_categories.rss",
+      "tags": ["macro", "financial-stability", "global"],
       "weight": 0.8,
       "enabled": true
     },
@@ -22,39 +30,63 @@
       "id": "ecb-press",
       "label": "ECB (Press Releases)",
       "rss_url": "https://www.ecb.europa.eu/rss/press.html",
-      "tags": ["macro", "rates", "central-bank", "europe"],
+      "tags": ["macro", "central-bank", "europe", "official"],
+      "weight": 0.8,
+      "enabled": true
+    },
+    {
+      "id": "sec-usgaap-xbrl",
+      "label": "SEC EDGAR (US-GAAP XBRL Filings)",
+      "rss_url": "https://www.sec.gov/Archives/edgar/usgaap.rss.xml",
+      "tags": ["corporate-earnings", "filings", "usa"],
+      "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "id": "sec-all-xbrl",
+      "label": "SEC EDGAR (All XBRL Filings)",
+      "rss_url": "https://www.sec.gov/Archives/edgar/xbrlrss.all.xml",
+      "tags": ["corporate-earnings", "filings", "usa"],
       "weight": 0.9,
       "enabled": true
     },
     {
-      "id": "boe-news",
-      "label": "Bank of England (News)",
-      "rss_url": "https://www.bankofengland.co.uk/rss/news",
-      "tags": ["macro", "rates", "central-bank", "uk"],
+      "id": "sec-press",
+      "label": "SEC (Press Releases)",
+      "rss_url": "https://www.sec.gov/news/pressreleases.rss",
+      "tags": ["regulation", "official", "usa", "markets"],
+      "weight": 0.8,
+      "enabled": true
+    },
+    {
+      "id": "nasdaq-earnings",
+      "label": "Nasdaq (Earnings)",
+      "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
+      "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.7,
       "enabled": true
     },
     {
-      "id": "treasury-press",
-      "label": "US Treasury (Press Releases)",
-      "rss_url": "https://home.treasury.gov/rss/press-releases",
-      "tags": ["macro", "fiscal", "usa"],
+      "id": "nasdaq-commodities",
+      "label": "Nasdaq (Commodities)",
+      "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Commodities",
+      "tags": ["energy", "commodities", "media", "markets"],
       "weight": 0.7,
       "enabled": true
     },
     {
-      "id": "bea-releases",
-      "label": "US BEA (News Releases)",
-      "rss_url": "https://www.bea.gov/rss/rss.xml",
-      "tags": ["macro", "data", "usa"],
+      "id": "nasdaq-stocks",
+      "label": "Nasdaq (Stocks)",
+      "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Stocks",
+      "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.6,
       "enabled": true
     },
     {
-      "id": "bls-news",
-      "label": "US BLS (News Releases)",
-      "rss_url": "https://www.bls.gov/feed/bls_latest.rss",
-      "tags": ["macro", "labor", "data", "usa"],
+      "id": "yahoo-finance-ticker",
+      "label": "Yahoo Finance (Ticker, replace MSFT)",
+      "rss_url": "http://finance.yahoo.com/rss/headline?s=MSFT",
+      "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.6,
       "enabled": true
     },
@@ -62,7 +94,31 @@
       "id": "eia-today",
       "label": "US EIA (Today in Energy)",
       "rss_url": "https://www.eia.gov/rss/todayinenergy.xml",
-      "tags": ["energy", "oil", "commodities", "macro"],
+      "tags": ["energy", "commodities", "policy", "usa"],
+      "weight": 0.8,
+      "enabled": true
+    },
+    {
+      "id": "eia-whatsnew",
+      "label": "US EIA (What's New)",
+      "rss_url": "https://www.eia.gov/rss/whatsnew.xml",
+      "tags": ["energy", "commodities", "policy", "usa"],
+      "weight": 0.7,
+      "enabled": true
+    },
+    {
+      "id": "eia-press",
+      "label": "US EIA (Press Releases)",
+      "rss_url": "https://www.eia.gov/rss/press_rss.xml",
+      "tags": ["energy", "commodities", "policy", "usa"],
+      "weight": 0.7,
+      "enabled": true
+    },
+    {
+      "id": "eia-gas-diesel",
+      "label": "US EIA (Gasoline & Diesel Update)",
+      "rss_url": "https://www.eia.gov/petroleum/gasdiesel/includes/gas_diesel_rss.xml",
+      "tags": ["energy", "commodities", "prices", "usa"],
       "weight": 0.6,
       "enabled": true
     }

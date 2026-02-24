@@ -5,25 +5,6 @@ import { classifyMacroFromTags } from "./contextUtils.js";
 
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
-async function loadFromGitHub({ githubToken }) {
-  const url = "https://api.github.com/repos/lukeinthecity/value-steward/contents/data/world-context.jsonl";
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${githubToken}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "value-steward-agent",
-    },
-  });
-
-  if (res.status === 404) return "";
-  if (!res.ok) {
-    throw new Error(`GitHub load failed: ${res.status} ${await res.text()}`);
-  }
-
-  const data = await res.json();
-  return Buffer.from(data.content, "base64").toString("utf8");
-}
-
 function parseLatest(raw) {
   const entries = raw
     .split("\n")
@@ -41,16 +22,8 @@ function parseLatest(raw) {
     .at(-1);
 }
 
-export async function loadLatestWorldContext({ githubToken } = {}) {
+export async function loadLatestWorldContext() {
   try {
-    if (githubToken) {
-      const raw = await loadFromGitHub({ githubToken });
-      const parsed = raw ? parseLatest(raw) : null;
-      if (!parsed) return null;
-      const macroView = classifyMacroFromTags(parsed.tags ?? null);
-      return { ...parsed, macro_view: macroView };
-    }
-
     if (!fs.existsSync(CONTEXT_PATH)) return null;
     const raw = fs.readFileSync(CONTEXT_PATH, "utf8");
     const parsed = parseLatest(raw);

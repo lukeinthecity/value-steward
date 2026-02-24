@@ -1,0 +1,23 @@
+{
+  "SPY": "INDEX",
+  "QQQ": "INDEX",
+  "DIA": "INDEX",
+  "IWM": "INDEX",
+  "XLK": "TECH",
+  "XLE": "ENERGY",
+  "XLF": "FINANCIALS",
+  "XLV": "HEALTHCARE",
+  "XLY": "CONSUMER_DISCRETIONARY",
+  "XLP": "CONSUMER_STAPLES",
+  "XLI": "INDUSTRIALS",
+  "XLB": "MATERIALS",
+  "XLRE": "REAL_ESTATE",
+  "XLU": "UTILITIES",
+  "XLC": "COMMUNICATIONS",
+  "VNQ": "REAL_ESTATE",
+  "TLT": "BONDS",
+  "IEF": "BONDS",
+  "SHY": "BONDS",
+  "GLD": "GOLD",
+  "SLV": "SILVER"
+}

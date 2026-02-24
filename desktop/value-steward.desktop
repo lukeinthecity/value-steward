@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Value Steward Console
+Comment=Value Steward desktop console
+Exec=/bin/bash -lc "cd /home/lukes/value-steward/desktop && npm start"
+Path=/home/lukes/value-steward/desktop
+Icon=utilities-terminal
+Terminal=false
+Categories=Finance;Utility;
+StartupNotify=true

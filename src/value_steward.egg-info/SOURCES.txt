@@ -9,11 +9,13 @@ src/valuesteward/__init__.py
 src/valuesteward/cli.py
 src/valuesteward/config.py
 src/valuesteward/models.py
+src/valuesteward/policy.py
 src/valuesteward/core/__init__.py
 src/valuesteward/core/decision_engine.py
 src/valuesteward/core/execution_engine.py
 src/valuesteward/core/memory.py
 src/valuesteward/core/patterns.py
+src/valuesteward/core/reporting.py
 src/valuesteward/core/risk_governor.py
 src/valuesteward/core/risk_modes.py
 src/valuesteward/core/world_recognition.py
@@ -23,4 +25,11 @@ src/valuesteward/data/portfolio_repository.py
 src/valuesteward/logging_utils/__init__.py
 src/valuesteward/logging_utils/intent_logger.py
 src/valuesteward/logging_utils/notifications.py
+tests/test_config_consistency.py
+tests/test_decision_engine.py
+tests/test_execution_safety.py
+tests/test_intent_enrichment.py
+tests/test_memory.py
+tests/test_notional_execution.py
+tests/test_reporting.py
 tests/test_smoke.py

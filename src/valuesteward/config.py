@@ -52,6 +52,9 @@ class ValueStewardSettings(BaseSettings):
     min_trade_notional_dollars: float = Field(
         default=1.0, validation_alias="MIN_TRADE_NOTIONAL_DOLLARS", gt=0
     )
+    max_symbols_per_day: int = Field(
+        default=5, validation_alias="VS_MAX_SYMBOLS_PER_DAY", gt=0
+    )
 
 
 @lru_cache(maxsize=1)
@@ -79,4 +82,5 @@ def get_settings() -> ValueStewardSettings:
             max_effective_capital_dollars=20.0,
             max_trade_notional_dollars=5.0,
             min_trade_notional_dollars=1.0,
+            max_symbols_per_day=5,
         )

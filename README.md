@@ -1,6 +1,6 @@
 # Value Steward
 
-Value Steward is currently a read-only, policy‑driven portfolio steward that observes an Alpaca paper account each day, logs rich end‑of‑day snapshots, and adaptively tunes a risk‑level policy based on historical trends, volatility, exposure, and cash utilization. The system is designed to be portable across environments (local, Pipedream, or future servers), keeps all actions in safe “no‑trade” mode, and writes a complete audit trail of both observations and training decisions. Each tick stores structured history for future learning, and when the policy meaningfully updates, it can notify you via SMTP email with a concise lesson summary.
+Value Steward is currently a read-only, policy‑driven portfolio steward that observes an Alpaca paper account each day, logs rich end‑of‑day snapshots, and adaptively tunes a risk‑level policy based on historical trends, volatility, exposure, and cash utilization. The system is designed to run locally with scheduled ticks, keeps all actions in safe “no‑trade” mode, and writes a complete audit trail of both observations and training decisions. Each tick stores structured history for future learning, and when the policy meaningfully updates, it can notify you via SMTP email with a concise lesson summary.
 
 Current scope:
 - Paper trading only
@@ -12,6 +12,22 @@ Core ideas:
 - Intent logging with explanations
 - Notifications (console/log now; email later)
 
+**System Summary**
+- World intelligence pipeline (Node) ingests RSS, hydrates content, scores tags, and writes daily world context with macro label/score.
+- Signal engine (Python) ranks Alpaca symbols by multi‑horizon momentum, relative strength, volatility, and drawdown with multi‑day smoothing.
+- Decision engine (Python) applies policy caps, world context gating, and signal adjustments to generate multi‑action plans.
+- Execution engine (Python) enforces market hours, risk caps, and daily execution limits before submitting paper orders.
+- Audit trail logs every intent and execution with reasoning and metadata.
+- Desktop UI lives in `desktop/` and can display tick status and context feeds.
+
+**Data Flow**
+1. RSS ingestion → `data/world-inbox.jsonl` (raw headlines).
+2. Hydration → `data/world-hydrated.jsonl` (extracted text/summary).
+3. World context → `data/world-context.jsonl` (tags, macro score/label, summary).
+4. Signal build → ranked symbols and smoothed scores.
+5. Decision → intent record (buy/sell/rotate/hold).
+6. Execution → paper orders when gates pass.
+
 Quickstart:
 1) Create a virtual environment
 2) Install requirements: `pip install -r requirements.txt`
@@ -21,27 +37,9 @@ Quickstart:
    - `python -m valuesteward.cli status`
    - `python -m valuesteward.cli tick`
 
-## GitHub Actions deployment (optional)
+## Local scheduling (recommended)
 
-This repo ships with a basic GitHub Actions workflow that can run a single
-Value Steward `tick` on a schedule (every 30 minutes by default).
+Use your system scheduler (cron, Task Scheduler, etc.) to run:
 
-To enable it:
-
-1. Add the following secrets in your GitHub repository settings:
-
-   - `ALPACA_API_KEY_ID` (paper key)
-   - `ALPACA_SECRET_KEY` (paper secret)
-   - `ALPACA_PAPER_BASE_URL` = `https://paper-api.alpaca.markets`
-
-   - `VS_MODE` = `LOW`
-   - `VS_SHADOW_MODE` = `true` (start in shadow mode)
-   - `VS_EXECUTION_ARMED` = `false`
-
-   - `MAX_EFFECTIVE_CAPITAL_DOLLARS` = `20`
-   - `MAX_TRADE_NOTIONAL_DOLLARS` = `10`
-   - `MIN_TRADE_NOTIONAL_DOLLARS` = `1`
-
-2. Go to the GitHub Actions tab, select \"Value Steward Tick\", and run the
-   workflow manually to verify it works in shadow mode before enabling the
-   schedule for real.
+- `npm run local:tick` every 15 minutes during market hours.
+- `npm run world:run` 30 minutes before open and 30 minutes before close.

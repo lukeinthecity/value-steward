@@ -96,7 +96,7 @@ export async function runValueSteward({
           )
         )
       : null;
-  const worldContext = { summary: null, tags: [], sources: [] };
+  const worldContext = null;
 
   const result = {
     ranAt: now,

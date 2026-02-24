@@ -35,14 +35,8 @@ function buildHydratedDocs(entries) {
   }));
 }
 
-function fallbackContext(stubContext, note) {
-  return {
-    ...stubContext,
-    notes: note,
-  };
-}
 
-export async function makeMacroDigest({ stubContext, hydratedEntries }) {
+export async function makeMacroDigest({ baseContext, hydratedEntries }) {
   const schema = loadSchema();
   const recent = filterRecent(hydratedEntries);
   const hydratedDocs = buildHydratedDocs(recent);
@@ -50,14 +44,14 @@ export async function makeMacroDigest({ stubContext, hydratedEntries }) {
   const cmd = process.env.WORLD_LLM_CMD?.trim();
   if (!cmd) {
     return {
-      context: fallbackContext(stubContext, "stub world context (LLM not configured)"),
-      digest: "stub",
+      context: null,
+      digest: "rule",
     };
   }
 
   const prompt = {
     schema,
-    stub_context: stubContext,
+    base_context: baseContext,
     hydrated_docs: hydratedDocs,
   };
 
@@ -72,38 +66,20 @@ export async function makeMacroDigest({ stubContext, hydratedEntries }) {
 
     const parsed = JSON.parse(stdout);
 
-    if (parsed.date !== stubContext.date) {
-      console.warn("[world] digest date mismatch; falling back to stub");
-      return {
-        context: fallbackContext(
-          stubContext,
-          "stub world context (LLM validation failed: date mismatch)"
-        ),
-        digest: "stub",
-      };
+    if (parsed.date !== baseContext.date) {
+      console.warn("[world] digest date mismatch; using rule-based context");
+      return { context: null, digest: "rule" };
     }
 
     if (!validateContext(parsed)) {
-      console.warn("[world] digest validation failed; falling back to stub");
-      return {
-        context: fallbackContext(
-          stubContext,
-          "stub world context (LLM validation failed)"
-        ),
-        digest: "stub",
-      };
+      console.warn("[world] digest validation failed; using rule-based context");
+      return { context: null, digest: "rule" };
     }
 
     return { context: parsed, digest: "LLM" };
   } catch (err) {
     const reason = err?.message ?? String(err);
     console.error("[world] LLM call failed:", reason);
-    return {
-      context: fallbackContext(
-        stubContext,
-        `stub world context (LLM call failed: ${reason})`
-      ),
-      digest: "stub",
-    };
+    return { context: null, digest: "rule" };
   }
 }

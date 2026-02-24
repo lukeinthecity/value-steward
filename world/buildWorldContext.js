@@ -8,8 +8,8 @@ import {
   filterRecent,
   validateContext,
   classifyMacroFromTags,
-  summarizeMacroLine,
   toWorldDateString,
+  getWorldTimeZone,
 } from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
@@ -59,13 +59,34 @@ function todayDate() {
   return toWorldDateString(new Date());
 }
 
-function buildStubContext({ entries, date }) {
+function getWorldSlot(now = new Date()) {
+  const tz = getWorldTimeZone();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const map = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+  const hour = Number(map.hour);
+  if (Number.isNaN(hour)) return "unknown";
+  if (hour < 12) return "pre_open";
+  if (hour >= 15) return "pre_close";
+  return "midday";
+}
+
+function buildBaseContext({ entries, date }) {
   const sourcesUsed = Array.from(
     new Set(entries.map((entry) => entry.source_id).filter(Boolean))
   );
 
   return {
     date,
+    slot: getWorldSlot(),
     generated_at: new Date().toISOString(),
     summary: null,
     tags: {
@@ -77,9 +98,38 @@ function buildStubContext({ entries, date }) {
     },
     sources_used: sourcesUsed,
     raw_count: entries.length,
-    notes: "stub world context (LLM not integrated yet)",
+    notes: "rule-based world context (scripted)",
     errors: [],
   };
+}
+
+function cleanSummaryText(value) {
+  if (!value) return null;
+  const cleaned = String(value).replace(/\s+/g, " ").trim();
+  return cleaned.length ? cleaned : null;
+}
+
+function buildRuleSummary({ hydratedEntries, macroView }) {
+  const entries = Array.isArray(hydratedEntries) ? hydratedEntries : [];
+  const titles = entries
+    .map(
+      (entry) =>
+        cleanSummaryText(entry.title) ||
+        cleanSummaryText(entry.title_extracted) ||
+        cleanSummaryText(entry.summary)
+    )
+    .filter(Boolean);
+
+  const unique = Array.from(new Set(titles));
+  if (!unique.length) return null;
+
+  const top = unique.slice(0, 3);
+  const hasMacroSignals = (macroView?.inputs_used ?? []).length > 0;
+  const macroLabel = hasMacroSignals ? macroView?.macro_label ?? "n/a" : "n/a";
+  const summary = `macro=${macroLabel} | headlines: ${top.join(" | ")}`;
+
+  if (summary.length <= 400) return summary;
+  return summary.slice(0, 397) + "...";
 }
 
 async function main() {
@@ -87,9 +137,10 @@ async function main() {
   const hydrated = loadHydrated();
   const context = loadContext();
   const date = todayDate();
+  const slot = getWorldSlot();
 
-  if (context.some((entry) => entry.date === date)) {
-    console.log("[world] context already exists for", date);
+  if (context.some((entry) => entry.date === date && entry.slot === slot)) {
+    console.log("[world] context already exists for", date, "slot", slot);
     return;
   }
 
@@ -98,9 +149,10 @@ async function main() {
   const hydratedRecent = filterRecent(hydrated, cutoff);
   const hydratedOk = hydratedRecent.filter((entry) => entry.ok === true);
   const hydratedFailed = hydratedRecent.filter((entry) => entry.ok === false);
-  const stubContext = buildStubContext({ entries: recent, date });
+  const baseContext = buildBaseContext({ entries: recent, date });
+  baseContext.slot = slot;
 
-  stubContext.hydration = {
+  baseContext.hydration = {
     inbox_recent: recent.length,
     hydrated_recent_ok: hydratedOk.length,
     hydrated_recent_failed: hydratedFailed.length,
@@ -119,24 +171,31 @@ async function main() {
     }));
 
   if (corpusPreview.length) {
-    stubContext.corpus_preview = corpusPreview;
+    baseContext.corpus_preview = corpusPreview;
   }
 
   try {
     const { context: builtContext, digest } = await makeMacroDigest({
-      stubContext,
+      baseContext,
       hydratedEntries: hydrated,
     });
 
-    const { tags, debugNote } = scoreWorldTags({ hydratedEntries: hydrated });
-    const baseNote = "rule-based world context (no LLM yet)";
+    const { tags, debugNote } = scoreWorldTags({
+      hydratedEntries: hydratedOk,
+    });
+    const baseNote = "rule-based world context (scripted)";
     const tagsValid =
       tags &&
       Object.values(tags).every(
         (val) => val === null || (val >= 0 && val <= 1)
       );
 
-    let contextToUse = builtContext;
+    let contextToUse = {
+      ...baseContext,
+      ...(builtContext ?? {}),
+      tags: builtContext?.tags ?? baseContext.tags,
+      summary: builtContext?.summary ?? baseContext.summary,
+    };
 
     if (tagsValid) {
       const tagKeys = Object.keys(tags);
@@ -152,25 +211,43 @@ async function main() {
         ? `${contextToUse.notes} | ${baseNote}: ${debugNote}`
         : `${baseNote}: ${debugNote}`;
     } else {
+      contextToUse.tags = contextToUse.tags ?? baseContext.tags;
       contextToUse.notes = contextToUse.notes
         ? `${contextToUse.notes} | rule-v1 failed, tags left null`
         : "rule-v1 failed, tags left null";
     }
 
+    const macroView = classifyMacroFromTags(contextToUse.tags);
+    contextToUse.macro_view = macroView;
+    if (!contextToUse.summary) {
+      contextToUse.summary = buildRuleSummary({
+        hydratedEntries: hydratedOk,
+        macroView,
+      });
+    }
+
     if (!validateContext(contextToUse)) {
-      console.error("[world] context validation failed; falling back to stub");
+      console.error(
+        "[world] context validation failed; using rule-based base context"
+      );
       const fallback = {
-        ...stubContext,
-        notes: "stub world context (LLM validation failed)",
+        ...baseContext,
+        notes: "rule-based world context (validation fallback)",
       };
+      fallback.slot = slot;
+      if (!validateContext(fallback)) {
+        console.error("[world] base context failed validation; aborting write");
+        return;
+      }
       appendContext(fallback);
       const logDate = fallback.date ?? date;
       console.log(
-        `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+        `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
       );
       return;
     }
 
+    contextToUse.slot = slot;
     appendContext(contextToUse);
 
     const tagSummary = Object.entries(contextToUse.tags || {})
@@ -183,18 +260,19 @@ async function main() {
     const logDate = contextToUse.date ?? date;
 
     console.log(
-      `[world] context built date=${logDate} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
+      `[world] context built date=${logDate} slot=${slot} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
     );
   } catch (err) {
     console.error("[world] macro digest error:", err?.message ?? err);
     const fallback = {
-      ...stubContext,
-      notes: "stub world context (LLM call failed)",
+      ...baseContext,
+      notes: "rule-based world context (digest error)",
     };
+    fallback.slot = slot;
     appendContext(fallback);
     const logDate = fallback.date ?? date;
     console.log(
-      `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=stub`
+      `[world] context built date=${logDate} slot=${slot} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
     );
   }
 }

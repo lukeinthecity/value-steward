@@ -1,6 +1,5 @@
-- Added policy-driven tick runner with history logging and GitHub file helpers.
+- Added policy-driven tick runner with local history logging.
 - Added local trainer script for policy updates from history.
-- Added Pipedream workflow template for scheduled execution.
 
 # Value Steward Agent Loop
 
@@ -14,16 +13,12 @@
 - `scripts/trainPolicy.js` reads `data/history.jsonl` and updates `config/policy.json`.
 - Run locally with `npm run train:policy`.
 
-## Pipedream scheduling
-- `pipedream/valueStewardWorkflow.js` is a template to copy into a Pipedream Node.js step.
-- Required env vars: `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `ALPACA_BASE_URL`, `GITHUB_TOKEN`.
-
 ## Automatic trainer
-- The Pipedream workflow now runs two phases every tick: a read-only tick and an auto-train pass.
+- Each local tick can optionally run an auto-train pass from local history.
 - The trainer only runs when `mode` is `"read-only"` and never changes `mode`.
 - It adjusts `risk_level` within bounds, updates `version`, and sets `lastTrainedAt`/`lastEquityDelta`.
-- You can still run the local trainer via `npm run train:policy` and revert policy.json via Git history.
-- Training hyperparameters (minHistory, maxStep, bounds) live in the Pipedream script for easy tuning.
+- You can run the local trainer via `npm run train:policy`.
+- Training hyperparameters (minHistory, maxStep, bounds) live in the local trainer.
 - The trainer now evaluates trend, volatility, cash utilization, exposure, and concentration metrics.
 - Each training run logs a decision record to `data/training-log.jsonl` with metrics and rationale.
 - It still only updates `risk_level` within hard bounds, in small steps capped by `maxStep`.
@@ -43,13 +38,11 @@
 - Account fields: `equity`, `buyingPower`, `cash`, `portfolioValue`, `patternDayTrader`, `marginMultiplier`, `cashUtilization`, `equityToBuyingPower`.
 - Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`, `grossExposure`, `netExposure`, `maxPositionWeight`, and `positions[]` summaries.
 - Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
-- Placeholder context: `worldContext` (empty for now; reserved for future signals).
+- World context: `worldContext` is populated from local files when available.
 - All of this data is collected read-only; no orders are placed during ticks or training.
 - Each tick result includes a `worldContext` field when a macro digest is available.
 - When present, `worldContext.macro_view` summarizes the smoothed macro score and label.
-- Agents may observe `macro_view`, but MUST NOT trade based on `macro_view` alone.
-- `macro_view` is advisory, not directive; trading behavior remains unchanged.
-- No trade behavior is altered by macro tagging or macro_view.
+- Macro view can adjust LOW-mode target exposure and buffer (risk is still capped by the risk governor).
 
 ## Operational modes and trade gate
 - Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.

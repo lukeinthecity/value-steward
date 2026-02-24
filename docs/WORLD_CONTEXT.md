@@ -40,7 +40,7 @@ preview of the hydrated corpus, run:
 npm run world:inspect
 ```
 
-This shows the most recent date, raw_count, sources_used, tag status (stub vs
+This shows the most recent date, raw_count, sources_used, tag status (null vs
 populated), and up to 5 items from the current corpus_preview.
 
 ## Hydration settings
@@ -56,7 +56,8 @@ Environment variables (with defaults):
 - Timeouts or content too short
 
 ## Macro Digest & LLM Integration
-- The build step can invoke a local LLM command to fill `summary` and tag values.
+- The build step can optionally invoke a local LLM command to fill `summary`
+  and additional context fields.
 - Env vars:
   - `WORLD_LLM_CMD` (required to enable LLM digest)
   - `WORLD_LLM_TIMEOUT_MS` (optional, default 15000)
@@ -65,11 +66,11 @@ Environment variables (with defaults):
 - The integration is model-agnostic: a JSON payload is sent via stdin and a JSON
   world context is expected on stdout.
 - Failure modes:
-  - Not configured → stub context with notes: "stub world context (LLM not configured)".
-  - LLM error/timeout → stub context with notes including the reason.
-  - Validation failure → stub context; logs contain details.
-- At this stage, `world-context.jsonl` is read-only from the perspective of trading
-  and risk logic. It is a macro diary and future teaching substrate.
+  - Not configured → rule-based context only (no LLM digest).
+  - LLM error/timeout → rule-based context; logs contain details.
+  - Validation failure → rule-based context; logs contain details.
+- `world-context.jsonl` is read-only from the perspective of data ingestion,
+  but its macro labels now adjust LOW-mode target exposure and buffer.
 
 ## World time zone normalization
 - World context dates are normalized to a single "world time zone."
@@ -100,10 +101,11 @@ If relevant headlines exist, `world:inspect` should show non-null tag values.
 
 ## Agent integration
 - `world/loadLatestWorldContext.js` is the single entry point for loading the
-  most recent valid context (local file or GitHub if a token is provided).
-- The EOD tick attaches `worldContext` to each result, and the lesson email
+  most recent valid context from local files.
+- The tick attaches `worldContext` to each result, and the lesson email
   includes key macro tags + summary when available.
+- In LOW mode, macro labels can adjust the target exposure and buffer.
 
 ## Notes
-The builder emits a stub world context when the LLM command is not configured
-or fails, with null tags and a short note for auditability.
+The builder emits a rule-based world context when the LLM command is not
+configured or fails, with null tags and a short note for auditability.

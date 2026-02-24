@@ -10,7 +10,10 @@
     "world:hydrate": "node world/hydrateLinks.js",
     "world:build": "node world/buildWorldContext.js",
     "world:run": "npm run world:fetch && npm run world:hydrate && npm run world:build",
-    "world:inspect": "node world/inspectWorldContext.js"
+    "world:inspect": "node world/inspectWorldContext.js",
+    "world:health": "node world/healthReport.js",
+    "world:health:refresh": "node world/healthReport.js --refresh-if-stale",
+    "desktop": "cd desktop && npm start"
   },
   "dependencies": {
     "@alpacahq/alpaca-trade-api": "^1.4.2",

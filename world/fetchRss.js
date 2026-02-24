@@ -30,6 +30,25 @@ function buildKey(entry) {
   return `${entry.source_id}|${entry.title}|${entry.published}`;
 }
 
+function isPaywalled({ sourceId, item }) {
+  if (!sourceId) return false;
+  const source = sourceId.toLowerCase();
+  if (!source.includes("yahoo")) return false;
+
+  const title = item.title ?? "";
+  const link = item.link ?? "";
+  const titleLower = title.toLowerCase();
+  const linkLower = link.toLowerCase();
+  const premiumPattern = /\[\s*\$\$\s*\]/;
+
+  return (
+    premiumPattern.test(title) ||
+    titleLower.includes("premium") ||
+    linkLower.includes("/premium") ||
+    linkLower.includes("premium")
+  );
+}
+
 function normalizeItem({ sourceId, item }) {
   return {
     ts: new Date().toISOString(),
@@ -52,7 +71,15 @@ function pruneOld(entries) {
 
 async function main() {
   const feeds = loadFeeds();
-  const parser = new Parser();
+  const userAgent =
+    process.env.WORLD_RSS_USER_AGENT?.trim() ||
+    "ValueSteward/1.0 (contact: local)";
+  const parser = new Parser({
+    headers: {
+      "User-Agent": userAgent,
+      Accept: "application/rss+xml, application/xml, text/xml, */*",
+    },
+  });
   const existing = loadInbox();
   const existingKeys = new Set(existing.map(buildKey));
 
@@ -62,6 +89,7 @@ async function main() {
     try {
       const feed = await parser.parseURL(source.rss_url);
       for (const item of feed.items ?? []) {
+        if (isPaywalled({ sourceId: source.id, item })) continue;
         const normalized = normalizeItem({ sourceId: source.id, item });
         const key = buildKey(normalized);
         if (existingKeys.has(key)) continue;
