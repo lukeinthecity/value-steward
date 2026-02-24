@@ -12,15 +12,6 @@
       "enabled": true
     },
     {
-      "id": "wto-news",
-      "label": "WTO (Latest News)",
-      "rss_url": "https://www.wto.org/library/rss/latest_news_e.xml",
-      "tags": ["geopolitics", "trade", "global"],
-      "weight": 0.9,
-      "stale_hours": 336,
-      "enabled": true
-    },
-    {
       "id": "bis-press",
       "label": "BIS (All Categories)",
       "rss_url": "https://www.bis.org/doclist/rss_all_categories.rss",
@@ -39,21 +30,12 @@
       "enabled": true
     },
     {
-      "id": "sec-usgaap-xbrl",
-      "label": "SEC EDGAR (US-GAAP XBRL Filings)",
-      "rss_url": "https://www.sec.gov/Archives/edgar/usgaap.rss.xml",
+      "id": "sec-current-filings",
+      "label": "SEC EDGAR (Current Filings, Atom)",
+      "rss_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&output=atom",
       "tags": ["corporate-earnings", "filings", "usa"],
       "weight": 1.0,
-      "stale_hours": 48,
-      "enabled": true
-    },
-    {
-      "id": "sec-all-xbrl",
-      "label": "SEC EDGAR (All XBRL Filings)",
-      "rss_url": "https://www.sec.gov/Archives/edgar/xbrlrss.all.xml",
-      "tags": ["corporate-earnings", "filings", "usa"],
-      "weight": 0.9,
-      "stale_hours": 48,
+      "stale_hours": 24,
       "enabled": true
     },
     {
@@ -84,6 +66,15 @@
       "enabled": true
     },
     {
+      "id": "nasdaq-markets",
+      "label": "Nasdaq (Markets)",
+      "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets",
+      "tags": ["markets", "media"],
+      "weight": 0.7,
+      "stale_hours": 48,
+      "enabled": true
+    },
+    {
       "id": "nasdaq-stocks",
       "label": "Nasdaq (Stocks)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Stocks",
@@ -102,12 +93,39 @@
       "enabled": true
     },
     {
-      "id": "eia-today",
-      "label": "US EIA (Today in Energy)",
-      "rss_url": "https://www.eia.gov/rss/todayinenergy.xml",
-      "tags": ["energy", "commodities", "policy", "usa"],
-      "weight": 0.8,
-      "stale_hours": 168,
+      "id": "investing-stocks",
+      "label": "Investing.com (Stock Market News)",
+      "rss_url": "https://www.investing.com/rss/news_25.rss",
+      "tags": ["markets", "media", "stocks"],
+      "weight": 0.7,
+      "stale_hours": 24,
+      "enabled": true
+    },
+    {
+      "id": "investing-indicators",
+      "label": "Investing.com (Economic Indicators)",
+      "rss_url": "https://www.investing.com/rss/news_95.rss",
+      "tags": ["macro", "economic-indicators", "media"],
+      "weight": 0.7,
+      "stale_hours": 48,
+      "enabled": true
+    },
+    {
+      "id": "investing-economy",
+      "label": "Investing.com (Economy News)",
+      "rss_url": "https://www.investing.com/rss/news_14.rss",
+      "tags": ["macro", "economy", "media"],
+      "weight": 0.7,
+      "stale_hours": 48,
+      "enabled": true
+    },
+    {
+      "id": "investing-sec-filings",
+      "label": "Investing.com (SEC Filings)",
+      "rss_url": "https://www.investing.com/rss/news_1064.rss",
+      "tags": ["filings", "corporate-earnings", "media"],
+      "weight": 0.6,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -116,24 +134,6 @@
       "rss_url": "https://www.eia.gov/rss/whatsnew.xml",
       "tags": ["energy", "commodities", "policy", "usa"],
       "weight": 0.7,
-      "stale_hours": 168,
-      "enabled": true
-    },
-    {
-      "id": "eia-press",
-      "label": "US EIA (Press Releases)",
-      "rss_url": "https://www.eia.gov/rss/press_rss.xml",
-      "tags": ["energy", "commodities", "policy", "usa"],
-      "weight": 0.7,
-      "stale_hours": 168,
-      "enabled": true
-    },
-    {
-      "id": "eia-gas-diesel",
-      "label": "US EIA (Gasoline & Diesel Update)",
-      "rss_url": "https://www.eia.gov/petroleum/gasdiesel/includes/gas_diesel_rss.xml",
-      "tags": ["energy", "commodities", "prices", "usa"],
-      "weight": 0.6,
       "stale_hours": 168,
       "enabled": true
     }
