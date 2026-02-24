@@ -147,9 +147,8 @@ async function main() {
         "[ValueSteward] Lesson email disabled (VS_EMAIL_POLICY_UPDATES=false)."
       );
     } else {
-      const shouldSendSummary = isFinalDecision;
-      const shouldSendUpdate =
-        training.updated && (!eodOnly || !shouldSendSummary);
+    const shouldSendSummary = isFinalDecision;
+    const shouldSendUpdate = training.updated && !eodOnly;
 
       if (shouldSendSummary || shouldSendUpdate) {
         try {
