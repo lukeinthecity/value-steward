@@ -135,7 +135,8 @@
       "tags": ["energy", "commodities", "policy", "usa"],
       "weight": 0.7,
       "stale_hours": 168,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "http_404"
     }
   ]
 }

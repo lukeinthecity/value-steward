@@ -78,6 +78,15 @@ async function main() {
   const userAgent =
     process.env.WORLD_RSS_USER_AGENT?.trim() ||
     "ValueSteward/1.0 (contact: local)";
+  const usesDefaultAgent = userAgent.includes("contact: local");
+  const hasSecFeed = (feeds.sources ?? []).some(
+    (source) => source.enabled && String(source.id || "").startsWith("sec")
+  );
+  if (usesDefaultAgent && hasSecFeed) {
+    console.warn(
+      "[world] SEC feeds may return 403 without a real contact in WORLD_RSS_USER_AGENT."
+    );
+  }
   const parser = new Parser({
     headers: {
       "User-Agent": userAgent,
@@ -90,6 +99,7 @@ async function main() {
   let added = 0;
   for (const source of feeds.sources ?? []) {
     if (!source.enabled) continue;
+    console.log(`[world] fetch ${source.id}...`);
     try {
       const feed = await Promise.race([
         parser.parseURL(source.rss_url),
