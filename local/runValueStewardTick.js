@@ -139,7 +139,7 @@ async function main() {
 
   const { hour, minute } = getExchangeTimeParts();
   const exchangeDate = getExchangeDateString();
-  const windowMinutes = Number(process.env.VS_EMAIL_EOD_WINDOW_MINUTES ?? 5);
+  const windowMinutes = Number(process.env.VS_EMAIL_EOD_WINDOW_MINUTES ?? 10);
   const inEodWindow = isWithinEodWindow(hour, minute, windowMinutes);
   const isFinalDecision = inEodWindow;
   if (isFinalDecision) {
@@ -151,14 +151,20 @@ async function main() {
   resultWithWorld.worldContextAgeMinutes =
     typeof worldAgeMinutes === "number" ? Number(worldAgeMinutes.toFixed(2)) : null;
 
-  const training = await trainPolicyFromHistoryLocal({
-    minHistory: 10,
-    equityDeltaThreshold: 0,
-    maxStep: 0.01,
-    minRisk: 0.1,
-    maxRisk: 0.9,
-    worldContext: resultWithWorld.worldContext ?? worldContext,
-  });
+  const trainEodOnly = !["0", "false", "no", "off"].includes(
+    String(process.env.VS_TRAIN_EOD_ONLY ?? "true").toLowerCase()
+  );
+  const shouldTrain = !trainEodOnly || isFinalDecision;
+  const training = shouldTrain
+    ? await trainPolicyFromHistoryLocal({
+        minHistory: 10,
+        equityDeltaThreshold: 0,
+        maxStep: 0.01,
+        minRisk: 0.1,
+        maxRisk: 0.9,
+        worldContext: resultWithWorld.worldContext ?? worldContext,
+      })
+    : null;
 
   if (training) {
     const emailEnabled = !["0", "false", "no", "off"].includes(
