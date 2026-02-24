@@ -8,6 +8,7 @@
       "rss_url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
       "tags": ["geopolitics", "global", "un"],
       "weight": 0.9,
+      "stale_hours": 120,
       "enabled": true
     },
     {
@@ -16,6 +17,7 @@
       "rss_url": "https://www.wto.org/library/rss/latest_news_e.xml",
       "tags": ["geopolitics", "trade", "global"],
       "weight": 0.9,
+      "stale_hours": 336,
       "enabled": true
     },
     {
@@ -24,6 +26,7 @@
       "rss_url": "https://www.bis.org/doclist/rss_all_categories.rss",
       "tags": ["macro", "financial-stability", "global"],
       "weight": 0.8,
+      "stale_hours": 336,
       "enabled": true
     },
     {
@@ -32,6 +35,7 @@
       "rss_url": "https://www.ecb.europa.eu/rss/press.html",
       "tags": ["macro", "central-bank", "europe", "official"],
       "weight": 0.8,
+      "stale_hours": 336,
       "enabled": true
     },
     {
@@ -40,6 +44,7 @@
       "rss_url": "https://www.sec.gov/Archives/edgar/usgaap.rss.xml",
       "tags": ["corporate-earnings", "filings", "usa"],
       "weight": 1.0,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -48,6 +53,7 @@
       "rss_url": "https://www.sec.gov/Archives/edgar/xbrlrss.all.xml",
       "tags": ["corporate-earnings", "filings", "usa"],
       "weight": 0.9,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -56,6 +62,7 @@
       "rss_url": "https://www.sec.gov/news/pressreleases.rss",
       "tags": ["regulation", "official", "usa", "markets"],
       "weight": 0.8,
+      "stale_hours": 168,
       "enabled": true
     },
     {
@@ -64,6 +71,7 @@
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
       "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.7,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -72,6 +80,7 @@
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Commodities",
       "tags": ["energy", "commodities", "media", "markets"],
       "weight": 0.7,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -80,6 +89,7 @@
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Stocks",
       "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.6,
+      "stale_hours": 48,
       "enabled": true
     },
     {
@@ -88,6 +98,7 @@
       "rss_url": "http://finance.yahoo.com/rss/headline?s=MSFT",
       "tags": ["corporate-earnings", "media", "markets"],
       "weight": 0.6,
+      "stale_hours": 24,
       "enabled": true
     },
     {
@@ -96,6 +107,7 @@
       "rss_url": "https://www.eia.gov/rss/todayinenergy.xml",
       "tags": ["energy", "commodities", "policy", "usa"],
       "weight": 0.8,
+      "stale_hours": 168,
       "enabled": true
     },
     {
@@ -104,6 +116,7 @@
       "rss_url": "https://www.eia.gov/rss/whatsnew.xml",
       "tags": ["energy", "commodities", "policy", "usa"],
       "weight": 0.7,
+      "stale_hours": 168,
       "enabled": true
     },
     {
@@ -112,6 +125,7 @@
       "rss_url": "https://www.eia.gov/rss/press_rss.xml",
       "tags": ["energy", "commodities", "policy", "usa"],
       "weight": 0.7,
+      "stale_hours": 168,
       "enabled": true
     },
     {
@@ -120,6 +134,7 @@
       "rss_url": "https://www.eia.gov/petroleum/gasdiesel/includes/gas_diesel_rss.xml",
       "tags": ["energy", "commodities", "prices", "usa"],
       "weight": 0.6,
+      "stale_hours": 168,
       "enabled": true
     }
   ]

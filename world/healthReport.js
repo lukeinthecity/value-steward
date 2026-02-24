@@ -78,9 +78,11 @@ function summarizeInbox(entries, sources) {
     const data = bySource.get(source.id);
     const lastActivity = data?.last_published ?? data?.last_ts ?? null;
     const ageHours = getAgeHours(lastActivity);
+    const thresholdHours =
+      typeof source.stale_hours === "number" ? source.stale_hours : STALE_HOURS;
     const stale =
       source.enabled !== false &&
-      (ageHours === null ? true : ageHours > STALE_HOURS);
+      (ageHours === null ? true : ageHours > thresholdHours);
     rows.push({
       id: source.id,
       label: source.label,
@@ -90,6 +92,7 @@ function summarizeInbox(entries, sources) {
       last_published: data?.last_published ?? null,
       age_hours: ageHours,
       stale,
+      threshold_hours: thresholdHours,
     });
   }
 
@@ -225,7 +228,9 @@ function autoDisableFeeds(feeds, summary, health) {
     const row = byId.get(source.id);
     if (!row || !row.stale) continue;
     const streak = health.sources?.[source.id]?.stale_streak ?? 0;
-    if (streak >= STALE_MAX) {
+    const maxStale =
+      typeof source.stale_max === "number" ? source.stale_max : STALE_MAX;
+    if (streak >= maxStale) {
       source.enabled = false;
       source.disabled_reason = "auto_stale";
       source.disabled_at = new Date().toISOString();
@@ -298,7 +303,7 @@ async function main() {
         row.last_ts
       )} last_published=${formatDate(row.last_published)} age_h=${formatAge(
         row.age_hours
-      )} streak=${streak} enabled=${row.enabled}`
+      )} threshold_h=${formatAge(row.threshold_hours)} streak=${streak} enabled=${row.enabled}`
     );
   });
 
