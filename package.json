@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "train:policy": "node scripts/trainPolicy.js",
+    "email:test": "node scripts/testEmail.js",
     "local:tick": "node local/runValueStewardTick.js",
     "world:fetch": "node world/fetchRss.js",
     "world:hydrate": "node world/hydrateLinks.js",
