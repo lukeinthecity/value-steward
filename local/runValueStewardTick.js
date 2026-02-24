@@ -5,6 +5,38 @@ import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import { sendLessonEmail } from "../core/emailNotifications.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
+async function fetchLastOrder(alpaca) {
+  try {
+    const orders = await alpaca.getOrders({
+      status: "all",
+      limit: 1,
+      direction: "desc",
+    });
+    if (Array.isArray(orders) && orders.length) {
+      const order = orders[0];
+      return {
+        id: order.id ?? null,
+        symbol: order.symbol ?? null,
+        side: order.side ?? null,
+        status: order.status ?? null,
+        qty: order.qty ?? null,
+        notional: order.notional ?? null,
+        type: order.type ?? null,
+        time_in_force: order.time_in_force ?? null,
+        submitted_at: order.submitted_at ?? null,
+        filled_at: order.filled_at ?? null,
+        filled_avg_price: order.filled_avg_price ?? null,
+      };
+    }
+  } catch (err) {
+    console.warn(
+      "[ValueSteward] Failed to fetch last order:",
+      err?.message ?? err
+    );
+  }
+  return null;
+}
+
 function getExchangeTimeParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -82,6 +114,8 @@ async function main() {
   const worldAgeMinutes = getWorldContextAgeMinutes(worldUsed);
   console.log(`[VS] world_context_used ${describeWorldContext(worldUsed)}`);
 
+  const lastOrder = await fetchLastOrder(alpaca);
+
   const { hour, minute } = getExchangeTimeParts();
   const isFinalDecision = hour === 16 && minute === 0;
   if (isFinalDecision) {
@@ -126,6 +160,7 @@ async function main() {
             training,
             worldContext: resultWithWorld.worldContext ?? worldContext,
             emailMode: shouldSendSummary ? "summary" : "update",
+            lastOrder,
           });
           console.log(
             shouldSendSummary

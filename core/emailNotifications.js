@@ -18,6 +18,7 @@ export async function sendLessonEmail({
   training,
   worldContext,
   emailMode = "update",
+  lastOrder = null,
 }) {
   const {
     SMTP_HOST,
@@ -104,6 +105,10 @@ export async function sendLessonEmail({
     `- Positions held: ${result.numPositions}`,
     `- Gross exposure: ${result.grossExposure}`,
     `- Net exposure: ${result.netExposure}`,
+    `- Trade gate: mode=${result.tradeGate?.mode ?? "n/a"} canTrade=${
+      result.tradeGate?.canTrade ?? "n/a"
+    } tradingEnabled=${result.tradeGate?.tradingEnabled ?? "n/a"}`,
+    `- Downtime seconds: ${result.downtimeSeconds ?? "n/a"}`,
     "",
     "World Context:",
   ];
@@ -144,6 +149,22 @@ export async function sendLessonEmail({
     if (worldContext.summary) {
       bodyLines.push("", "Macro digest summary:", worldContext.summary);
     }
+  }
+
+  if (lastOrder) {
+    const qtyText = lastOrder.qty ?? lastOrder.notional ?? "n/a";
+    const priceText = lastOrder.filled_avg_price ?? "n/a";
+    bodyLines.push(
+      "",
+      "Last Order:",
+      `- Symbol: ${lastOrder.symbol ?? "n/a"}`,
+      `- Side: ${lastOrder.side ?? "n/a"} Status: ${lastOrder.status ?? "n/a"}`,
+      `- Qty/Notional: ${qtyText} Type: ${lastOrder.type ?? "n/a"}`,
+      `- Submitted: ${lastOrder.submitted_at ?? "n/a"}`,
+      `- Filled: ${lastOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+    );
+  } else {
+    bodyLines.push("", "Last Order:", "- Status: unavailable");
   }
 
   bodyLines.push(
