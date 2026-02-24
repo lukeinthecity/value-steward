@@ -30,24 +30,6 @@
       "enabled": true
     },
     {
-      "id": "sec-current-filings",
-      "label": "SEC EDGAR (Current Filings, Atom)",
-      "rss_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&output=atom",
-      "tags": ["corporate-earnings", "filings", "usa"],
-      "weight": 1.0,
-      "stale_hours": 24,
-      "enabled": true
-    },
-    {
-      "id": "sec-press",
-      "label": "SEC (Press Releases)",
-      "rss_url": "https://www.sec.gov/news/pressreleases.rss",
-      "tags": ["regulation", "official", "usa", "markets"],
-      "weight": 0.8,
-      "stale_hours": 168,
-      "enabled": true
-    },
-    {
       "id": "nasdaq-earnings",
       "label": "Nasdaq (Earnings)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
@@ -127,16 +109,6 @@
       "weight": 0.6,
       "stale_hours": 48,
       "enabled": true
-    },
-    {
-      "id": "eia-whatsnew",
-      "label": "US EIA (What's New)",
-      "rss_url": "https://www.eia.gov/rss/whatsnew.xml",
-      "tags": ["energy", "commodities", "policy", "usa"],
-      "weight": 0.7,
-      "stale_hours": 168,
-      "enabled": false,
-      "disabled_reason": "http_404"
     }
   ]
 }
