@@ -1,6 +1,6 @@
 # Value Steward
 
-Value Steward is currently a read-only, policy‑driven portfolio steward that observes an Alpaca paper account each day, logs rich end‑of‑day snapshots, and adaptively tunes a risk‑level policy based on historical trends, volatility, exposure, and cash utilization. The system is designed to run locally with scheduled ticks, keeps all actions in safe “no‑trade” mode, and writes a complete audit trail of both observations and training decisions. Each tick stores structured history for future learning, and when the policy meaningfully updates, it can notify you via SMTP email with a concise lesson summary.
+Value Steward is a policy‑driven portfolio steward that observes an Alpaca paper account each day, logs rich end‑of‑day snapshots, and adaptively tunes a risk‑level policy based on historical trends, volatility, exposure, and cash utilization. The system is designed to run locally with scheduled ticks and writes a complete audit trail of both observations and training decisions. Each tick stores structured history for future learning, and when the policy meaningfully updates, it can notify you via SMTP email with a concise lesson summary.
 
 Current scope:
 - Paper trading only
