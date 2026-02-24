@@ -5,6 +5,8 @@ import path from "path";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 
+import { startSpinner } from "./spinner.js";
+
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 
@@ -180,6 +182,7 @@ async function hydrateEntry(entry) {
 }
 
 async function main() {
+  const stopSpinner = startSpinner("hydrate links");
   const inbox = loadJsonl(INBOX_PATH);
   const hydrated = loadJsonl(HYDRATED_PATH);
   const hydratedKeys = new Set(hydrated.map(buildKey));
@@ -203,6 +206,9 @@ async function main() {
     await sleep(WORLD_HYDRATE_SLEEP_MS);
   }
 
+  stopSpinner(
+    `attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`
+  );
   console.log(
     `[world] hydrate attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`
   );

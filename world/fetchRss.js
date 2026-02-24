@@ -2,9 +2,12 @@ import fs from "fs";
 import path from "path";
 import Parser from "rss-parser";
 
+import { startSpinner } from "./spinner.js";
+
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const RETAIN_DAYS = 7;
+const WORLD_RSS_TIMEOUT_MS = Number(process.env.WORLD_RSS_TIMEOUT_MS ?? 15000);
 
 function loadFeeds() {
   const raw = fs.readFileSync(FEEDS_PATH, "utf8");
@@ -70,6 +73,7 @@ function pruneOld(entries) {
 }
 
 async function main() {
+  const stopSpinner = startSpinner("fetch rss");
   const feeds = loadFeeds();
   const userAgent =
     process.env.WORLD_RSS_USER_AGENT?.trim() ||
@@ -87,7 +91,12 @@ async function main() {
   for (const source of feeds.sources ?? []) {
     if (!source.enabled) continue;
     try {
-      const feed = await parser.parseURL(source.rss_url);
+      const feed = await Promise.race([
+        parser.parseURL(source.rss_url),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), WORLD_RSS_TIMEOUT_MS)
+        ),
+      ]);
       for (const item of feed.items ?? []) {
         if (isPaywalled({ sourceId: source.id, item })) continue;
         const normalized = normalizeItem({ sourceId: source.id, item });
@@ -105,7 +114,12 @@ async function main() {
   const pruned = pruneOld(existing);
   saveInbox(pruned);
 
-  console.log(`[world] fetched sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`);
+  stopSpinner(
+    `sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`
+  );
+  console.log(
+    `[world] fetched sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`
+  );
 }
 
 main().catch((err) => {

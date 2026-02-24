@@ -13,6 +13,7 @@ import {
 } from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
+import { startSpinner } from "./spinner.js";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
@@ -133,6 +134,7 @@ function buildRuleSummary({ hydratedEntries, macroView }) {
 }
 
 async function main() {
+  const stopSpinner = startSpinner("build world context");
   const inbox = loadInbox();
   const hydrated = loadHydrated();
   const context = loadContext();
@@ -141,6 +143,7 @@ async function main() {
 
   if (context.some((entry) => entry.date === date && entry.slot === slot)) {
     console.log("[world] context already exists for", date, "slot", slot);
+    stopSpinner("already built");
     return;
   }
 
@@ -237,6 +240,7 @@ async function main() {
       fallback.slot = slot;
       if (!validateContext(fallback)) {
         console.error("[world] base context failed validation; aborting write");
+        stopSpinner("validation failed");
         return;
       }
       appendContext(fallback);
@@ -244,6 +248,7 @@ async function main() {
       console.log(
         `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
       );
+      stopSpinner(`saved ${logDate} ${slot}`);
       return;
     }
 
@@ -262,6 +267,7 @@ async function main() {
     console.log(
       `[world] context built date=${logDate} slot=${slot} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
     );
+    stopSpinner(`saved ${logDate} ${slot}`);
   } catch (err) {
     console.error("[world] macro digest error:", err?.message ?? err);
     const fallback = {
@@ -274,6 +280,7 @@ async function main() {
     console.log(
       `[world] context built date=${logDate} slot=${slot} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
     );
+    stopSpinner(`saved ${logDate} ${slot}`);
   }
 }
 

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { startSpinner } from "./spinner.js";
 
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
@@ -174,7 +175,19 @@ function bold(text) {
 
 async function runWorldPipeline() {
   console.log("[world:health] Running world:run to refresh feeds...");
-  await execAsync("npm run world:run", { cwd: process.cwd() });
+  const timeoutMs = Number(process.env.WORLD_RUN_TIMEOUT_MS ?? 120000);
+  const stopSpinner = startSpinner("world:run");
+  try {
+    await execAsync("npm run world:run", {
+      cwd: process.cwd(),
+      timeout: timeoutMs,
+      maxBuffer: 5 * 1024 * 1024,
+    });
+    stopSpinner("complete");
+  } catch (err) {
+    stopSpinner("failed");
+    throw err;
+  }
 }
 
 function loadState() {
