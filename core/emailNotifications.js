@@ -12,7 +12,13 @@ import nodemailer from "nodemailer";
  *   EMAIL_FROM
  *   EMAIL_TO
  */
-export async function sendLessonEmail({ policy, result, training, worldContext }) {
+export async function sendLessonEmail({
+  policy,
+  result,
+  training,
+  worldContext,
+  emailMode = "update",
+}) {
   const {
     SMTP_HOST,
     SMTP_PORT,
@@ -49,13 +55,25 @@ export async function sendLessonEmail({ policy, result, training, worldContext }
     },
   });
 
-  const subject = `Value Steward update: policy v${policy.version} (risk ${policy.risk_level.toFixed(
-    3
-  )})`;
+  let subject;
+  if (emailMode === "summary") {
+    subject = `Value Steward EOD summary: policy v${policy.version} (risk ${policy.risk_level.toFixed(
+      3
+    )})`;
+  } else {
+    subject = `Value Steward update: policy v${policy.version} (risk ${policy.risk_level.toFixed(
+      3
+    )})`;
+  }
 
   const metrics = training.metrics ?? {};
+  const header =
+    emailMode === "summary"
+      ? "Value Steward End-of-Day Summary"
+      : "Value Steward Daily Lesson";
+
   const bodyLines = [
-    "Value Steward Daily Lesson",
+    header,
     "",
     `Ran at: ${result.ranAt}`,
     `Market open at snapshot: ${result.marketOpen}`,
