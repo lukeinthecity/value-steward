@@ -11,3 +11,7 @@ npm-debug.log*
 *.pyc
 .env
 logs/*.log
+logs/*.jsonl
+data/*.jsonl
+data/market-holidays.json
+data/world-health.json
