@@ -13,6 +13,7 @@ const HISTORY_PATH = "data/history.jsonl";
 export async function runTick({ alpacaConfig, marketOpen, clock }) {
   const alpaca = new Alpaca(alpacaConfig);
   const now = new Date().toISOString();
+  const nowDate = new Date(now);
   const agentState = await loadAgentState();
   const lastRun = agentState.last_run_wall_clock
     ? Date.parse(agentState.last_run_wall_clock)
@@ -20,15 +21,42 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   const downtimeSeconds =
     lastRun !== null ? Math.max(0, (Date.parse(now) - lastRun) / 1000) : null;
   const marketOpenFlag = typeof marketOpen === "boolean" ? marketOpen : false;
+  const lastRunDate = lastRun !== null ? new Date(lastRun) : null;
+  const exchangeTz = "America/New_York";
+  const formatExchangeDate = (date) => {
+    try {
+      const fmt = new Intl.DateTimeFormat("en-CA", {
+        timeZone: exchangeTz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      return fmt.format(date);
+    } catch {
+      return date.toISOString().slice(0, 10);
+    }
+  };
+  const todayExchange = formatExchangeDate(nowDate);
+  const lastRunExchange = lastRunDate ? formatExchangeDate(lastRunDate) : null;
 
   let nextMode = agentState.current_mode || MODES.INACTIVE;
   let transitionReason = null;
+  const recoveryThresholdSeconds = Number(
+    process.env.VS_RECOVERY_DOWNTIME_SECONDS ?? 1800
+  );
 
   if (!agentState.last_run_wall_clock) {
     nextMode = MODES.INACTIVE;
     transitionReason = "initial_boot";
     console.log(`[VS] boot @ ${now} mode=${nextMode}`);
-  } else if (marketOpenFlag && downtimeSeconds !== null && downtimeSeconds > 300) {
+  } else if (marketOpenFlag && lastRunExchange && lastRunExchange !== todayExchange) {
+    nextMode = MODES.CATCHUP;
+    transitionReason = "new_trading_day";
+  } else if (
+    marketOpenFlag &&
+    downtimeSeconds !== null &&
+    downtimeSeconds > recoveryThresholdSeconds
+  ) {
     nextMode = MODES.RECOVERY;
     transitionReason = "downtime_detected";
   } else {

@@ -1,5 +1,6 @@
 export const MODES = {
   INACTIVE: "INACTIVE",
+  CATCHUP: "CATCHUP",
   RECOVERY: "RECOVERY",
   LIVE: "LIVE",
   ERROR: "ERROR",
