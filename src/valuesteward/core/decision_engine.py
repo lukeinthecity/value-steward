@@ -326,6 +326,10 @@ class DecisionEngine:
         risk_off, risk_off_note, defensive_symbols = self._risk_off_status(world_context)
         defensive_set = {item for item in defensive_symbols if item}
         risk_note = f" {risk_off_note}" if risk_off_note else ""
+        require_signal = (
+            os.getenv("VS_REQUIRE_SIGNAL", "true").strip().lower()
+            in {"1", "true", "yes", "y"}
+        )
 
         signal_note = None
         signal_result: SignalResult | None = None
@@ -384,6 +388,29 @@ class DecisionEngine:
         if signal_result:
             self._prefetch_sectors(signal_result.signals)
 
+        if require_signal and not selected_signal:
+            return IntentRecord(
+                mode=mode,
+                action_type="NO_ACTION",
+                core_symbol=self.settings.core_symbol,
+                target_exposure_pct=target,
+                buffer_pct=buffer,
+                reason_code="NO_SIGNAL",
+                pre_risk_exposure_pct=snapshot.risk_exposure_pct,
+                post_risk_exposure_pct=snapshot.risk_exposure_pct,
+                target_risk_exposure_pct=target,
+                rebalance_buffer_pct=buffer,
+                world_tags=world_tags,
+                patterns_consulted=[],
+                explanation=(
+                    "No eligible signal available; skipping trades."
+                    + (f" {macro_note}" if macro_note else "")
+                    + (f" {signal_note}" if signal_note else "")
+                    + risk_note
+                ),
+                **signal_meta,
+            )
+
         signal_meta = {
             "signal_symbol": selected_signal.symbol if selected_signal else None,
             "signal_sector": self.sector_map.get(selected_signal.symbol)
@@ -432,12 +459,7 @@ class DecisionEngine:
             )
 
         core_symbol = self.settings.core_symbol
-        if selected_signal:
-            selected_symbol = selected_signal.symbol
-        elif risk_off and defensive_symbols:
-            selected_symbol = defensive_symbols[0]
-        else:
-            selected_symbol = core_symbol
+        selected_symbol = selected_signal.symbol if selected_signal else None
         current = snapshot.risk_exposure_pct
         max_pos = self.risk_governor.config.max_position_pct
         position = self.portfolio_repository.get_position_for_symbol(
@@ -543,6 +565,51 @@ class DecisionEngine:
                     ),
                     **signal_meta,
                 )
+            if selected_symbol is None:
+                return IntentRecord(
+                    mode=mode,
+                    action_type="NO_ACTION",
+                    core_symbol=core_symbol,
+                    target_exposure_pct=target,
+                    buffer_pct=buffer,
+                    reason_code="NO_SIGNAL",
+                    pre_risk_exposure_pct=current,
+                    post_risk_exposure_pct=current,
+                    target_risk_exposure_pct=target,
+                    rebalance_buffer_pct=buffer,
+                    world_tags=world_tags,
+                    patterns_consulted=[],
+                    explanation=(
+                        "No eligible signal available; skipping buys."
+                        + (f" {macro_note}" if macro_note else "")
+                        + (f" {signal_note}" if signal_note else "")
+                        + risk_note
+                    ),
+                    **signal_meta,
+                )
+            if risk_off and defensive_symbols and not defensive_signals:
+                return IntentRecord(
+                    mode=mode,
+                    action_type="NO_ACTION",
+                    core_symbol=selected_symbol,
+                    target_exposure_pct=target,
+                    buffer_pct=buffer,
+                    reason_code="RISK_OFF_NO_DEFENSIVE_SIGNAL",
+                    pre_risk_exposure_pct=current,
+                    post_risk_exposure_pct=current,
+                    target_risk_exposure_pct=target,
+                    rebalance_buffer_pct=buffer,
+                    world_tags=world_tags,
+                    patterns_consulted=[],
+                    explanation=(
+                        "Risk-off active but no defensive signals were eligible; "
+                        "skipping buys."
+                        + (f" {macro_note}" if macro_note else "")
+                        + (f" {signal_note}" if signal_note else "")
+                        + risk_note
+                    ),
+                    **signal_meta,
+                )
 
             actions: list[TradeAction] = []
             action_symbols = [selected_symbol]
@@ -551,8 +618,6 @@ class DecisionEngine:
                     action_symbols = self._pick_by_sector(
                         defensive_signals, max_symbols
                     )
-                else:
-                    action_symbols = defensive_symbols[:max_symbols]
             elif signal_result and signal_result.signals:
                 action_symbols = self._pick_by_sector(
                     signal_result.signals, max_symbols
@@ -758,7 +823,7 @@ class DecisionEngine:
                             defensive_signals, max_symbols
                         )
                     else:
-                        action_symbols = defensive_symbols[:max_symbols]
+                        action_symbols = []
                 elif signal_result and signal_result.signals:
                     action_symbols = self._pick_by_sector(
                         signal_result.signals, max_symbols
