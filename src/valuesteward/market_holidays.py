@@ -6,6 +6,7 @@ Generates a rolling two-year window by default, to avoid frequent updates.
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -49,10 +50,10 @@ def _easter_sunday(year: int) -> date:
     h = (19 * a + b - d - g + 15) % 30
     i = c // 4
     k = c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    month = (h + l - 7 * m + 114) // 31
-    day = ((h + l - 7 * m + 114) % 31) + 1
+    ell = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * ell) // 451
+    month = (h + ell - 7 * m + 114) // 31
+    day = ((h + ell - 7 * m + 114) % 31) + 1
     return date(year, month, day)
 
 
@@ -89,6 +90,69 @@ def generate_nyse_holidays(start_year: int, end_year: int) -> list[str]:
     return sorted({d.isoformat() for d in holidays})
 
 
+def _thanksgiving_day(year: int) -> date:
+    return _nth_weekday(year, 11, 3, 4)
+
+
+def generate_nyse_early_closes(
+    start_year: int, end_year: int, holiday_dates: set[date]
+) -> list[dict[str, str]]:
+    """Generate NYSE early close dates for the given year range.
+
+    Rules based on NYSE holiday announcements (day after Thanksgiving, Christmas Eve,
+    and July 3 when July 4 is a weekday). Early closes are skipped if the date is a
+    full holiday.
+    """
+
+    early_closes: list[dict[str, str]] = []
+
+    for year in range(start_year, end_year + 1):
+        # Day after Thanksgiving (Friday).
+        thanksgiving = _thanksgiving_day(year)
+        day_after = thanksgiving + timedelta(days=1)
+        if day_after.weekday() < 5 and day_after not in holiday_dates:
+            early_closes.append(
+                {
+                    "date": day_after.isoformat(),
+                    "close_time": "13:00",
+                    "label": "Day after Thanksgiving",
+                }
+            )
+
+        # Christmas Eve (if not an observed holiday).
+        christmas_eve = date(year, 12, 24)
+        if christmas_eve.weekday() < 5 and christmas_eve not in holiday_dates:
+            early_closes.append(
+                {
+                    "date": christmas_eve.isoformat(),
+                    "close_time": "13:00",
+                    "label": "Christmas Eve",
+                }
+            )
+
+        # July 3 early close when July 4 is a weekday.
+        july_fourth = date(year, 7, 4)
+        july_third = date(year, 7, 3)
+        if (
+            july_fourth.weekday() < 5
+            and july_third.weekday() < 5
+            and july_third not in holiday_dates
+        ):
+            early_closes.append(
+                {
+                    "date": july_third.isoformat(),
+                    "close_time": "13:00",
+                    "label": "Independence Day Eve",
+                }
+            )
+
+    return early_closes
+
+
+def _default_tz() -> str:
+    return os.getenv("VS_MARKET_TIMEZONE") or "America/New_York"
+
+
 def _now_in_tz(tz: str) -> datetime:
     return datetime.now(tz=ZoneInfo(tz))
 
@@ -96,6 +160,10 @@ def _now_in_tz(tz: str) -> datetime:
 def build_calendar_payload(start_year: int, years: int, tz: str) -> dict:
     end_year = start_year + years - 1
     holidays = generate_nyse_holidays(start_year, end_year + 1)
+    holiday_dates = {date.fromisoformat(item) for item in holidays}
+    early_closes = generate_nyse_early_closes(
+        start_year, end_year, holiday_dates
+    )
     start = date(start_year, 1, 1)
     end = date(end_year, 12, 31)
     filtered = [d for d in holidays if start.isoformat() <= d <= end.isoformat()]
@@ -104,18 +172,20 @@ def build_calendar_payload(start_year: int, years: int, tz: str) -> dict:
         "years": [start_year, end_year],
         "timezone": tz,
         "holidays": filtered,
+        "early_closes": early_closes,
     }
 
 
 def ensure_holiday_file(
     path: str | Path = "data/market-holidays.json",
     years: int = 2,
-    tz: str = "America/New_York",
+    tz: str | None = None,
     max_age_days: int = 730,
 ) -> dict:
     """Ensure the holiday file exists and is fresh within max_age_days."""
 
     holiday_path = Path(path)
+    tz = tz or _default_tz()
     now = _now_in_tz(tz)
     payload = None
 

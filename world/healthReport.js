@@ -11,6 +11,17 @@ const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 const STATE_PATH = path.join(process.cwd(), "data", "world-health.json");
 const STALE_HOURS = Number(process.env.WORLD_FEED_STALE_HOURS ?? 72);
 const STALE_MAX = Number(process.env.WORLD_FEED_STALE_MAX ?? 3);
+const DYNAMIC_STALE =
+  String(process.env.WORLD_FEED_DYNAMIC_STALE ?? "true").toLowerCase() ===
+  "true";
+const DYNAMIC_WINDOW = Number(process.env.WORLD_FEED_DYNAMIC_WINDOW ?? 12);
+const DYNAMIC_MULTIPLIER = Number(
+  process.env.WORLD_FEED_DYNAMIC_MULTIPLIER ?? 3
+);
+const DYNAMIC_MIN_HOURS = Number(process.env.WORLD_FEED_DYNAMIC_MIN_HOURS ?? 6);
+const DYNAMIC_MAX_HOURS = Number(
+  process.env.WORLD_FEED_DYNAMIC_MAX_HOURS ?? 720
+);
 const AUTO_DISABLE =
   String(process.env.WORLD_FEED_AUTO_DISABLE ?? "true").toLowerCase() === "true";
 
@@ -59,6 +70,7 @@ function summarizeInbox(entries, sources) {
       count: 0,
       last_ts: null,
       last_published: null,
+      published_list: [],
     };
     current.count += 1;
     if (!current.last_ts || Date.parse(entry.ts) > Date.parse(current.last_ts)) {
@@ -71,6 +83,10 @@ function summarizeInbox(entries, sources) {
     ) {
       current.last_published = entry.published;
     }
+    const published = entry.published ?? entry.ts ?? null;
+    if (published) {
+      current.published_list.push(published);
+    }
     bySource.set(sourceId, current);
   }
 
@@ -81,9 +97,21 @@ function summarizeInbox(entries, sources) {
     const ageHours = getAgeHours(lastActivity);
     const thresholdHours =
       typeof source.stale_hours === "number" ? source.stale_hours : STALE_HOURS;
+    const dynamicThreshold = DYNAMIC_STALE
+      ? computeDynamicThreshold(data?.published_list ?? [])
+      : null;
+    let effectiveThreshold = thresholdHours;
+    if (typeof dynamicThreshold === "number") {
+      const dynamicClamped = clamp(
+        dynamicThreshold,
+        DYNAMIC_MIN_HOURS,
+        DYNAMIC_MAX_HOURS
+      );
+      effectiveThreshold = Math.max(thresholdHours, dynamicClamped);
+    }
     const stale =
       source.enabled !== false &&
-      (ageHours === null ? true : ageHours > thresholdHours);
+      (ageHours === null ? true : ageHours > effectiveThreshold);
     rows.push({
       id: source.id,
       label: source.label,
@@ -93,11 +121,42 @@ function summarizeInbox(entries, sources) {
       last_published: data?.last_published ?? null,
       age_hours: ageHours,
       stale,
-      threshold_hours: thresholdHours,
+      threshold_hours: effectiveThreshold,
+      threshold_dynamic: dynamicThreshold,
     });
   }
 
   return rows;
+}
+
+function clamp(value, min, max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function computeDynamicThreshold(publishedList) {
+  if (!publishedList || publishedList.length < 4) return null;
+  const timestamps = publishedList
+    .map((value) => Date.parse(value))
+    .filter((ts) => !Number.isNaN(ts))
+    .sort((a, b) => a - b);
+  if (timestamps.length < 4) return null;
+  const gaps = [];
+  for (let i = 1; i < timestamps.length; i += 1) {
+    const gapHours = (timestamps[i] - timestamps[i - 1]) / (1000 * 60 * 60);
+    if (gapHours > 0) gaps.push(gapHours);
+  }
+  if (gaps.length < 2) return null;
+  const recent = gaps.slice(-DYNAMIC_WINDOW);
+  recent.sort((a, b) => a - b);
+  const mid = Math.floor(recent.length / 2);
+  const median =
+    recent.length % 2 === 0
+      ? (recent[mid - 1] + recent[mid]) / 2
+      : recent[mid];
+  if (!Number.isFinite(median)) return null;
+  return median * DYNAMIC_MULTIPLIER;
 }
 
 function summarizeHydration(entries) {
@@ -176,15 +235,17 @@ function bold(text) {
 async function runWorldPipeline() {
   console.log("[world:health] Running world:run to refresh feeds...");
   const timeoutMs = Number(process.env.WORLD_RUN_TIMEOUT_MS ?? 120000);
-  const stopSpinner = startSpinner("world:run");
+  const stopSpinner = startSpinner("world:run", { total: 1 });
   try {
     await execAsync("npm run world:run", {
       cwd: process.cwd(),
       timeout: timeoutMs,
       maxBuffer: 5 * 1024 * 1024,
     });
+    stopSpinner.update(1);
     stopSpinner("complete");
   } catch (err) {
+    stopSpinner.update(1);
     stopSpinner("failed");
     throw err;
   }
@@ -209,6 +270,13 @@ function updateHealthState(summary, health) {
   const next = health ?? { last_checked: null, sources: {} };
   next.sources = next.sources ?? {};
   const now = new Date().toISOString();
+
+  const summaryIds = new Set(summary.map((row) => row.id));
+  for (const key of Object.keys(next.sources)) {
+    if (!summaryIds.has(key)) {
+      delete next.sources[key];
+    }
+  }
 
   for (const row of summary) {
     const entry = next.sources[row.id] || {
@@ -280,6 +348,7 @@ async function main() {
     staleSources = inboxSummary.filter((row) => row.stale);
   }
 
+  const reportSpinner = startSpinner("world health", { total: 1 });
   health = updateHealthState(inboxSummary, health);
   const disableResult = autoDisableFeeds(feeds, inboxSummary, health);
   if (disableResult.changed) {
@@ -290,6 +359,8 @@ async function main() {
     );
   }
   saveHealthState(health);
+  reportSpinner.update(1);
+  reportSpinner("report ready");
 
   console.log("[world:health] Feed health report");
   console.log(`- feeds: ${feeds.sources?.length ?? 0}`);

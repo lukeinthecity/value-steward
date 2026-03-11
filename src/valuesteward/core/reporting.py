@@ -29,13 +29,22 @@ def build_report(intents: List[IntentRecord]) -> Dict[str, Any]:
     )
 
     latest = intents[-1] if intents else None
-    latest_mode = latest.mode.value if latest else "-"
-    latest_core_symbol = latest.core_symbol or (latest.symbol if latest else "-")
-    latest_target = latest.target_exposure_pct if latest else None
-    latest_buffer = latest.buffer_pct if latest else None
-    latest_pre = latest.pre_risk_exposure_pct if latest else 0.0
-    latest_post = latest.post_risk_exposure_pct if latest else 0.0
-    latest_reason = latest.reason_code or "-" if latest else "-"
+    if latest:
+        latest_mode = latest.mode.value
+        latest_core_symbol = latest.core_symbol or latest.symbol or "-"
+        latest_target = latest.target_risk_exposure_pct
+        latest_buffer = latest.rebalance_buffer_pct
+        latest_pre = latest.pre_risk_exposure_pct
+        latest_post = latest.post_risk_exposure_pct
+        latest_reason = latest.reason_code or "-"
+    else:
+        latest_mode = "-"
+        latest_core_symbol = "-"
+        latest_target = None
+        latest_buffer = None
+        latest_pre = 0.0
+        latest_post = 0.0
+        latest_reason = "-"
 
     def pct(count: int) -> float:
         return (count / total) * 100 if total > 0 else 0.0

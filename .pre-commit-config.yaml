@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: vs-check
+        name: Value Steward Check
+        entry: npm run check
+        language: system
+        pass_filenames: false
+      - id: vs-typecheck
+        name: Value Steward Typecheck (Python)
+        entry: npm run typecheck:py
+        language: system
+        pass_filenames: false
+      - id: vs-security
+        name: Value Steward Security Scan (Python)
+        entry: npm run security:py
+        language: system
+        pass_filenames: false

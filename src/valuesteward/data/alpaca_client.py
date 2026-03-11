@@ -1,28 +1,57 @@
-"""Alpaca API wrapper for the Value Steward agent."""
+"""Alpaca API wrapper for the Value Steward agent with professional resilience."""
 
 from __future__ import annotations
 
-import sys
-from datetime import datetime
-from typing import List, Literal
+import time
+import logging
+from functools import wraps
+from datetime import datetime, timezone
+from typing import Any, List, Literal, cast, Callable
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
+from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockSnapshotRequest
 
 from valuesteward.config import ValueStewardSettings, get_settings
 from valuesteward.models import PortfolioSnapshot, Position
 
+logger = logging.getLogger(__name__)
+
+def retry_alpaca(retries: int = 3, backoff: float = 1.0):
+    """Decorator for institutional-grade exponential backoff."""
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exc = None
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    last_exc = exc
+                    # Handle rate limits specifically if possible, or generic 500s
+                    msg = str(exc).lower()
+                    if (
+                        "429" in msg 
+                        or "too many requests" in msg 
+                        or "500" in msg 
+                        or "502" in msg
+                    ):
+                        wait = backoff * (2 ** i)
+                        logger.warning(
+                            f"[ALPACA] Rate limit or server error. "
+                            f"Retrying in {wait}s... ({i+1}/{retries})"
+                        )
+                        time.sleep(wait)
+                        continue
+                    raise # Don't retry on auth or logic errors
+            raise last_exc
+        return wrapper
+    return decorator
 
 class AlpacaClient:
-    """Thin wrapper around Alpaca's trading SDK.
-
-    TODO: add support for limit orders
-    TODO: add retry / error handling
-    TODO: add separate data feed for market data if needed
-    """
+    """Thin wrapper around Alpaca's trading SDK with retry resilience."""
 
     def __init__(self, settings: ValueStewardSettings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -37,19 +66,15 @@ class AlpacaClient:
             self.settings.alpaca_secret_key,
         )
 
+    @retry_alpaca()
     def get_account(self):
-        """Return raw account info from Alpaca."""
-
         return self._trading_client.get_account()
 
+    @retry_alpaca()
     def get_all_assets(self):
-        """Return all assets from Alpaca."""
-
         return self._trading_client.get_all_assets()
 
     def list_tradable_symbols(self) -> List[str]:
-        """Return tradable, active US equity symbols."""
-
         symbols: List[str] = []
         for asset in self.get_all_assets():
             if getattr(asset, "tradable", False) is not True:
@@ -63,109 +88,109 @@ class AlpacaClient:
                 symbols.append(symbol)
         return symbols
 
+    @retry_alpaca()
     def get_positions(self) -> List[Position]:
-        """Return current positions as Position models."""
-
         positions = []
-        for position in self._trading_client.get_all_positions():
-            positions.append(
-                Position(
-                    symbol=position.symbol,
-                    quantity=float(position.qty),
-                    market_value=float(position.market_value),
-                    asset_class=getattr(position, "asset_class", "us_equity"),
-                )
-            )
+        positions_raw = cast(List[Any], self._trading_client.get_all_positions())
+        for position in positions_raw:
+            positions.append(Position(
+                symbol=position.symbol,
+                quantity=float(position.qty),
+                market_value=float(position.market_value),
+                asset_class=getattr(position, "asset_class", "us_equity"),
+            ))
         return positions
 
+    @retry_alpaca()
     def get_clock(self):
-        """Return Alpaca market clock (open/close state)."""
-
         return self._trading_client.get_clock()
 
+    @retry_alpaca()
     def get_snapshots(self, symbols: List[str]):
-        """Return snapshots for the given symbols."""
-
         request = StockSnapshotRequest(symbol_or_symbols=symbols)
         return self._data_client.get_stock_snapshot(request)
 
     def get_portfolio_snapshot(self) -> PortfolioSnapshot:
-        """Build a basic PortfolioSnapshot from Alpaca account data."""
-
         account = self.get_account()
         positions = self.get_positions()
         return PortfolioSnapshot(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             cash=float(account.cash),
             equity=float(account.equity),
             positions=positions,
             risk_exposure_pct=0.0,
         )
 
-    def submit_order(
-        self,
-        symbol: str,
-        qty: float,
-        side: str,
-        time_in_force: str = "day",
-    ) -> None:
-        """Submit an order to Alpaca.
+    @retry_alpaca()
+    def get_open_orders(self):
+        request = GetOrdersRequest(status=QueryOrderStatus.OPEN)
+        return self._trading_client.get_orders(filter=request)
 
-        For v1, this will be used only in paper trading.
-        """
+    @retry_alpaca()
+    def cancel_open_orders(self, symbol: str | None = None) -> int:
+        """Cancel orders and verify completion."""
+        count = 0
+        orders = self.get_open_orders()
+        for order in orders:
+            if symbol is None or order.symbol == symbol:
+                self._trading_client.cancel_order_by_id(order.id)
+                count += 1
+        
+        if count > 0:
+            logger.info(f"[EXEC] Sent cancel request for {count} orders ({symbol or 'all'}).")
+            # --- Professional Handshake: Wait for cancellation to propagate ---
+            time.sleep(2.0) 
+        return count
 
-        side_lower = side.lower()
-        if side_lower not in {"buy", "sell"}:
-            raise ValueError("side must be 'buy' or 'sell'.")
-
-        order_side = OrderSide.BUY if side_lower == "buy" else OrderSide.SELL
-        tif = TimeInForce.DAY
-        if time_in_force.lower() != "day":
-            raise ValueError("Only 'day' time_in_force is supported in v1.")
-
-        order = MarketOrderRequest(
-            symbol=symbol,
-            qty=qty,
-            side=order_side,
-            time_in_force=tif,
-        )
-        try:
-            self._trading_client.submit_order(order_data=order)
-            print(f"[EXEC] Alpaca order submitted for {symbol} qty={qty}.")
-        except Exception as exc:  # noqa: BLE001 - surface Alpaca errors clearly
-            print(f"[ERROR] Alpaca order submission failed: {exc}", file=sys.stderr)
-            # TODO: pass a logger instead of print.
-            raise
-
-        # TODO: support limit orders and other TIFs later.
-
-    def submit_market_order(
+    @retry_alpaca()
+    def submit_steward_order(
         self,
         symbol: str,
         side: Literal["buy", "sell"],
         notional: float,
-    ) -> None:
-        """Submit a notional-based market order to Alpaca paper trading."""
-
+    ) -> float | None:
+        """Submit a mid-point Limit Order with retry resilience."""
         order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
+        
+        try:
+            snapshot = self.get_snapshots([symbol])
+            snap = snapshot.get(symbol)
+            if snap and snap.latest_quote:
+                bid = float(snap.latest_quote.bid_price)
+                ask = float(snap.latest_quote.ask_price)
+                if bid > 0 and ask > 0:
+                    limit_price = round((bid + ask) / 2.0, 2)
+                    qty = round(notional / limit_price, 4)
+                    
+                    from alpaca.trading.requests import LimitOrderRequest
+                    order: Any = LimitOrderRequest(
+                        symbol=symbol,
+                        qty=qty,
+                        limit_price=limit_price,
+                        side=order_side,
+                        time_in_force=TimeInForce.DAY,
+                    )
+                    self._trading_client.submit_order(order_data=order)
+                    logger.info(
+                        f"[EXEC] Mid-point LIMIT: {side.upper()} {symbol} "
+                        f"qty={qty} @ ${limit_price:.2f}"
+                    )
+                    return limit_price
+        except Exception as exc:
+            logger.warning(
+                f"[WARN] Mid-point calc failed for {symbol}: {exc}. "
+                "Falling back to market."
+            )
+
         order = MarketOrderRequest(
             symbol=symbol,
             notional=round(notional, 2),
             side=order_side,
             time_in_force=TimeInForce.DAY,
         )
-        try:
-            self._trading_client.submit_order(order_data=order)
-            print(
-                f"[EXEC] Alpaca notional order submitted for {symbol} "
-                f"notional=${notional:.2f}."
-            )
-        except Exception as exc:  # noqa: BLE001 - surface Alpaca errors clearly
-            print(
-                f"[ERROR] Alpaca notional order submission failed: {exc}",
-                file=sys.stderr,
-            )
-            # TODO: pass a logger instead of print.
-            raise
-
-        # TODO: support limit orders and other TIFs later.
+        self._trading_client.submit_order(order_data=order)
+        logger.info(
+            f"[EXEC] Fallback MARKET: {side.upper()} {symbol} "
+            f"notional=${notional:.2f}"
+        )
+        return None

@@ -8,6 +8,7 @@ export function trainPolicyWithMetrics({
   maxStep = 0.01,
   minRisk = 0.1,
   maxRisk = 0.9,
+  minRiskDelta = 0,
 }) {
   if (policy.mode !== "read-only") {
     return {
@@ -114,6 +115,18 @@ export function trainPolicyWithMetrics({
   const oldRisk = policy.risk_level ?? 0.5;
   let newRisk = oldRisk + step;
   newRisk = Math.max(minRisk, Math.min(maxRisk, newRisk));
+
+  if (Math.abs(newRisk - oldRisk) < minRiskDelta) {
+    return {
+      updated: false,
+      reason: "risk_delta_small",
+      metrics,
+      equityDelta,
+      oldRisk,
+      newRisk: oldRisk,
+      policyVersion: policy.version ?? 1,
+    };
+  }
 
   if (newRisk === oldRisk) {
     return {

@@ -1,0 +1,19 @@
+# Value Steward Institutional Cron (UTC TIMING)
+# Market Hours (ET) converted to UTC (assuming EDT / UTC-4)
+
+# world:run - every 30 mins from 13:00 to 19:00 UTC (9am-3pm ET)
+# plus lead run at 19:25 UTC (3:25pm ET)
+*/30 13-18 * * 1-5 /usr/bin/npm --prefix /app run world:run >> /app/logs/cron.log 2>&1
+25 19 * * 1-5 /usr/bin/npm --prefix /app run world:run >> /app/logs/cron.log 2>&1
+
+# local:tick - Closing Sequence (19:30, 19:40, 19:50, 19:55 UTC)
+30,40,50,55 19 * * 1-5 /usr/bin/npm --prefix /app run local:tick >> /app/logs/cron.log 2>&1
+
+# eod:run - daily after market data becomes public (4:20 PM ET)
+20 20 * * 1-5 cd /home/lukes/value-steward && npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
+
+# health:check - hourly
+0 * * * * /usr/bin/npm --prefix /app run health:check >> /app/logs/cron.log 2>&1
+
+# report:weekly - Sunday 10pm UTC (6pm ET)
+0 22 * * 0 /usr/bin/npm --prefix /app run report:weekly -- --send-email >> /app/logs/cron.log 2>&1

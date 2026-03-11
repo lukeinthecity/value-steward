@@ -30,6 +30,16 @@
       "enabled": true
     },
     {
+      "id": "economic-calendar",
+      "label": "Forex Factory (Economic Calendar)",
+      "rss_url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+      "format": "calendar_json",
+      "tags": ["macro", "economic-calendar", "forward"],
+      "weight": 0.9,
+      "stale_hours": 24,
+      "enabled": true
+    },
+    {
       "id": "nasdaq-earnings",
       "label": "Nasdaq (Earnings)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
@@ -66,11 +76,11 @@
       "enabled": true
     },
     {
-      "id": "yahoo-finance-ticker",
-      "label": "Yahoo Finance (Ticker, replace MSFT)",
-      "rss_url": "http://finance.yahoo.com/rss/headline?s=MSFT",
-      "tags": ["corporate-earnings", "media", "markets"],
-      "weight": 0.6,
+      "id": "marketwatch-topstories",
+      "label": "MarketWatch (Top Stories)",
+      "rss_url": "http://feeds.marketwatch.com/marketwatch/topstories/",
+      "tags": ["markets", "headlines", "media"],
+      "weight": 0.7,
       "stale_hours": 24,
       "enabled": true
     },

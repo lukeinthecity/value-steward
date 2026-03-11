@@ -1,5 +1,10 @@
+// core/tradingEnabled.js
+import { loadStateSync } from "./stewardState.js";
+
+/**
+ * High-level check for the 'master switch'.
+ */
 export function getTradingEnabled() {
-  const flag = process.env.TRADING_ENABLED;
-  if (!flag) return false;
-  return String(flag).toLowerCase() === "true";
+  const state = loadStateSync();
+  return state.trading_enabled === true;
 }

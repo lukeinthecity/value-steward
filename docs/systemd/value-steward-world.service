@@ -1,0 +1,10 @@
+[Unit]
+Description=Value Steward World Context Scheduler
+After=network.target
+
+[Service]
+Type=oneshot
+User=lukes
+WorkingDirectory=/home/lukes/value-steward
+EnvironmentFile=-/home/lukes/value-steward/.env
+ExecStart=/usr/bin/npm run world:run:scheduled

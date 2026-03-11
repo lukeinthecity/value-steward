@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 from uuid import uuid4
@@ -51,11 +51,12 @@ class IntentRecord(BaseModel):
     """A logged intent for auditability and future learning."""
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     mode: RiskMode
     action_type: str
     symbol: Optional[str] = None
     size_pct: Optional[float] = None
+    expected_price: Optional[float] = None
     pre_risk_exposure_pct: float = 0.0
     post_risk_exposure_pct: float = 0.0
     target_risk_exposure_pct: Optional[float] = None
@@ -76,6 +77,9 @@ class IntentRecord(BaseModel):
     policy_force_no_trade: Optional[bool] = None
     world_macro_label: Optional[str] = None
     world_macro_score: Optional[float] = None
+    world_scout_score: Optional[float] = None
+    world_scout_label: Optional[str] = None
+    world_scout_thesis: Optional[str] = None
     world_context_generated_at: Optional[str] = None
     world_context_age_minutes: Optional[float] = None
     world_context_sources_used: Optional[int] = None
@@ -98,14 +102,28 @@ class IntentRecord(BaseModel):
     signal_drawdown_rank: Optional[float] = None
     signal_sector: Optional[str] = None
     signal_universe_size: Optional[int] = None
+    signal_last_bar_date: Optional[str] = None
+    signal_age_days: Optional[float] = None
     risk_off: Optional[bool] = None
     risk_off_reason: Optional[str] = None
+    gate_world_context_fresh: Optional[bool] = None
+    gate_signal_required: Optional[bool] = None
+    gate_signal_present: Optional[bool] = None
+    gate_signal_fresh: Optional[bool] = None
+    gate_macro_buy_allowed: Optional[bool] = None
+    gate_macro_sell_allowed: Optional[bool] = None
+    gate_risk_governor_allowed: Optional[bool] = None
+    gate_reason: Optional[str] = None
     actions: List[TradeAction] = Field(default_factory=list)
 
     def to_json_dict(self) -> dict:
         """Return a JSON-serializable dict for logging."""
 
         data = self.model_dump()
-        data["timestamp"] = self.timestamp.isoformat()
+        # Force 'Z' suffix for UTC ISO format (standard for JS compatibility)
+        ts = self.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        data["timestamp"] = ts.isoformat().replace("+00:00", "Z")
         data["mode"] = self.mode.value
         return data

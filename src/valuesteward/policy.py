@@ -27,6 +27,8 @@ class PolicySnapshot(BaseModel):
     mode: str | None = None
     risk_level: float | None = None
     target_risk_exposure_pct_low: float | None = None
+    target_risk_exposure_pct_medium: float | None = None
+    target_risk_exposure_pct_high: float | None = None
     rebalance_buffer_pct: float | None = None
     trade_gate_overrides: dict[str, Any] = Field(default_factory=dict)
 
@@ -76,6 +78,8 @@ def validate_policy(raw_policy: Any) -> tuple[dict[str, Any], list[str]]:
 
     _validate_percent(policy, "risk_level", warnings)
     _validate_percent(policy, "target_risk_exposure_pct_low", warnings)
+    _validate_percent(policy, "target_risk_exposure_pct_medium", warnings)
+    _validate_percent(policy, "target_risk_exposure_pct_high", warnings)
     _validate_percent(policy, "rebalance_buffer_pct", warnings)
 
     trade_gate = policy.get("trade_gate_overrides")
@@ -113,6 +117,14 @@ def apply_policy_to_settings(
     if isinstance(policy.get("target_risk_exposure_pct_low"), (int, float)):
         updates["target_risk_exposure_pct_low"] = float(
             policy["target_risk_exposure_pct_low"]
+        )
+    if isinstance(policy.get("target_risk_exposure_pct_medium"), (int, float)):
+        updates["target_risk_exposure_pct_medium"] = float(
+            policy["target_risk_exposure_pct_medium"]
+        )
+    if isinstance(policy.get("target_risk_exposure_pct_high"), (int, float)):
+        updates["target_risk_exposure_pct_high"] = float(
+            policy["target_risk_exposure_pct_high"]
         )
     if isinstance(policy.get("rebalance_buffer_pct"), (int, float)):
         updates["rebalance_buffer_pct"] = float(policy["rebalance_buffer_pct"])

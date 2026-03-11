@@ -1,12 +1,19 @@
 """Tests for execution safety switches."""
 
-from datetime import datetime
+import pytest
+from datetime import datetime, timezone
 
 from valuesteward.config import ValueStewardSettings
 from valuesteward.core.execution_engine import ExecutionEngine
 from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.models import IntentRecord, PortfolioSnapshot, RiskMode
 
+@pytest.fixture(autouse=True)
+def mock_steward_state(tmp_path, monkeypatch):
+    """Ensure tests use a temporary state file."""
+    fake_state = tmp_path / "steward-state.json"
+    monkeypatch.setattr("valuesteward.steward_state.STATE_PATH", fake_state)
+    return fake_state
 
 class FakeAlpacaClient:
     def __init__(self) -> None:
@@ -15,10 +22,16 @@ class FakeAlpacaClient:
     def submit_order(self, *args, **kwargs) -> None:
         self.submitted = True
 
+    def get_open_orders(self) -> list:
+        return []
+
+    def cancel_open_orders(self, symbol: str) -> None:
+        pass
+
 
 def build_snapshot() -> PortfolioSnapshot:
     return PortfolioSnapshot(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         cash=100_000.0,
         equity=100_000.0,
         positions=[],

@@ -1,0 +1,12 @@
+[Unit]
+Description=Value Steward EOD Timer
+
+[Timer]
+OnCalendar=Mon..Fri 12:45..15:55/5
+Timezone=America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=value-steward-eod.service
+
+[Install]
+WantedBy=timers.target

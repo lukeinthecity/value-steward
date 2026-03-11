@@ -9,6 +9,23 @@ const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const RETAIN_DAYS = 7;
 const WORLD_RSS_TIMEOUT_MS = Number(process.env.WORLD_RSS_TIMEOUT_MS ?? 15000);
 
+function parseCalendarDate(value) {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return null;
+  return new Date(parsed).toISOString();
+}
+
+function buildCalendarSummary({ title, impact, forecast, previous, actual }) {
+  const parts = [];
+  if (impact) parts.push(`impact=${impact}`);
+  if (forecast) parts.push(`forecast=${forecast}`);
+  if (previous) parts.push(`previous=${previous}`);
+  if (actual) parts.push(`actual=${actual}`);
+  if (!parts.length) return title || null;
+  return `${title} (${parts.join(", ")})`;
+}
+
 function loadFeeds() {
   const raw = fs.readFileSync(FEEDS_PATH, "utf8");
   return JSON.parse(raw);
@@ -64,6 +81,32 @@ function normalizeItem({ sourceId, item }) {
   };
 }
 
+function normalizeCalendarItem({ sourceId, item }) {
+  const rawTitle = item.title ?? item.event ?? "";
+  const country = item.country ?? item.currency ?? "";
+  const title = [country, rawTitle].filter(Boolean).join(" ").trim();
+  const published = parseCalendarDate(
+    item.date ?? item.datetime ?? item.time ?? item.timestamp
+  );
+  const summary = buildCalendarSummary({
+    title: title || rawTitle || "calendar event",
+    impact: item.impact ?? item.importance ?? null,
+    forecast: item.forecast ?? null,
+    previous: item.previous ?? null,
+    actual: item.actual ?? null,
+  });
+
+  return {
+    ts: new Date().toISOString(),
+    source_id: sourceId,
+    title: title || rawTitle || "calendar event",
+    link: null,
+    published,
+    summary,
+    content_text: summary,
+  };
+}
+
 function pruneOld(entries) {
   const cutoff = Date.now() - RETAIN_DAYS * 24 * 60 * 60 * 1000;
   return entries.filter((entry) => {
@@ -72,9 +115,28 @@ function pruneOld(entries) {
   });
 }
 
+async function fetchJsonWithTimeout(url, { timeoutMs, headers }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers,
+    });
+    if (!res.ok) {
+      throw new Error(`http_${res.status}`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function main() {
-  const stopSpinner = startSpinner("fetch rss");
   const feeds = loadFeeds();
+  const enabledSources = (feeds.sources ?? []).filter((source) => source.enabled);
+  const stopSpinner = startSpinner("fetch rss", { total: enabledSources.length });
   const userAgent =
     process.env.WORLD_RSS_USER_AGENT?.trim() ||
     "ValueSteward/1.0 (contact: local)";
@@ -97,27 +159,59 @@ async function main() {
   const existingKeys = new Set(existing.map(buildKey));
 
   let added = 0;
+  let processed = 0;
   for (const source of feeds.sources ?? []) {
     if (!source.enabled) continue;
     console.log(`[world] fetch ${source.id}...`);
     try {
-      const feed = await Promise.race([
-        parser.parseURL(source.rss_url),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), WORLD_RSS_TIMEOUT_MS)
-        ),
-      ]);
-      for (const item of feed.items ?? []) {
-        if (isPaywalled({ sourceId: source.id, item })) continue;
-        const normalized = normalizeItem({ sourceId: source.id, item });
-        const key = buildKey(normalized);
-        if (existingKeys.has(key)) continue;
-        existing.push(normalized);
-        existingKeys.add(key);
-        added += 1;
+      if (source.format === "calendar_json") {
+        const data = await fetchJsonWithTimeout(source.rss_url, {
+          timeoutMs: WORLD_RSS_TIMEOUT_MS,
+          headers: {
+            "User-Agent": userAgent,
+            Accept: "application/json, */*",
+          },
+        });
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.events)
+            ? data.events
+            : Array.isArray(data?.items)
+              ? data.items
+              : [];
+        for (const item of items) {
+          const normalized = normalizeCalendarItem({
+            sourceId: source.id,
+            item,
+          });
+          const key = buildKey(normalized);
+          if (existingKeys.has(key)) continue;
+          existing.push(normalized);
+          existingKeys.add(key);
+          added += 1;
+        }
+      } else {
+        const feed = await Promise.race([
+          parser.parseURL(source.rss_url),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), WORLD_RSS_TIMEOUT_MS)
+          ),
+        ]);
+        for (const item of feed.items ?? []) {
+          if (isPaywalled({ sourceId: source.id, item })) continue;
+          const normalized = normalizeItem({ sourceId: source.id, item });
+          const key = buildKey(normalized);
+          if (existingKeys.has(key)) continue;
+          existing.push(normalized);
+          existingKeys.add(key);
+          added += 1;
+        }
       }
     } catch (err) {
       console.error(`[world] fetch failed for ${source.id}:`, err?.message ?? err);
+    } finally {
+      processed += 1;
+      stopSpinner.update(processed);
     }
   }
 

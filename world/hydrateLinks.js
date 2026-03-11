@@ -10,7 +10,7 @@ import { startSpinner } from "./spinner.js";
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 
-const WORLD_HYDRATE_MAX = Number(process.env.WORLD_HYDRATE_MAX ?? 5);
+const WORLD_HYDRATE_MAX = Number(process.env.WORLD_HYDRATE_MAX ?? 20);
 const WORLD_HYDRATE_SLEEP_MS = Number(process.env.WORLD_HYDRATE_SLEEP_MS ?? 1500);
 const WORLD_HYDRATE_TIMEOUT_MS = Number(process.env.WORLD_HYDRATE_TIMEOUT_MS ?? 15000);
 const WORLD_HYDRATE_MAX_CHARS = Number(process.env.WORLD_HYDRATE_MAX_CHARS ?? 15000);
@@ -62,6 +62,24 @@ function fallbackExtract(document) {
   return normalizeWhitespace(clone.body?.textContent || "");
 }
 
+function buildInlineHydration(entry, baseRecord) {
+  const rawText = entry.content_text ?? entry.summary ?? null;
+  if (!rawText) return null;
+  const truncated = rawText.slice(0, WORLD_HYDRATE_MAX_CHARS);
+  const hash = crypto.createHash("sha256").update(truncated).digest("hex");
+  return {
+    ...baseRecord,
+    ok: true,
+    status: "inline",
+    content_type: "text/plain",
+    extractor: "inline",
+    content_text: truncated,
+    content_chars: truncated.length,
+    content_hash: hash,
+    error: null,
+  };
+}
+
 async function fetchWithTimeout(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), WORLD_HYDRATE_TIMEOUT_MS);
@@ -101,6 +119,8 @@ async function hydrateEntry(entry) {
   };
 
   if (!entry.link) {
+    const inline = buildInlineHydration(entry, baseRecord);
+    if (inline) return inline;
     return { ...baseRecord, error: "no_link" };
   }
 
@@ -182,13 +202,13 @@ async function hydrateEntry(entry) {
 }
 
 async function main() {
-  const stopSpinner = startSpinner("hydrate links");
   const inbox = loadJsonl(INBOX_PATH);
   const hydrated = loadJsonl(HYDRATED_PATH);
   const hydratedKeys = new Set(hydrated.map(buildKey));
 
   const candidates = inbox.filter((entry) => !hydratedKeys.has(buildKey(entry)));
   const toProcess = candidates.slice(0, WORLD_HYDRATE_MAX);
+  const stopSpinner = startSpinner("hydrate links", { total: toProcess.length });
 
   let attempted = 0;
   let okCount = 0;
@@ -203,6 +223,7 @@ async function main() {
     } else {
       failCount += 1;
     }
+    stopSpinner.update(attempted);
     await sleep(WORLD_HYDRATE_SLEEP_MS);
   }
 

@@ -2,8 +2,10 @@ import "dotenv/config";
 
 import { sendLessonEmail } from "../core/emailNotifications.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
+import { startSpinner } from "../world/spinner.js";
 
 async function main() {
+  const stopSpinner = startSpinner("email test", { total: 2 });
   const policy = {
     version: 999,
     mode: "read-only",
@@ -38,6 +40,7 @@ async function main() {
   };
 
   const worldContext = await loadLatestWorldContext();
+  stopSpinner.update(1);
 
   await sendLessonEmail({
     policy,
@@ -45,6 +48,8 @@ async function main() {
     training,
     worldContext,
   });
+  stopSpinner.update(2);
+  stopSpinner("sent");
 
   console.log("[ValueSteward] Test email requested.");
 }

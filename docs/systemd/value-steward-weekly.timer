@@ -1,0 +1,11 @@
+[Unit]
+Description=Value Steward Weekly Report Timer
+
+[Timer]
+OnCalendar=Sun 18:00:00
+Timezone=America/New_York
+Persistent=true
+Unit=value-steward-weekly.service
+
+[Install]
+WantedBy=timers.target

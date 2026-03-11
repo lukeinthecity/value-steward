@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.config import get_settings
 from valuesteward.models import PortfolioSnapshot, Position
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioRepository:
@@ -28,9 +31,9 @@ class PortfolioRepository:
         except Exception as exc:  # noqa: BLE001 - fallback for shadow mode only
             if not settings.shadow_mode:
                 raise
-            print(f"[WARN] Falling back to empty snapshot in shadow mode: {exc}")
+            logger.warning(f"[WARN] Falling back to empty snapshot in shadow mode: {exc}")
             return PortfolioSnapshot(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 cash=0.0,
                 equity=0.0,
                 positions=[],

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 
 import { summarizeMacroLine } from "./contextUtils.js";
+import { startSpinner } from "./spinner.js";
 
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
@@ -63,8 +64,11 @@ function formatRaw(value) {
 }
 
 function main() {
+  const stopSpinner = startSpinner("world inspect", { total: 1 });
   const entries = loadJsonl(CONTEXT_PATH);
   if (!entries.length) {
+    stopSpinner.update(1);
+    stopSpinner("no entries");
     console.log(
       '[world:inspect] No world context entries found. Run "npm run world:run" first.'
     );
@@ -73,11 +77,16 @@ function main() {
 
   const latest = getLatestContext(entries);
   if (!latest) {
+    stopSpinner.update(1);
+    stopSpinner("invalid");
     console.log(
       '[world:inspect] No valid world context entries found. Run "npm run world:run" first.'
     );
     process.exit(0);
   }
+
+  stopSpinner.update(1);
+  stopSpinner("loaded");
 
   const sourcesUsed = Array.isArray(latest.sources_used)
     ? latest.sources_used.length

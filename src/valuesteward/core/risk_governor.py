@@ -27,6 +27,18 @@ class RiskGovernor:
 
         return snapshot.risk_exposure_pct + intended_position_pct
 
+    def check_vol_stop(self, day_return: float, volatility: float) -> bool:
+        """Institutional Exit Rule: Return True if day return is worse than -2.0 SD.
+        
+        This identifies 'Abnormal Pain' beyond regular market noise.
+        """
+        if volatility <= 0:
+            return False
+        
+        # 2.0 SD is the standard institutional threshold for a trend break
+        threshold = -2.0 * volatility
+        return day_return < threshold
+
     def check_trade_allowed(
         self, snapshot: PortfolioSnapshot, intended_position_pct: float
     ) -> bool:

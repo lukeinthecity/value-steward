@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": 16,
-  "mode": "read-only",
-  "risk_level": 0.20000027999999986,
+  "version": 52,
+  "mode": "rebalance",
+  "risk_level": 0.2000002699999997,
   "target_risk_exposure_pct_low": 0.2,
   "rebalance_buffer_pct": 0.02,
   "trade_gate_overrides": {
@@ -11,16 +11,16 @@
   },
   "max_positions": 3,
   "rebalance_threshold": 0.02,
-  "lastTrainedAt": "2026-02-24T18:30:02.189Z",
-  "lastEquityDelta": 0.00999999999476131,
+  "lastTrainedAt": "2026-03-11T17:00:03.949Z",
+  "lastEquityDelta": -0.00999999999476131,
   "lastMetricsSummary": {
-    "sampleCount": 55,
-    "equityReturn": 9.99999999476131e-8,
-    "equityVolatility": 2.3497365000632796e-8,
-    "maxDrawdown": 9.999998994761412e-8,
+    "sampleCount": 369,
+    "equityReturn": -9.99999999476131e-8,
+    "equityVolatility": 4.574185678764029e-8,
+    "maxDrawdown": 6.99999789924393e-7,
     "avgCashUtilization": 0,
-    "avgGrossExposureRatio": 0.000006780037564284796,
-    "avgMaxPositionWeight": 0.00001610258921517639
+    "avgGrossExposureRatio": 0.000014998760832957952,
+    "avgMaxPositionWeight": 0.000015998678221821815
   },
   "lastTrainingReason": "update"
 }

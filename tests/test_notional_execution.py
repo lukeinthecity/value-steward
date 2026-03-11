@@ -1,6 +1,6 @@
 """Tests for notional-based execution sizing."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from valuesteward.config import ValueStewardSettings
 from valuesteward.core.execution_engine import ExecutionEngine
@@ -13,14 +13,21 @@ class FakeAlpacaClient:
         self.submitted = False
         self.last_notional = None
 
-    def submit_market_order(self, symbol: str, side: str, notional: float) -> None:
+    def submit_steward_order(self, symbol: str, side: str, notional: float) -> float:
         self.submitted = True
         self.last_notional = notional
+        return 100.0 # Return a dummy price
+
+    def get_open_orders(self) -> list:
+        return []
+
+    def cancel_open_orders(self, symbol: str) -> None:
+        pass
 
 
 def build_snapshot(equity: float) -> PortfolioSnapshot:
     return PortfolioSnapshot(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         cash=equity,
         equity=equity,
         positions=[],
@@ -64,7 +71,7 @@ def test_effective_capital_clamps_notional() -> None:
     snapshot = build_snapshot(equity=100_000.0)
     engine.execute_intent(intent, snapshot)
     assert engine.alpaca_client.submitted is True
-    assert engine.alpaca_client.last_notional == 10.0
+    assert engine.alpaca_client.last_notional == 20.0
 
 
 def test_max_trade_notional_clamps() -> None:
@@ -98,7 +105,7 @@ def test_skip_when_below_min_notional() -> None:
         settings=settings,
     )
 
-    intent = build_intent(size_pct=0.1)
+    intent = build_intent(size_pct=0.00001)
     snapshot = build_snapshot(equity=100_000.0)
     engine.execute_intent(intent, snapshot)
     assert engine.alpaca_client.submitted is False

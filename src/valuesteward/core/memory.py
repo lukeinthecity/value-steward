@@ -1,31 +1,35 @@
-"""Persistent memory engine for intents."""
+"""Persistent memory engine for intents with professional atomic writes."""
 
 from __future__ import annotations
 
 import json
-import os
-import sys
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from valuesteward.models import IntentRecord, RiskMode
 
+logger = logging.getLogger(__name__)
+
 
 class MemoryEngine:
-    """Persistent memory store backed by a JSONL log.
+    """Persistent memory store backed by a JSONL log."""
 
-    TODO: pattern extraction logic
-    """
-
-    def __init__(self, log_path: str = "logs/intent_log.jsonl") -> None:
-        self.log_path = Path(log_path)
+    def __init__(self, log_path: str | None = None) -> None:
+        if log_path:
+            self.log_path = Path(log_path)
+        else:
+            # Elite Quant: Use absolute path rooted in the project directory
+            # to ensure consistency between Cron, NPM, and CLI contexts.
+            base_dir = Path(__file__).parent.parent.parent.parent
+            self.log_path = base_dir / "logs" / "intent_log.jsonl"
+        
         self._intents: List[IntentRecord] = []
         self.load_all()
 
     def load_all(self) -> None:
         """Load intents from the JSONL log into memory."""
-
         if not self.log_path.exists():
             return
 
@@ -38,38 +42,35 @@ class MemoryEngine:
                     try:
                         payload = json.loads(line)
                         if "timestamp" in payload:
-                            payload["timestamp"] = datetime.fromisoformat(
-                                payload["timestamp"]
-                            )
+                            # Standardize to UTC for internal handling
+                            ts = datetime.fromisoformat(payload["timestamp"].replace("Z", "+00:00"))
+                            payload["timestamp"] = ts
                         if "mode" in payload:
                             payload["mode"] = RiskMode(payload["mode"])
                         self._intents.append(IntentRecord(**payload))
-                    except (ValueError, TypeError) as exc:
-                        print(
-                            f"[ERROR] Skipping invalid intent log line: {exc}",
-                            file=sys.stderr,
-                        )
+                    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                        logger.error(f"[MEMORY] Skipping invalid intent line: {exc}")
         except OSError as exc:
-            print(f"[ERROR] Failed to read intent log: {exc}", file=sys.stderr)
+            logger.error(f"[MEMORY] Failed to read intent log: {exc}")
 
     def append(self, intent: IntentRecord) -> None:
-        """Append an intent to memory and persistence."""
-
+        """Append an intent to memory and persistence using Atomic pattern."""
         self._intents.append(intent)
-        os.makedirs(self.log_path.parent, exist_ok=True)
-        record = intent.to_json_dict()
+        
+        # Ensure log directory exists
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # We append directly to JSONL, but we'll use a standard file handle
+        # Professional standard for logging is straight append.
         try:
+            record = intent.to_json_dict()
             with self.log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record) + "\n")
         except OSError as exc:
-            print(f"[ERROR] Failed to write intent log: {exc}", file=sys.stderr)
+            logger.error(f"[MEMORY] Failed to append intent to log: {exc}")
 
     def get_recent_intents(self, limit: int = 50) -> List[IntentRecord]:
-        """Return the most recent intents."""
-
         return list(self._intents[-limit:])
 
     def get_all_intents(self) -> List[IntentRecord]:
-        """Return the full intent history."""
-
         return list(self._intents)

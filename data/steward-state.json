@@ -1,0 +1,28 @@
+{
+  "current_mode": "LIVE",
+  "last_run_at": "2026-03-11T23:30:02.461Z",
+  "last_mode_transition_reason": "normal",
+  "last_known_positions": [
+    {
+      "symbol": "SPY",
+      "qty": 0.002347052,
+      "side": "long",
+      "marketValue": 1.586466,
+      "avgEntryPrice": 681.706,
+      "unrealizedPl": -0.013533,
+      "unrealizedPlPc": -0.00846,
+      "assetClass": "us_equity"
+    }
+  ],
+  "trading_enabled": true,
+  "force_no_trade": false,
+  "control_reason": null,
+  "control_updated_at": null,
+  "daily_starting_equity": 99999.99,
+  "last_equity_reset_date": "2026-03-11",
+  "executions_today": 40,
+  "last_executed_date": "2026-03-11",
+  "last_executed_at": "2026-03-11T23:29:11.016234+00:00",
+  "version": 1,
+  "updated_at": "2026-03-11T23:30:02.482Z"
+}

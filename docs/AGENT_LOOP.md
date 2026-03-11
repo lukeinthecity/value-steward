@@ -1,61 +1,40 @@
-- Added policy-driven tick runner with local history logging.
-- Added local trainer script for policy updates from history.
+# Agent Loop Mechanics
 
-# Value Steward Agent Loop
+The Value Steward operates on a periodic "Tick" cycle (defaulting to every 15 minutes during market hours). Each tick follows a specific sequence to ensure safety, data integrity, and deterministic execution.
 
-## Core flow
-- `core/runValueSteward.js` is the main agent logic for each tick.
-- `config/policy.json` is the policy the agent reads every tick.
-- `data/history.jsonl` stores one JSON record per tick.
-- `core/tick.js` loads policy, runs the steward, and appends history.
+## The Tick Sequence
 
-## Training
-- `scripts/trainPolicy.js` reads `data/history.jsonl` and updates `config/policy.json`.
-- Run locally with `npm run train:policy`.
+1.  **State Loading:** The agent loads the unified `data/steward-state.json`, which contains the mode, trading toggles, and daily equity baseline.
+2.  **Infrastructure Check:** The agent verifies internet connectivity and broker (Alpaca) API status.
+3.  **GPIO Sync:** If a GPIO bridge is active, hardware-level toggles (e.g., physical switches) are synced into the unified state.
+4.  **World Context Refresh:** The agent reads the latest `data/world-context.jsonl` to ingest macro sentiment scores.
+5.  **Decision Engine (The Brain):**
+    *   **Signal Generation:** Ranks symbols based on Momentum, Volatility, and Drawdown.
+    *   **Stale Data Check:** Discards any symbols with price data older than 1 trading day.
+    *   **Rebalance Logic:** Compares current portfolio exposure to the target (adjusted by macro risk).
+    *   **Strategic Hold:** May decide to "NO_ACTION" even if overweight if signals remain strong and risk is low.
+6.  **Execution Engine (The Arm):**
+    *   **Circuit Breaker:** Halts if daily loss exceeds 3%.
+    *   **Fishing Strategy:** Cancels old orders and places new Mid-point Limit Orders.
+    *   **Partial Fill Awareness:** Only "fishes" for the remaining amount if an order was partially filled.
+7.  **State Persistence:** Updates the unified state with the latest run time, positions, and execution counts.
 
-## Automatic trainer
-- Each local tick can optionally run an auto-train pass from local history.
-- The trainer only runs when `mode` is `"read-only"` and never changes `mode`.
-- It adjusts `risk_level` within bounds, updates `version`, and sets `lastTrainedAt`/`lastEquityDelta`.
-- You can run the local trainer via `npm run train:policy`.
-- Training hyperparameters (minHistory, maxStep, bounds) live in the local trainer.
-- The trainer now evaluates trend, volatility, cash utilization, exposure, and concentration metrics.
-- Each training run logs a decision record to `data/training-log.jsonl` with metrics and rationale.
-- It still only updates `risk_level` within hard bounds, in small steps capped by `maxStep`.
-- No orders are ever placed as part of training.
+## Unified System State (`data/steward-state.json`)
 
-## Notifications
-- When the trainer updates `policy.risk_level`, the agent attempts to send a summary email via SMTP.
-- The email includes policy changes, training reason, key metrics, and snapshot context.
-- When available, the email also includes key macro tags and the world context summary.
-- Required env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`.
-- If any are missing, the agent logs a warning and skips email without affecting the EOD loop.
+This file is the single source of truth shared by both the Node.js infrastructure and the Python decision engine.
 
-## Per-tick perception
-- Each history entry captures an EOD snapshot (run near market close) via read-only Alpaca endpoints.
-- Even when the market is closed, the agent still fetches account and positions data and logs a full snapshot.
-- In those cases, `marketOpen` is false and `accountStatus` is `MARKET_CLOSED`, but all other fields are populated.
-- Account fields: `equity`, `buyingPower`, `cash`, `portfolioValue`, `patternDayTrader`, `marginMultiplier`, `cashUtilization`, `equityToBuyingPower`.
-- Positions summary: `numPositions`, `longMarketValue`, `shortMarketValue`, `grossExposure`, `netExposure`, `maxPositionWeight`, and `positions[]` summaries.
-- Market timing: `isMarketOpen`, `nextOpen`, `nextClose`.
-- World context: `worldContext` is populated from local files when available.
-- All of this data is collected read-only; no orders are placed during ticks or training.
-- Each tick result includes a `worldContext` field when a macro digest is available.
-- When present, `worldContext.macro_view` summarizes the smoothed macro score and label.
-- Macro view can adjust LOW-mode target exposure and buffer (risk is still capped by the risk governor).
+*   **`current_mode`**: `INACTIVE`, `CATCHUP`, `LIVE`, `RECOVERY`.
+*   **`trading_enabled`**: Master toggle for automated trading.
+*   **`force_no_trade`**: Safety kill-switch (Circuit Breaker).
+*   **`daily_starting_equity`**: The account value at the start of the trading day.
+*   **`executions_today`**: Counter to enforce daily trade limits.
 
-## Operational modes and trade gate
-- Modes: `INACTIVE`, `RECOVERY`, `LIVE`, `ERROR`.
-- Trade gate invariant: `can_trade = trading_enabled && internet_ok && broker_ok && mode == LIVE`.
-- `trading_enabled` is currently sourced from `process.env.TRADING_ENABLED` and defaults to false.
+## Decision Gates
 
-## Agent state file
-- `data/agent-state.json` stores the latest operational snapshot:
-  - `last_run_wall_clock`, `last_market_timestamp`
-  - `last_known_positions`, `open_orders_snapshot`
-  - `current_mode`, `last_mode_transition_reason`, `status_indicator`
-
-## Macro view examples
-- calm: `2026-01-24 · macro=0.22 (calm) · inputs=4/5 · nulls=1 · confidence=0.80 (moderate)`
-- watchful: `2026-01-24 · macro=0.48 (watchful) · inputs=5/5 · nulls=0 · confidence=1.00 (robust)`
-- stressed: `2026-01-24 · macro=0.67 (stressed) · inputs=3/5 · nulls=2 · confidence=0.60 (moderate)`
+Trading only occurs if all gates are passed:
+*   `trading_enabled == true`
+*   `force_no_trade == false`
+*   `market_open == true`
+*   `internet_ok && broker_ok`
+*   `macro_risk` allows the specific action (BUY/SELL).
+*   `risk_governor` confirms the trade won't exceed portfolio caps.

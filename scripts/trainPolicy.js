@@ -1,17 +1,25 @@
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
+import { startSpinner } from "../world/spinner.js";
 
 async function main() {
+  const stopSpinner = startSpinner("train policy", { total: 1 });
   const training = trainPolicyFromHistoryLocal({
     minHistory: 10,
-    equityDeltaThreshold: 0,
+    equityDeltaThreshold: Number(
+      process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD ?? 0
+    ),
     maxStep: 0.01,
     minRisk: 0.1,
-    maxRisk: 0.9,
+    maxRisk: Number(process.env.VS_TRAIN_MAX_RISK ?? 0.33),
+    minRiskDelta: Number(process.env.VS_TRAIN_MIN_RISK_DELTA ?? 0),
   });
 
+  stopSpinner.update(1);
   if (training.updated && training.newPolicy) {
+    stopSpinner("updated");
     console.log("Updated policy:", training.newPolicy);
   } else {
+    stopSpinner("no update");
     console.log("No policy update:", training.reason);
   }
 }

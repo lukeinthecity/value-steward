@@ -12,6 +12,7 @@ import {
   getWorldTimeZone,
 } from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
+import { observeWorld } from "./shadowObserver.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
 import { startSpinner } from "./spinner.js";
 
@@ -134,7 +135,7 @@ function buildRuleSummary({ hydratedEntries, macroView }) {
 }
 
 async function main() {
-  const stopSpinner = startSpinner("build world context");
+  const stopSpinner = startSpinner("build world context", { total: 1 });
   const inbox = loadInbox();
   const hydrated = loadHydrated();
   const context = loadContext();
@@ -142,9 +143,7 @@ async function main() {
   const slot = getWorldSlot();
 
   if (context.some((entry) => entry.date === date && entry.slot === slot)) {
-    console.log("[world] context already exists for", date, "slot", slot);
-    stopSpinner("already built");
-    return;
+    console.log("[world] context already exists for", date, "slot", slot, "- continuing to build higher-resolution entry.");
   }
 
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -229,17 +228,26 @@ async function main() {
       });
     }
 
+    // --- Phase 1.6: Shadow Observer (Scout) ---
+    const scoutResult = await observeWorld({ baseContext: contextToUse });
+    contextToUse = { ...contextToUse, ...scoutResult };
+    // ------------------------------------------
+
     if (!validateContext(contextToUse)) {
       console.error(
         "[world] context validation failed; using rule-based base context"
       );
       const fallback = {
         ...baseContext,
-        notes: "rule-based world context (validation fallback)",
+        scout_score: contextToUse.scout_score,
+        scout_label: contextToUse.scout_label,
+        scout_thesis: contextToUse.scout_thesis,
+        notes: `rule-based world context (validation fallback) | scout: ${contextToUse.scout_label}`,
       };
       fallback.slot = slot;
       if (!validateContext(fallback)) {
         console.error("[world] base context failed validation; aborting write");
+        stopSpinner.update(1);
         stopSpinner("validation failed");
         return;
       }
@@ -248,6 +256,7 @@ async function main() {
       console.log(
         `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
       );
+      stopSpinner.update(1);
       stopSpinner(`saved ${logDate} ${slot}`);
       return;
     }
@@ -267,6 +276,7 @@ async function main() {
     console.log(
       `[world] context built date=${logDate} slot=${slot} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
     );
+    stopSpinner.update(1);
     stopSpinner(`saved ${logDate} ${slot}`);
   } catch (err) {
     console.error("[world] macro digest error:", err?.message ?? err);
@@ -280,8 +290,12 @@ async function main() {
     console.log(
       `[world] context built date=${logDate} slot=${slot} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
     );
+    stopSpinner.update(1);
     stopSpinner(`saved ${logDate} ${slot}`);
   }
 }
 
-main();
+main().catch((err) => {
+  console.error("[world] Fatal build error:", err.message);
+  process.exit(1);
+});

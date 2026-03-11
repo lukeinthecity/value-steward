@@ -1,3 +1,3 @@
-"""Core package for the Value Steward agent."""
+"""Value Steward core package."""
 
 __version__ = "0.1.0"

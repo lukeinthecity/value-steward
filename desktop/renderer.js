@@ -1,455 +1,304 @@
-const api = window.valueSteward;
-const EXCHANGE_TZ = "America/New_York";
 
 const elements = {
-  policySummary: document.getElementById("policy-summary"),
-  policyRisk: document.getElementById("policy-risk"),
-  policyTarget: document.getElementById("policy-target"),
-  policyBuffer: document.getElementById("policy-buffer"),
-  policyForceNoTrade: document.getElementById("policy-force-no-trade"),
-  savePolicy: document.getElementById("save-policy"),
-  policyStatus: document.getElementById("policy-status"),
-  worldSummary: document.getElementById("world-summary"),
-  worldTags: document.getElementById("world-tags"),
-  worldSources: document.getElementById("world-sources"),
-  marketSummary: document.getElementById("market-summary"),
-  marketPositions: document.getElementById("market-positions"),
-  trainingSummary: document.getElementById("training-summary"),
-  rssTicker: document.getElementById("rss-ticker"),
-  tickLog: document.getElementById("tick-log"),
-  tickLogMeta: document.getElementById("tick-log-meta"),
-  nextTick: document.getElementById("next-tick"),
-  tickCountdown: document.getElementById("tick-countdown"),
-  tickMeta: document.getElementById("tick-meta"),
-  dataStatus: document.getElementById("data-status"),
-  refreshData: document.getElementById("refresh-data"),
-  refreshStatus: document.getElementById("refresh-status"),
+  guardianMeter: document.getElementById('guardian-meter'),
+  scoutMeter: document.getElementById('scout-meter'),
+  worldSummary: document.getElementById('world-summary'),
+  hudExposure: document.getElementById('hud-exposure'),
+  hudEquity: document.getElementById('hud-equity'),
+  hudBaseline: document.getElementById('hud-baseline'),
+  intentFeed: document.getElementById('intent-feed'),
+  portfolioPositions: document.getElementById('portfolio-positions'),
+  tickLog: document.getElementById('tick-log'),
+  refreshBtn: document.getElementById('refresh-data'),
+  actionGrid: document.getElementById('action-grid'),
+  // Config Elements
+  confAlpacaId: document.getElementById('conf-alpaca-id'),
+  confAlpacaSecret: document.getElementById('conf-alpaca-secret'),
+  confGeminiKey: document.getElementById('conf-gemini-key'),
+  saveConfigBtn: document.getElementById('save-config')
 };
 
-function formatPercent(value) {
-  if (value === null || value === undefined) return "n/a";
-  return `${(value * 100).toFixed(1)}%`;
+const getApi = () => window.valueSteward;
+
+// Global Ticker State for Infinite Loop
+let marketPrices = { 'SPY': null, 'DIA': null, 'QQQ': null };
+let newsHeadlines = [];
+
+function formatCurrency(val) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
 }
 
-function formatNumber(value) {
-  if (value === null || value === undefined) return "n/a";
-  if (Number.isNaN(Number(value))) return "n/a";
-  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+function formatPct(val) {
+  return ((val || 0) * 100).toFixed(2) + '%';
 }
 
-function formatDate(value) {
-  if (!value) return "n/a";
-  const ts = Date.parse(value);
-  if (Number.isNaN(ts)) return value;
-  return new Date(ts).toLocaleString();
+function updateUnifiedTicker() {
+  const tickerEl = document.getElementById('news-ticker');
+  if (!tickerEl) return;
+
+  const marketParts = Object.entries(marketPrices)
+    .filter(([, price]) => price !== null)
+    .map(([sym, price]) => `<span class="ticker-item">${sym}: <span class="data-mono">$${price.toFixed(2)}</span></span>`);
+
+  const newsParts = newsHeadlines.map(h => `<span>${h}</span>`);
+  
+  const content = [...marketParts, ...newsParts].join('');
+  if (!content) return;
+
+  // Elite Quant: Triple the content for absolute infinite wrapping
+  tickerEl.innerHTML = content + content + content;
 }
 
-function getOffsetMinutesForTz(date, timeZone) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    timeZoneName: "shortOffset",
-  }).formatToParts(date);
-  const offsetPart = parts.find((part) => part.type === "timeZoneName");
-  const value = offsetPart?.value ?? "GMT+0";
-  const match = value.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
-  if (!match) return 0;
-  const sign = match[1] === "-" ? -1 : 1;
-  const hours = Number(match[2]);
-  const minutes = Number(match[3] ?? "0");
-  return sign * (hours * 60 + minutes);
-}
-
-function getExchangeParts(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: EXCHANGE_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    weekday: "short",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const map = Object.fromEntries(
-    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value])
-  );
-  return {
-    year: Number(map.year),
-    month: Number(map.month),
-    day: Number(map.day),
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-    weekday: map.weekday,
-  };
-}
-
-function makeDateInExchangeTz(components) {
-  const offsetMinutes = getOffsetMinutesForTz(new Date(), EXCHANGE_TZ);
-  const utcMs =
-    Date.UTC(
-      components.year,
-      components.month - 1,
-      components.day,
-      components.hour,
-      components.minute,
-      0,
-      0
-    ) - offsetMinutes * 60 * 1000;
-  return new Date(utcMs);
-}
-
-function isWeekendShort(weekday) {
-  return weekday === "Sat" || weekday === "Sun";
-}
-
-function getNextTickTime(now = new Date()) {
-  const parts = getExchangeParts(now);
-  const isWeekend = isWeekendShort(parts.weekday);
-  const start = {
-    year: parts.year,
-    month: parts.month,
-    day: parts.day,
-    hour: 9,
-    minute: 30,
-  };
-  const end = {
-    year: parts.year,
-    month: parts.month,
-    day: parts.day,
-    hour: 16,
-    minute: 0,
-  };
-
-  function nextWeekdayDate(base) {
-    const date = new Date(base);
-    do {
-      date.setDate(date.getDate() + 1);
-    } while (isWeekendShort(getExchangeParts(date).weekday));
-    const nextParts = getExchangeParts(date);
-    return {
-      year: nextParts.year,
-      month: nextParts.month,
-      day: nextParts.day,
-      hour: 9,
-      minute: 30,
-    };
-  }
-
-  const nowExchange = makeDateInExchangeTz(parts);
-  const startDate = makeDateInExchangeTz(start);
-  const endDate = makeDateInExchangeTz(end);
-
-  if (isWeekend) {
-    return makeDateInExchangeTz(nextWeekdayDate(nowExchange));
-  }
-
-  if (nowExchange < startDate) {
-    return startDate;
-  }
-
-  if (nowExchange >= endDate) {
-    return makeDateInExchangeTz(nextWeekdayDate(nowExchange));
-  }
-
-  const minutesSinceStart = Math.floor((nowExchange - startDate) / (1000 * 60));
-  const nextQuarter = Math.floor(minutesSinceStart / 15) * 15 + 15;
-  const next = new Date(startDate);
-  next.setMinutes(startDate.getMinutes() + nextQuarter, 0, 0);
-  if (next > endDate) {
-    return makeDateInExchangeTz(nextWeekdayDate(nowExchange));
-  }
-  return next;
-}
-
-function updateCountdown() {
-  const now = new Date();
-  const next = getNextTickTime(now);
-  const diffMs = next - now;
-  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
-  const minutes = String(Math.floor(diffSeconds / 60)).padStart(2, "0");
-  const seconds = String(diffSeconds % 60).padStart(2, "0");
-  const formatter = new Intl.DateTimeFormat([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: EXCHANGE_TZ,
-  });
-  const dateFormatter = new Intl.DateTimeFormat([], { timeZone: EXCHANGE_TZ });
-  elements.nextTick.textContent = formatter.format(next);
-  elements.tickCountdown.textContent =
-    Number.isFinite(diffSeconds) ? `${minutes}:${seconds}` : "--:--";
-  elements.tickMeta.textContent = `${dateFormatter.format(next)} · ${EXCHANGE_TZ}`;
-}
-
-function renderPolicy(policy) {
-  const items = [
-    ["Version", policy?.version ?? "n/a"],
-    ["Mode", policy?.mode ?? "n/a"],
-    ["Risk Level", formatPercent(policy?.risk_level)],
-    ["Target Exposure", formatPercent(policy?.target_risk_exposure_pct_low)],
-    ["Buffer", formatPercent(policy?.rebalance_buffer_pct)],
-    [
-      "Force No-Trade",
-      policy?.trade_gate_overrides?.force_no_trade ? "true" : "false",
-    ],
-    ["Last Trained", formatDate(policy?.lastTrainedAt)],
-    ["Last Equity Δ", formatNumber(policy?.lastEquityDelta)],
-  ];
-
-  elements.policySummary.innerHTML = items
-    .map(
-      ([label, value]) =>
-        `<div class="policy-item"><span>${label}</span><strong>${value}</strong></div>`
-    )
-    .join("");
-
-  elements.policyRisk.value = policy?.risk_level ?? "";
-  elements.policyTarget.value = policy?.target_risk_exposure_pct_low ?? "";
-  elements.policyBuffer.value = policy?.rebalance_buffer_pct ?? "";
-  elements.policyForceNoTrade.checked = Boolean(
-    policy?.trade_gate_overrides?.force_no_trade
-  );
-}
-
-function renderWorld(world) {
+function renderMacro(world) {
   if (!world) {
-    elements.worldSummary.textContent = "No world context available.";
-    elements.worldTags.innerHTML = "";
-    elements.worldSources.innerHTML = "";
+    elements.worldSummary.textContent = "Awaiting world context build...";
     return;
   }
-  const macro = world.macro_view ?? {};
+  
+  const gScore = world.macro_view?.macro_score || 0;
+  const sScore = world.scout_score || 0;
+  
+  if (elements.guardianMeter) {
+    const fill = elements.guardianMeter.querySelector('.meter-fill');
+    const text = elements.guardianMeter.querySelector('.data-mono');
+    if (fill) fill.style.width = (gScore * 100) + '%';
+    if (text) text.textContent = gScore.toFixed(2);
+  }
+  
+  if (elements.scoutMeter) {
+    const fill = elements.scoutMeter.querySelector('.meter-fill');
+    const text = elements.scoutMeter.querySelector('.data-mono');
+    if (fill) fill.style.width = (sScore * 100) + '%';
+    if (text) text.textContent = sScore.toFixed(2);
+  }
+  
+  const scoutStatus = world.scout_label ? ` [AI: ${world.scout_label.toUpperCase()}]` : '';
   elements.worldSummary.innerHTML = `
-    <div>Date: ${world.date ?? "n/a"} (slot: ${world.slot ?? "n/a"})</div>
-    <div>Generated: ${formatDate(world.generated_at)}</div>
-    <div>Macro: ${macro.macro_label ?? "n/a"} (score ${formatNumber(
-      macro.macro_score
-    )})</div>
-    <div>Confidence: ${formatNumber(macro.confidence)}</div>
-    <div>Sources: ${world.sources_used?.length ?? 0} | Raw count: ${
-    world.raw_count ?? 0
-  }</div>
+    <div class="text-ai" style="margin-bottom: 0.5rem; font-weight: bold;">Guardian: ${world.macro_view?.macro_label?.toUpperCase() || 'CALM'}${scoutStatus}</div>
+    <div>${world.scout_thesis || world.summary || "No macro thesis available."}</div>
   `;
 
-  const tags = world.tags || {};
-  elements.worldTags.innerHTML = Object.entries(tags)
-    .map(([key, value]) => {
-      const display = value === null || value === undefined ? "n/a" : value.toFixed(2);
-      return `<div class="tag">${key}: ${display}</div>`;
-    })
-    .join("");
-
-  const sources = world.sources_used || [];
-  elements.worldSources.innerHTML = sources.length
-    ? sources.map((source) => `<div>${source}</div>`).join("")
-    : "<div>No sources recorded.</div>";
-}
-
-function renderMarket(snapshot) {
-  if (!snapshot) {
-    elements.marketSummary.textContent = "No market snapshot available.";
-    elements.marketPositions.innerHTML = "";
-    return;
+  // Update Global News State
+  // Elite Quant: Prioritize AI-summarized professional headlines
+  if (world.scout_headlines && world.scout_headlines.length > 0) {
+    newsHeadlines = world.scout_headlines;
+  } else if (world.summary) {
+    newsHeadlines = world.summary.split('|').map(s => s.trim());
   }
-  elements.marketSummary.innerHTML = `
-    <div>Equity: $${formatNumber(snapshot.equity)}</div>
-    <div>Cash: $${formatNumber(snapshot.cash)}</div>
-    <div>Buying Power: $${formatNumber(snapshot.buyingPower)}</div>
-    <div>Exposure: ${formatPercent(snapshot.grossExposure / snapshot.portfolioValue || 0)}</div>
-    <div>Market Open: ${snapshot.marketOpen ? "true" : "false"}</div>
-    <div>Last Tick: ${formatDate(snapshot.ranAt)}</div>
-  `;
-
-  const positions = snapshot.positions || [];
-  if (!positions.length) {
-    elements.marketPositions.innerHTML = "<div>No positions.</div>";
-    return;
-  }
-  elements.marketPositions.innerHTML = positions
-    .slice(0, 8)
-    .map(
-      (pos) =>
-        `<div>${pos.symbol}: ${formatNumber(pos.qty)} @ $${formatNumber(
-          pos.marketValue
-        )} (${pos.side})</div>`
-    )
-    .join("");
+  updateUnifiedTicker();
 }
 
-function renderTraining(entry) {
-  if (!entry) {
-    elements.trainingSummary.textContent = "No training log entries.";
-    return;
-  }
-  elements.trainingSummary.innerHTML = `
-    <div>Ran At: ${formatDate(entry.ranAt)}</div>
-    <div>Decision: ${entry.decision ?? "n/a"} (${entry.reason ?? "n/a"})</div>
-    <div>Risk: ${formatPercent(entry.oldRisk)} → ${formatPercent(entry.newRisk)}</div>
-    <div>Policy Version: ${entry.policyVersionAfter ?? "n/a"}</div>
-  `;
-}
+function startMarketTicker() {
+  const api = getApi();
+  if (!api) return;
 
-function renderRss(entries) {
-  if (!entries.length) {
-    elements.rssTicker.innerHTML = "<div>No RSS entries yet.</div>";
-    return;
-  }
-  const sorted = entries
-    .slice()
-    .sort((a, b) => Date.parse(b.published ?? b.ts) - Date.parse(a.published ?? a.ts))
-    .slice(0, 15);
-
-  elements.rssTicker.innerHTML = sorted
-    .map(
-      (entry) => `
-        <div class="ticker-item">
-          <strong>${entry.title ?? "(no title)"}</strong>
-          <span>${entry.source_id ?? "unknown"} · ${formatDate(
-        entry.published ?? entry.ts
-      )}</span>
-          ${
-            entry.link
-              ? `<a href="#" class="rss-link" data-link="${entry.link}">Open Article</a>`
-              : ""
-          }
-        </div>
-      `
-    )
-    .join("");
-}
-
-function renderTickLog(logText, stats) {
-  elements.tickLog.textContent = logText || "No tick log found.";
-  if (!stats) {
-    elements.tickLogMeta.textContent = "No tick log metadata.";
-    return;
-  }
-  elements.tickLogMeta.textContent = `Last updated: ${formatDate(
-    stats.mtime
-  )} (${formatNumber(stats.size)} bytes)`;
-}
-
-function renderDataStatus(statuses) {
-  const rows = statuses.map(
-    (row) =>
-      `<div>${row.label}: ${row.exists ? "ok" : "missing"} · last ${
-        row.mtime ? formatDate(row.mtime) : "n/a"
-      } · ${formatNumber(row.size)} bytes</div>`
-  );
-  elements.dataStatus.innerHTML = rows.join("");
-}
-
-function loadData() {
-  const policy = api.readJson("config/policy.json");
-  const world = api.readJsonlLatest("data/world-context.jsonl");
-  const history = api.readJsonlLatest("data/history.jsonl");
-  const training = api.readJsonlLatest("data/training-log.jsonl");
-  const inbox = api.readJsonl("data/world-inbox.jsonl", 200);
-  const tickLog = api.readText("logs/tick.log", 200 * 1024);
-  const tickLogStats = api.stat("logs/tick.log");
-  const files = [
-    { label: "policy.json", path: "config/policy.json" },
-    { label: "history.jsonl", path: "data/history.jsonl" },
-    { label: "training-log.jsonl", path: "data/training-log.jsonl" },
-    { label: "world-context.jsonl", path: "data/world-context.jsonl" },
-    { label: "world-inbox.jsonl", path: "data/world-inbox.jsonl" },
-    { label: "tick.log", path: "logs/tick.log" },
-  ];
-  const status = files.map((file) => {
-    const stat = api.stat(file.path);
-    return {
-      label: file.label,
-      exists: Boolean(stat),
-      mtime: stat?.mtime ?? null,
-      size: stat?.size ?? 0,
-    };
+  api.onMarketEvent((event) => {
+    if (event.type === 'trade' || event.type === 'bar') {
+      marketPrices[event.symbol] = event.price;
+      updateUnifiedTicker();
+    }
   });
 
-  renderPolicy(policy);
-  renderWorld(world);
-  renderMarket(history);
-  renderTraining(training);
-  renderRss(inbox);
-  renderTickLog(tickLog, tickLogStats);
-  renderDataStatus(status);
+  api.startMarketStream(['SPY', 'DIA', 'QQQ']);
 }
 
-function handleSavePolicy() {
-  const update = {
-    risk_level: Number(elements.policyRisk.value),
-    target_risk_exposure_pct_low: Number(elements.policyTarget.value),
-    rebalance_buffer_pct: Number(elements.policyBuffer.value),
-    trade_gate_overrides: {
-      force_no_trade: elements.policyForceNoTrade.checked,
-    },
+function renderHUD(snapshot, state) {
+  if (!snapshot) {
+    elements.hudExposure.textContent = "0.00%";
+    elements.hudEquity.textContent = "Equity: $0.00 | Cash: $0.00";
+    return;
+  }
+
+  const exposurePct = (snapshot.grossExposure && snapshot.equity) ? snapshot.grossExposure / snapshot.equity : 0;
+  elements.hudExposure.textContent = formatPct(exposurePct);
+  
+  const equity = snapshot.equity || 0;
+  const cash = snapshot.cash || 0;
+  elements.hudEquity.textContent = `Equity: ${formatCurrency(equity)} | Cash: ${formatCurrency(cash)}`;
+  
+  const baseline = state?.daily_starting_equity || equity;
+  elements.hudBaseline.textContent = formatCurrency(baseline);
+  
+  const loss = baseline ? (equity / baseline) - 1 : 0;
+  elements.hudEquity.style.color = loss >= 0 ? 'var(--color-bullish)' : 'var(--color-bearish)';
+}
+
+function renderIntents(intents) {
+  if (!intents || !intents.length) {
+    elements.intentFeed.innerHTML = '<div class="text-muted">No intents logged yet.</div>';
+    return;
+  }
+  elements.intentFeed.innerHTML = '';
+  
+  intents.slice().reverse().forEach(intent => {
+    let tsString = intent.timestamp;
+    if (tsString && !tsString.endsWith('Z') && !tsString.includes('+')) {
+        tsString += 'Z';
+    }
+    const ts = new Date(tsString);
+    
+    const div = document.createElement('div');
+    div.className = 'intent-item data-mono';
+    const colorClass = intent.action_type === 'BUY' ? 'text-bullish' : 
+                       intent.action_type === 'SELL' ? 'text-bearish' : 'text-muted';
+    
+    div.innerHTML = `
+      <span class="text-muted">[${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}]</span>
+      <span class="${colorClass}">${intent.action_type.padEnd(6)}</span>
+      <span style="width: 60px; display: inline-block;">${intent.symbol || '---'}</span>
+      <span class="text-muted">| ${intent.reason_code || 'N/A'}</span>
+      <span class="text-ai" style="margin-left: 10px; font-size: 0.75rem;">${intent.world_scout_label || ''}</span>
+    `;
+    elements.intentFeed.appendChild(div);
+  });
+}
+
+function renderPositions(snapshot) {
+  elements.portfolioPositions.innerHTML = '';
+  const positions = snapshot?.positions || [];
+  
+  if (!positions.length) {
+    elements.portfolioPositions.innerHTML = '<div class="text-muted">No active positions.</div>';
+    return;
+  }
+  
+  positions.forEach(pos => {
+    const card = document.createElement('div');
+    card.className = 'position-card';
+    
+    const pnl = pos.unrealizedPl || 0;
+    const pnlPct = pos.unrealizedPlPc || 0;
+    
+    card.innerHTML = `
+      <header>
+        <strong class="text-action">${pos.symbol}</strong>
+        <span class="label-mini">${(pos.side || 'long').toUpperCase()}</span>
+      </header>
+      <div class="hud-item ${pnl >= 0 ? 'bullish' : 'bearish'}">
+        <div class="label-mini">PnL</div>
+        <div class="data-mono ${pnl >= 0 ? 'text-bullish' : 'text-bearish'}">
+          ${formatCurrency(pnl)} (${(pnlPct * 100).toFixed(2)}%)
+        </div>
+      </div>
+      <div class="label-mini" style="margin-top: 8px;">Market Value</div>
+      <div class="data-mono">${formatCurrency(pos.marketValue)}</div>
+    `;
+    elements.portfolioPositions.appendChild(card);
+  });
+}
+
+async function loadConfig() {
+  const api = getApi();
+  if (!api) return;
+  const env = api.readEnv();
+  if (elements.confAlpacaId) elements.confAlpacaId.value = env.ALPACA_API_KEY_ID || "";
+  if (elements.confAlpacaSecret) elements.confAlpacaSecret.value = env.ALPACA_SECRET_KEY || "";
+  if (elements.confGeminiKey) elements.confGeminiKey.value = env.GOOGLE_GENAI_API_KEY || "";
+}
+
+async function loadData() {
+  const api = getApi();
+  if (!api) return;
+  
+  try {
+    const world = api.readJsonlLatest("data/world-context.jsonl");
+    const intents = api.readJsonl("logs/intent_log.jsonl", 50);
+    const state = api.readJson("data/steward-state.json");
+    const history = api.readJsonlLatest("data/history.jsonl");
+    const tickLog = api.readText("logs/tick.log", 50 * 1024);
+
+    const nextTickEl = document.getElementById('next-tick');
+    const tickMetaEl = document.getElementById('tick-meta');
+    if (state && nextTickEl) {
+      nextTickEl.textContent = state.current_mode || "INACTIVE";
+      nextTickEl.style.color = state.trading_enabled ? 'var(--color-action)' : 'var(--color-warning)';
+      if (tickMetaEl) {
+        const lastRun = state.last_run_at ? new Date(state.last_run_at).toLocaleTimeString() : 'Never';
+        tickMetaEl.textContent = `Last Run: ${lastRun}`;
+      }
+    }
+
+    renderMacro(world);
+    renderHUD(history, state);
+    renderIntents(intents);
+    renderPositions(history);
+    
+    if (tickLog) {
+      elements.tickLog.textContent = tickLog;
+      elements.tickLog.scrollTop = elements.tickLog.scrollHeight;
+    }
+  } catch (err) {
+    console.error("[UI] Sync error:", err);
+  }
+}
+
+elements.refreshBtn.addEventListener('click', loadData);
+
+elements.saveConfigBtn.addEventListener('click', () => {
+  const api = getApi();
+  if (!api) return;
+  
+  const updates = {
+    ALPACA_API_KEY_ID: elements.confAlpacaId.value.trim(),
+    ALPACA_SECRET_KEY: elements.confAlpacaSecret.value.trim(),
+    GOOGLE_GENAI_API_KEY: elements.confGeminiKey.value.trim()
   };
-  const saved = api.writePolicy(update);
-  elements.policyStatus.textContent = `Saved @ ${new Date().toLocaleTimeString()}`;
-  renderPolicy(saved);
+  
+  api.writeEnv(updates);
+  elements.tickLog.textContent += `\n[UI] Configuration saved to .env and reloaded.\n`;
+  alert("Settings saved successfully.");
+});
+
+elements.actionGrid.addEventListener('click', async (e) => {
+  const script = e.target.getAttribute('data-script');
+  if (!script) return;
+  
+  e.target.disabled = true;
+  elements.tickLog.textContent += `\n[UI] Spawning ${script}...\n`;
+  
+  try {
+    const api = getApi();
+    if (!api) throw new Error("API Bridge not available");
+    const res = await api.runScript(script);
+    elements.tickLog.textContent += res.output;
+  } catch (err) {
+    elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+  } finally {
+    e.target.disabled = false;
+    loadData();
+  }
+});
+
+// Fullscreen Hover Logic
+const topbar = document.querySelector('.topbar');
+const trigger = document.getElementById('fullscreen-trigger');
+
+if (trigger && topbar) {
+  trigger.addEventListener('mouseenter', () => {
+    if (document.body.classList.contains('fullscreen')) {
+      topbar.classList.add('is-visible');
+    }
+  });
+
+  topbar.addEventListener('mouseleave', () => {
+    if (document.body.classList.contains('fullscreen')) {
+      topbar.classList.remove('is-visible');
+    }
+  });
 }
 
-elements.savePolicy.addEventListener("click", handleSavePolicy);
-elements.refreshData.addEventListener("click", () => {
-  loadData();
-  elements.refreshStatus.textContent = `Refreshed @ ${new Date().toLocaleTimeString()}`;
-});
-elements.rssTicker.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  const link = target.getAttribute("data-link");
-  if (!link) return;
-  event.preventDefault();
-  api.openExternal(link);
+// Keyboard Shortcut for Fullscreen Mode
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F11') {
+    document.body.classList.toggle('fullscreen');
+    if (!document.body.classList.contains('fullscreen')) {
+      topbar.classList.remove('is-visible');
+    }
+  }
 });
 
+// Initial Load
 loadData();
-updateCountdown();
-setInterval(updateCountdown, 1000);
+loadConfig();
+startMarketTicker();
 setInterval(loadData, 30000);
-
-function updateFullscreenState() {
-  const isFullscreen =
-    window.innerHeight >= screen.availHeight - 2 ||
-    window.outerHeight >= screen.availHeight - 2;
-  document.body.classList.toggle("fullscreen", isFullscreen);
-  return isFullscreen;
-}
-
-const topbar = document.getElementById("topbar");
-const menuHandle = document.getElementById("menu-handle");
-
-function showTopbar() {
-  if (!topbar) return;
-  topbar.classList.add("is-visible");
-}
-
-function hideTopbar() {
-  if (!topbar) return;
-  topbar.classList.remove("is-visible");
-}
-
-if (menuHandle) {
-  menuHandle.addEventListener("mouseenter", showTopbar);
-}
-if (topbar) {
-  topbar.addEventListener("mouseleave", hideTopbar);
-  topbar.addEventListener("mouseenter", showTopbar);
-}
-
-window.addEventListener("resize", updateFullscreenState);
-updateFullscreenState();
-
-window.addEventListener("mousemove", (event) => {
-  const isFullscreen = updateFullscreenState();
-  if (!isFullscreen) return;
-  if (event.clientY <= 6) {
-    showTopbar();
-  }
-});
-
-window.addEventListener("keydown", (event) => {
-  if (event.key.toLowerCase() === "m") {
-    if (!topbar) return;
-    topbar.classList.toggle("is-visible");
-  }
-});

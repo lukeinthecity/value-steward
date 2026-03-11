@@ -72,6 +72,23 @@ function containsAny(text, keywords) {
   return keywords.some((kw) => text.includes(kw));
 }
 
+/**
+ * Calculates a weight based on age (Time-Decay).
+ * maxAge is dynamic (48h normally, 72h on Mondays).
+ */
+function calculateDecayWeight(entryTs, nowMs, maxAge) {
+  const ts = Date.parse(entryTs);
+  if (Number.isNaN(ts)) return 0;
+  const ageHours = (nowMs - ts) / (1000 * 60 * 60);
+  
+  if (ageHours > maxAge) return 0;
+  
+  if (ageHours <= 6) return 1.0;
+  if (ageHours <= 24) return 0.5;
+  if (ageHours <= maxAge) return 0.25;
+  return 0;
+}
+
 export function scoreWorldTags({ hydratedEntries, now = new Date() }) {
   try {
     if (!Array.isArray(hydratedEntries)) {
@@ -82,58 +99,64 @@ export function scoreWorldTags({ hydratedEntries, now = new Date() }) {
     }
 
     const nowMs = now instanceof Date ? now.getTime() : Date.now();
-    const cutoff = nowMs - 48 * 60 * 60 * 1000;
-    const recent = hydratedEntries.filter((entry) => {
-      const ts = Date.parse(entry.ts);
-      return Number.isNaN(ts) ? false : ts >= cutoff;
-    });
+    const isMonday = (now instanceof Date ? now : new Date(nowMs)).getDay() === 1;
+    // Elite Quant: Expand window to 72h on Mondays to capture Friday's close data.
+    const maxAge = isMonday ? 72 : 48;
+    
+    const docsWithWeights = [];
+    for (const entry of hydratedEntries) {
+        const weight = calculateDecayWeight(entry.ts, nowMs, maxAge);
+        if (weight > 0) {
+            const title = entry.title ?? "";
+            const text = entry.content_text ?? "";
+            docsWithWeights.push({
+                text: `${title} ${text}`.toLowerCase(),
+                weight
+            });
+        }
+    }
 
-    if (!recent.length) {
+    if (!docsWithWeights.length) {
       return {
         tags: nullTags(),
-        debugNote: "rule-v1: no recent hydrated entries, tags left null",
+        debugNote: `rule-v1: no recent docs found (maxAge=${maxAge}h)`,
       };
     }
 
-    const docs = recent.map((entry) => {
-      const title = entry.title ?? "";
-      const text = entry.content_text ?? "";
-      return `${title} ${text}`.toLowerCase();
-    });
-
-    let hawkCount = 0;
-    let doveCount = 0;
-    for (const doc of docs) {
-      if (containsAny(doc, KEYWORDS.rate_hawkishness.hawk)) hawkCount += 1;
-      if (containsAny(doc, KEYWORDS.rate_hawkishness.dove)) doveCount += 1;
+    let weightedHawk = 0;
+    let weightedDove = 0;
+    
+    // For ratio tags (Hawk/Dove)
+    for (const doc of docsWithWeights) {
+      const hasHawk = containsAny(doc.text, KEYWORDS.rate_hawkishness.hawk);
+      const hasDove = containsAny(doc.text, KEYWORDS.rate_hawkishness.dove);
+      
+      if (hasHawk) weightedHawk += doc.weight;
+      if (hasDove) weightedDove += doc.weight;
     }
 
-    const hawkScoreRaw =
-      (hawkCount - doveCount) / (hawkCount + doveCount + 1);
+    const hawkScoreRaw = (weightedHawk - weightedDove) / (weightedHawk + weightedDove + 1);
     const rateHawkishness = clamp01((hawkScoreRaw + 1) / 2);
 
-    const macroRisk = clamp01(
-      countDocsWith(KEYWORDS.macro_risk, docs) / docs.length
-    );
-    const geoTension = clamp01(
-      countDocsWith(KEYWORDS.geopolitical_tension, docs) / docs.length
-    );
-    const energyShock = clamp01(
-      countDocsWith(KEYWORDS.energy_shock_risk, docs) / docs.length
-    );
-    const recessionFear = clamp01(
-      countDocsWith(KEYWORDS.recession_fear, docs) / docs.length
-    );
-
-    const tags = {
-      macro_risk: macroRisk,
-      rate_hawkishness: rateHawkishness,
-      geopolitical_tension: geoTension,
-      energy_shock_risk: energyShock,
-      recession_fear: recessionFear,
+    // For absolute risk tags
+    const totalPossibleWeight = docsWithWeights.reduce((sum, d) => sum + d.weight, 0);
+    
+    const calculateWeightedTag = (keywords) => {
+        const matchingWeight = docsWithWeights.reduce((sum, d) => {
+            return sum + (containsAny(d.text, keywords) ? d.weight : 0);
+        }, 0);
+        return clamp01(matchingWeight / (totalPossibleWeight || 1));
     };
 
-    const debugNote = `rule-v1: docs=${docs.length}, hawk=${hawkCount}, dove=${doveCount}`;
+    const tags = {
+      macro_risk: calculateWeightedTag(KEYWORDS.macro_risk),
+      rate_hawkishness: rateHawkishness,
+      geopolitical_tension: calculateWeightedTag(KEYWORDS.geopolitical_tension),
+      energy_shock_risk: calculateWeightedTag(KEYWORDS.energy_shock_risk),
+      recession_fear: calculateWeightedTag(KEYWORDS.recession_fear),
+    };
+
+    const debugNote = `rule-v1-decay: docs=${docsWithWeights.length}, totalWeight=${totalPossibleWeight.toFixed(2)}, maxAge=${maxAge}h`;
 
     return { tags, debugNote };
   } catch (err) {
@@ -142,14 +165,6 @@ export function scoreWorldTags({ hydratedEntries, now = new Date() }) {
       debugNote: `rule-v1: error ${(err?.message ?? err).toString()}`,
     };
   }
-}
-
-function countDocsWith(keywords, docs) {
-  let count = 0;
-  for (const doc of docs) {
-    if (containsAny(doc, keywords)) count += 1;
-  }
-  return count;
 }
 
 function nullTags() {

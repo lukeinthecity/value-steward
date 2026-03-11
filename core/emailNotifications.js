@@ -1,25 +1,51 @@
 import nodemailer from "nodemailer";
+import { GoogleGenAI } from "@google/genai";
+
+const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
 /**
- * Send a lesson summary email when the policy is updated.
- * This uses SMTP and is environment-agnostic.
- *
- * Required env vars:
- *   SMTP_HOST
- *   SMTP_PORT
- *   SMTP_USER
- *   SMTP_PASS
- *   EMAIL_FROM
- *   EMAIL_TO
+ * Uses Gemini to synthesize a technical report into a human-readable 
+ * professional summary for investors/stewards.
  */
-export async function sendLessonEmail({
-  policy,
-  result,
-  training,
-  worldContext,
-  emailMode = "update",
-  lastOrder = null,
-}) {
+async function generateAISummary({ type, data }) {
+  if (!API_KEY) return null;
+  const client = new GoogleGenAI({ apiKey: API_KEY });
+  
+  const systemInstruction = `
+    You are the "Head of Portfolio Reporting" for an elite institutional investment desk. 
+    Your persona is sophisticated, concise, and focused on risk-adjusted performance. 
+    You communicate with the Principal (the account owner) using institutional clarity.
+
+    Your Reporting Framework:
+    1. Performance Attribution: Explain the "Why" behind the results (e.g., regime shifts, momentum quality).
+    2. Capital Discipline: Highlight adherence to the 3% kill-switch and 2.0 SD Vol-Stops.
+    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the 'Guardian' and 'Scout' scores.
+
+    Avoid flowery language. Use terms like 'alpha decay', 'volatility clustering', 'regime change', and 'convexity'.
+  `;
+
+  const prompt = `
+    Report Type: ${type}
+    Technical Data: ${JSON.stringify(data)}
+    
+    Provide a 2-3 sentence executive summary explaining the system's current 
+    posture and the strategic rationale for its latest actions.
+  `;
+
+  try {
+    const interaction = await client.interactions.create({
+      model: "gemini-3-flash-preview",
+      system_instruction: systemInstruction,
+      input: prompt,
+    });
+    return interaction.outputs[interaction.outputs.length - 1].text;
+  } catch (err) {
+    console.warn("[email] AI Summary failed:", err.message);
+    return null;
+  }
+}
+
+function loadEmailConfig(label) {
   const {
     SMTP_HOST,
     SMTP_PORT,
@@ -41,9 +67,9 @@ export async function sendLessonEmail({
     console.warn(
       `[ValueSteward] Email config incomplete (missing: ${missing.join(
         ", "
-      )}), skipping lesson email.`
+      )}), skipping ${label}.`
     );
-    return;
+    return null;
   }
 
   const transporter = nodemailer.createTransport({
@@ -56,15 +82,44 @@ export async function sendLessonEmail({
     },
   });
 
+  return {
+    transporter,
+    from: EMAIL_FROM,
+    to: EMAIL_TO,
+  };
+}
+
+/**
+ * Send a lesson summary email when the policy is updated.
+ * This uses SMTP and is environment-agnostic.
+ *
+ * Required env vars:
+ *   SMTP_HOST
+ *   SMTP_PORT
+ *   SMTP_USER
+ *   SMTP_PASS
+ *   EMAIL_FROM
+ *   EMAIL_TO
+ */
+export async function sendLessonEmail({
+  policy,
+  result,
+  training,
+  worldContext,
+  emailMode = "update",
+  lastOrder = null,
+  tradingDays = 0,
+}) {
+  const config = loadEmailConfig("lesson email");
+  if (!config) return;
+  const { transporter, from, to } = config;
+
+  const policyVersion = policy?.version ?? "n/a";
   let subject;
   if (emailMode === "summary") {
-    subject = `Value Steward EOD summary: policy v${policy.version} (risk ${policy.risk_level.toFixed(
-      3
-    )})`;
+    subject = `Value Steward EOD summary: day ${tradingDays}/60 (policy v${policyVersion})`;
   } else {
-    subject = `Value Steward update: policy v${policy.version} (risk ${policy.risk_level.toFixed(
-      3
-    )})`;
+    subject = `Value Steward update: day ${tradingDays}/60 (policy v${policyVersion})`;
   }
 
   const metrics = training.metrics ?? {};
@@ -73,17 +128,28 @@ export async function sendLessonEmail({
       ? "Value Steward End-of-Day Summary"
       : "Value Steward Daily Lesson";
 
+  const aiSummary = await generateAISummary({ 
+    type: "Daily Execution & Policy Update", 
+    data: { result, training, worldContext } 
+  });
+
   const bodyLines = [
     header,
+    "",
+    `Phase 1 Progress: ${tradingDays} / 60 Trading Days`,
+    "-".repeat(40),
+    "",
+    "Steward's Insight:",
+    aiSummary || "[System fallback: AI synthesis currently unavailable. Strategy remains focused on deterministic risk parity and momentum adherence.]",
     "",
     `Ran at: ${result.ranAt}`,
     `Market open at snapshot: ${result.marketOpen}`,
     "",
     "Policy:",
-    `- Version: ${policy.version}`,
-    `- Mode: ${policy.mode}`,
-    `- Old risk level: ${training.oldRisk ?? policy.risk_level}`,
-    `- New risk level: ${training.newRisk ?? policy.risk_level}`,
+    `- Version: ${policyVersion}`,
+    `- Mode: ${policy?.mode ?? "n/a"}`,
+    `- Old risk level: ${training.oldRisk ?? policy?.risk_level ?? "n/a"}`,
+    `- New risk level: ${training.newRisk ?? policy?.risk_level ?? "n/a"}`,
     "",
     "Training decision:",
     `- Updated: ${training.updated}`,
@@ -174,8 +240,8 @@ export async function sendLessonEmail({
   );
 
   const mailOptions = {
-    from: EMAIL_FROM,
-    to: EMAIL_TO,
+    from,
+    to,
     subject,
     text: bodyLines.join("\n"),
   };
@@ -186,4 +252,230 @@ export async function sendLessonEmail({
 function formatTag(value) {
   if (value === null || value === undefined) return "n/a";
   return Number(value).toFixed(2);
+}
+
+function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  return Number(value).toFixed(digits);
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  return `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+export async function sendHealthEmail({ health, reason = "scheduled" }) {
+  const config = loadEmailConfig("health email");
+  if (!config) return;
+  const { transporter, from, to } = config;
+
+  const subject = `Value Steward health check (${health.exchange_date})`;
+  const aiSummary = await generateAISummary({ 
+    type: "System Health & Data Integrity", 
+    data: health 
+  });
+
+  const issues = Array.isArray(health.issues) ? health.issues : [];
+  const issueLines = issues.length
+    ? issues.map((issue) => `- ${issue.code}: ${issue.message}`)
+    : ["- None detected"];
+
+  const staleLines = health.feeds?.stale_sources?.length
+    ? [`- Stale list: ${health.feeds.stale_sources.join(", ")}`]
+    : [];
+
+  const bodyLines = [
+    "Value Steward System Health",
+    "",
+    "Steward's Insight:",
+    aiSummary || "System health is optimal. Core data pipelines are operational.",
+    "",
+    `Generated at: ${health.generated_at}`,
+    `Timezone: ${health.timezone}`,
+    `Market open now: ${health.market_open}`,
+    `Reason: ${reason}`,
+    "",
+    "Tick:",
+    `- Last run: ${health.tick?.last_run_at ?? "n/a"}`,
+    `- Age (hours): ${formatNumber(health.tick?.age_hours)}`,
+    "",
+    "World context:",
+    `- Generated at: ${health.world?.generated_at ?? "n/a"}`,
+    `- Age (hours): ${formatNumber(health.world?.age_hours)}`,
+    `- Date/slot: ${health.world?.date ?? "n/a"} / ${health.world?.slot ?? "n/a"}`,
+    `- Macro: ${health.world?.macro_label ?? "n/a"} (${formatNumber(
+      health.world?.macro_score,
+      2
+    )})`,
+    `- Sources used: ${health.world?.sources_used ?? "n/a"}`,
+    `- Raw items: ${health.world?.raw_count ?? "n/a"}`,
+    "",
+    "Feed health:",
+    `- Last checked: ${health.feeds?.last_checked ?? "n/a"}`,
+    `- Stale sources: ${health.feeds?.stale_count ?? 0}`,
+    ...staleLines,
+    "",
+    "Execution:",
+    `- Last executed at: ${health.execution?.last_executed_at ?? "n/a"}`,
+    `- Last action: ${health.execution?.last_action ?? "n/a"}`,
+    `- Last symbol: ${health.execution?.last_symbol ?? "n/a"}`,
+    `- Count today: ${health.execution?.count_today ?? "n/a"}`,
+    "",
+    "Training:",
+    `- Last trained at: ${health.training?.last_trained_at ?? "n/a"}`,
+    `- Last reason: ${health.training?.last_reason ?? "n/a"}`,
+    `- Policy version: ${health.training?.policy_version ?? "n/a"}`,
+    "",
+    "Policy:",
+    `- Version: ${health.policy?.version ?? "n/a"}`,
+    `- Mode: ${health.policy?.mode ?? "n/a"}`,
+    `- Risk level: ${health.policy?.risk_level ?? "n/a"}`,
+    "",
+    "Scorecard:",
+    `- Records: ${health.scorecard?.records ?? "n/a"}`,
+    `- Trading days: ${health.scorecard?.trading_days ?? "n/a"}`,
+    `- Summary generated at: ${health.scorecard?.summary_generated_at ?? "n/a"}`,
+    "",
+    "Issues:",
+    ...issueLines,
+    "",
+    "—",
+    "This email was generated automatically by Value Steward’s health monitor.",
+  ];
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text: bodyLines.join("\n"),
+  });
+}
+
+export async function sendPhaseCheckpointEmail({ phase, exchangeDate }) {
+  const config = loadEmailConfig("phase checkpoint email");
+  if (!config) return;
+  const { transporter, from, to } = config;
+
+  const subject = `Value Steward phase checkpoint (${exchangeDate})`;
+  const milestoneText = phase.milestones?.length
+    ? phase.milestones.join(", ")
+    : "n/a";
+
+  const horizonLines = [];
+  for (const [horizon, data] of Object.entries(phase.horizons ?? {})) {
+    horizonLines.push(
+      `- ${horizon}d: samples=${data.samples ?? "n/a"} ` +
+        `avg_excess_benchmark=${formatPercent(data.avg_excess_benchmark)} ` +
+        `avg_signed_return=${formatPercent(data.avg_signed_return)} ` +
+        `no_action_avoid=${formatPercent(data.no_action_beats_benchmark_rate)} ` +
+        `no_action_missed=${formatPercent(data.no_action_missed_rate)}`
+    );
+  }
+
+  const bodyLines = [
+    "Value Steward Phase Checkpoint",
+    "",
+    `Exchange date: ${exchangeDate}`,
+    `Trading days collected: ${phase.trading_days} / 60`,
+    `Scorecard records: ${phase.records}`,
+    `Summary generated at: ${phase.summary_generated_at ?? "n/a"}`,
+    `Milestones configured: ${milestoneText}`,
+    `Ready for review: ${phase.ready_for_review ? "yes" : "no"}`,
+    "",
+    "Scorecard horizons:",
+    ...(horizonLines.length ? horizonLines : ["- No summary data yet"]),
+    "",
+    "Suggested next step:",
+    phase.ready_for_review
+      ? "- Consider reviewing Phase 1 DoD and deciding on Phase 2 transition."
+      : "- Continue collecting daily scorecard data.",
+    "",
+    "—",
+    "This email was generated automatically by Value Steward’s phase monitor.",
+  ];
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text: bodyLines.join("\n"),
+  });
+}
+
+export async function sendWeeklyReportEmail({ report }) {
+  const config = loadEmailConfig("weekly report email");
+  if (!config) return;
+  const { transporter, from, to } = config;
+
+  const subject = `Value Steward Weekly Report: ${report.startDate} to ${report.endDate}`;
+  const aiSummary = await generateAISummary({ 
+    type: "Weekly Performance & Strategy Audit", 
+    data: report 
+  });
+
+  const bodyLines = [
+    `Value Steward Weekly Report`,
+    `Period: ${report.startDate} to ${report.endDate}`,
+    "=".repeat(60),
+    "",
+    "Steward's Insight:",
+    aiSummary || "[System fallback: AI synthesis currently unavailable. Weekly performance characterized by adherence to risk gates and momentum-driven rebalancing.]",
+    "",
+    `Total Decisions: ${report.totalIntents}`,
+    "",
+    "Decision Summary:",
+  ];
+
+  Object.entries(report.actions).forEach(([type, count]) => {
+    bodyLines.push(`  - ${type}: ${count}`);
+  });
+
+  bodyLines.push(
+    "",
+    "Strategic 'Hold' Logic (Protection Gates):",
+    `  - Within Buffer:    ${report.holdSummary.withinBuffer}`,
+    `  - Macro Blocked:    ${report.holdSummary.blockedByMacro}`,
+    `  - Risk Blocked:     ${report.holdSummary.blockedByRisk}`,
+    `  - Data Stale:       ${report.holdSummary.staleData}`,
+    ""
+    );
+
+    if (report.slippage && report.slippage.samples > 0) {
+    bodyLines.push(
+      "Execution Quality (Slippage):",
+      `  - Avg Slippage:     ${report.slippage.avg} (${report.slippage.samples} trades)`,
+        ""
+      );
+      }
+
+      if (report.intelligence && report.intelligence.samples > 0) {
+      bodyLines.push(
+        "Intelligence Divergence (Guardian vs Scout):",
+        `  - Avg Divergence:   ${report.intelligence.avgDivergence}`,
+        `  - Significant (>0.3): ${report.intelligence.significantDisagreements} instances`,
+        ""
+      );
+      }
+
+      if (report.horizons.length > 0) {
+    bodyLines.push("Performance Scorecard:");
+    report.horizons.forEach((h) => {
+      bodyLines.push(`  - Horizon ${h.name}D: Ret=${h.avgReturn} Excess=${h.avgExcess} HitRate=${h.buyHitRate || 'n/a'}`);
+    });
+  } else {
+    bodyLines.push("Performance Scorecard: No data collected for this period.");
+  }
+
+  bodyLines.push(
+    "",
+    "—",
+    "This email was generated automatically by Value Steward’s weekly report loop."
+  );
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text: bodyLines.join("\n"),
+  });
 }

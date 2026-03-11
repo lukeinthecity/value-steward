@@ -1,7 +1,14 @@
+alpaca-trade-api
 alpaca-py
 pydantic
 pydantic-settings
-python-dotenv
 click
-rich
+pandas
+quantstats
+PyPortfolioOpt
+python-dotenv
 pytest
+bandit
+ruff
+mypy
+black

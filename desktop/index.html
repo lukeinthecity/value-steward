@@ -7,83 +7,111 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="menu-handle" id="fullscreen-trigger"></div>
     <div class="app">
-      <header class="topbar" id="topbar">
+      <header class="topbar">
         <div>
-          <h1>Value Steward Console</h1>
-          <p class="subtitle">World context, policy, and tick status in one place.</p>
-          <div class="header-actions">
-            <button id="refresh-data">Refresh Data</button>
-            <span id="refresh-status" class="muted"></span>
-          </div>
+          <h1>Value Steward</h1>
+          <p class="subtitle">Institutional Portfolio Management Agent</p>
         </div>
         <div class="tick-card">
-          <div class="tick-title">Next Tick</div>
-          <div class="tick-time" id="next-tick">--:--</div>
-          <div class="tick-countdown" id="tick-countdown">--:--</div>
-          <div class="tick-meta" id="tick-meta">--</div>
+          <div class="label-mini">Operational Status</div>
+          <div class="tick-time" id="next-tick">ACTIVE</div>
+          <div class="label-mini" id="tick-meta">--</div>
         </div>
       </header>
 
-      <div class="menu-handle" id="menu-handle">MENU</div>
+      <!-- Market & News Ticker -->
+      <section class="ticker-belt">
+        <div class="news-ticker-container">
+          <div class="news-ticker" id="news-ticker">
+            <span>Awaiting real-time market and news intelligence...</span>
+          </div>
+        </div>
+      </section>
 
       <main class="grid">
-        <section class="panel">
-          <h2>Policy</h2>
-          <div class="policy-grid" id="policy-summary"></div>
-          <div class="policy-controls">
-            <label>
-              Risk Level
-              <input type="number" id="policy-risk" min="0" max="1" step="0.01" />
-            </label>
-            <label>
-              Target Exposure (LOW)
-              <input type="number" id="policy-target" min="0" max="1" step="0.01" />
-            </label>
-            <label>
-              Rebalance Buffer
-              <input type="number" id="policy-buffer" min="0" max="1" step="0.01" />
-            </label>
-            <label class="checkbox">
-              <input type="checkbox" id="policy-force-no-trade" />
-              Force No-Trade
-            </label>
-            <button id="save-policy">Save Policy</button>
-            <span id="policy-status" class="muted"></span>
+        <!-- 1. Macro Intelligence -->
+        <section class="panel medium">
+          <h2>Macro Intelligence</h2>
+          <div class="macro-meter-group">
+            <div class="meter-col" id="guardian-meter">
+              <div class="label-mini">Guardian (Rules)</div>
+              <div class="meter-bar"><div class="meter-fill" style="width: 0%; background: var(--color-warning);"></div></div>
+              <div class="data-mono">0.00</div>
+            </div>
+            <div class="meter-col" id="scout-meter">
+              <div class="label-mini">Scout (Gemini)</div>
+              <div class="meter-bar"><div class="meter-fill" style="width: 0%; background: var(--color-ai);"></div></div>
+              <div class="data-mono">0.00</div>
+            </div>
+          </div>
+          <div id="world-summary" class="subtitle" style="font-style: italic;">Fetching macro thesis...</div>
+        </section>
+
+        <!-- 2. Portfolio Risk HUD -->
+        <section class="panel medium">
+          <h2>Risk HUD</h2>
+          <div class="risk-hud" id="risk-hud">
+            <div class="hud-item">
+              <div class="label-mini">Account Risk</div>
+              <div class="data-mono" id="hud-exposure">--%</div>
+            </div>
+            <div class="hud-item">
+              <div class="label-mini">Equity</div>
+              <div class="data-mono" id="hud-equity">$0.00</div>
+            </div>
+            <div class="hud-item">
+              <div class="label-mini">Daily Baseline</div>
+              <div class="data-mono" id="hud-baseline">$0.00</div>
+            </div>
+          </div>
+          <div id="data-status" class="label-mini">System Healthy</div>
+        </section>
+
+        <!-- 3. Intelligence Feed (Live) -->
+        <section class="panel wide">
+          <h2>Intelligence Feed</h2>
+          <div class="ticker" id="intent-feed">
+            <div class="text-muted">Awaiting system tick...</div>
           </div>
         </section>
 
-        <section class="panel">
-          <h2>World Context</h2>
-          <div id="world-summary" class="summary"></div>
-          <div class="tag-grid" id="world-tags"></div>
-          <div class="list" id="world-sources"></div>
-        </section>
-
-        <section class="panel">
-          <h2>Market Snapshot</h2>
-          <div id="market-summary" class="summary"></div>
-          <div class="list" id="market-positions"></div>
-        </section>
-
-        <section class="panel">
-          <h2>Training</h2>
-          <div id="training-summary" class="summary"></div>
-        </section>
-
-        <section class="panel">
-          <h2>Data Status</h2>
-          <div id="data-status" class="summary"></div>
-        </section>
-
+        <!-- 4. Active Positions -->
         <section class="panel wide">
-          <h2>RSS Inbox</h2>
-          <div class="ticker" id="rss-ticker"></div>
+          <h2>Active Positions</h2>
+          <div class="portfolio-grid" id="portfolio-positions">
+            <!-- Positions will be rendered here -->
+          </div>
         </section>
 
-        <section class="panel wide">
+        <!-- 5. Controls & Infrastructure -->
+        <section class="panel medium">
+          <h2>System Controls</h2>
+          <div class="action-grid" id="action-grid">
+            <button data-script="local:tick" class="primary">Execute Daily Tick</button>
+            <button data-script="world:run">Build Context</button>
+            <button data-script="report:weekly">Weekly Report</button>
+            <button id="refresh-data">Sync UI</button>
+          </div>
+        </section>
+
+        <!-- 6. Configuration -->
+        <section class="panel medium">
+          <h2>System Configuration</h2>
+          <div class="settings-form">
+            <div class="label-mini">Alpaca API Key ID</div>
+            <input type="password" id="conf-alpaca-id" placeholder="Enter Alpaca ID..." style="width: 100%; margin-bottom: 0.5rem;">
+            <div class="label-mini">Alpaca Secret Key</div>
+            <input type="password" id="conf-alpaca-secret" placeholder="Enter Alpaca Secret..." style="width: 100%; margin-bottom: 0.5rem;">
+            <div class="label-mini">Gemini API Key</div>
+            <input type="password" id="conf-gemini-key" placeholder="Enter Gemini Key..." style="width: 100%; margin-bottom: 1rem;">
+            <button id="save-config" class="primary" style="width: 100%;">Save & Hot-Reload</button>
+          </div>
+        </section>
+
+        <section class="panel medium">
           <h2>Tick Log</h2>
-          <div id="tick-log-meta" class="summary"></div>
           <pre id="tick-log" class="log"></pre>
         </section>
       </main>

@@ -1,0 +1,12 @@
+[Unit]
+Description=Value Steward Local Tick Timer (market hours)
+
+[Timer]
+OnCalendar=Mon..Fri 09:30..15:45/15
+Timezone=America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=value-steward-tick.service
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,6 @@
 """Smoke tests for Value Steward core wiring."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.core.risk_modes import get_risk_mode_config
@@ -11,7 +11,7 @@ def test_risk_governor_allows_small_trade() -> None:
     _ = get_risk_mode_config(RiskMode.LOW)
 
     snapshot = PortfolioSnapshot(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         cash=10000.0,
         equity=12000.0,
         positions=[],

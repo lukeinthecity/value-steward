@@ -1,12 +1,59 @@
 // world/contextUtils.js
+import fs from "fs";
+import path from "path";
 
-export const REQUIRED_TAGS = [
-  "macro_risk",
-  "rate_hawkishness",
-  "geopolitical_tension",
-  "energy_shock_risk",
-  "recession_fear",
-];
+function loadMacroPolicy() {
+  const policyPath = path.join(process.cwd(), "config", "macro-policy.json");
+  if (!fs.existsSync(policyPath)) {
+    return {
+      required_tags: [
+        "macro_risk",
+        "rate_hawkishness",
+        "geopolitical_tension",
+        "energy_shock_risk",
+        "recession_fear",
+      ],
+      weights: {
+        macro_risk: 0.4,
+        recession_fear: 0.3,
+        geopolitical_tension: 0.15,
+        energy_shock_risk: 0.15,
+      },
+      thresholds: {
+        crisis_prone: 0.8,
+        stressed: 0.6,
+        watchful: 0.3,
+      },
+    };
+  }
+  try {
+    return JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  } catch (err) {
+    return {
+      required_tags: [
+        "macro_risk",
+        "rate_hawkishness",
+        "geopolitical_tension",
+        "energy_shock_risk",
+        "recession_fear",
+      ],
+      weights: {
+        macro_risk: 0.4,
+        recession_fear: 0.3,
+        geopolitical_tension: 0.15,
+        energy_shock_risk: 0.15,
+      },
+      thresholds: {
+        crisis_prone: 0.8,
+        stressed: 0.6,
+        watchful: 0.3,
+      },
+    };
+  }
+}
+
+const policy = loadMacroPolicy();
+export const REQUIRED_TAGS = policy.required_tags;
 
 /**
  * Validate a world-context entry before appending to world-context.jsonl
@@ -52,6 +99,9 @@ export function filterRecent(entries, cutoffMs) {
 export function getWorldTimeZone() {
   if (process.env.WORLD_TIMEZONE && process.env.WORLD_TIMEZONE.trim()) {
     return process.env.WORLD_TIMEZONE.trim();
+  }
+  if (process.env.VS_MARKET_TIMEZONE && process.env.VS_MARKET_TIMEZONE.trim()) {
+    return process.env.VS_MARKET_TIMEZONE.trim();
   }
 
   try {
@@ -104,12 +154,17 @@ export function toWorldDateString(date) {
  * from the smoothed tag values in [0,1].
  */
 export function classifyMacroFromTags(tags) {
+  const currentPolicy = loadMacroPolicy();
+  const reqTags = currentPolicy.required_tags;
+  const weights = currentPolicy.weights;
+  const thresholds = currentPolicy.thresholds;
+
   if (!tags) {
     return {
       macro_score: null,
       macro_label: "n/a",
       inputs_used: [],
-      null_count: REQUIRED_TAGS.length,
+      null_count: reqTags.length,
       confidence: 0,
       coverage_note: "no tag signals",
     };
@@ -117,7 +172,7 @@ export function classifyMacroFromTags(tags) {
 
   const values = {};
   let nullCount = 0;
-  for (const key of REQUIRED_TAGS) {
+  for (const key of reqTags) {
     const value = tags[key];
     if (value === null || value === undefined) {
       nullCount += 1;
@@ -128,24 +183,23 @@ export function classifyMacroFromTags(tags) {
   }
 
   // Weighted blend of the key risks, clamped to [0,1]
-  const rawScore =
-    values.macro_risk * 0.4 +
-    values.recession_fear * 0.3 +
-    values.geopolitical_tension * 0.15 +
-    values.energy_shock_risk * 0.15;
+  const rawScore = Object.entries(weights).reduce(
+    (sum, [key, weight]) => sum + (values[key] || 0) * weight,
+    0
+  );
 
   const macroScore = Math.max(0, Math.min(1, rawScore));
 
   let macroLabel = "calm";
-  if (macroScore >= 0.8) macroLabel = "crisis-prone";
-  else if (macroScore >= 0.6) macroLabel = "stressed";
-  else if (macroScore >= 0.3) macroLabel = "watchful";
+  if (macroScore >= thresholds.crisis_prone) macroLabel = "crisis-prone";
+  else if (macroScore >= thresholds.stressed) macroLabel = "stressed";
+  else if (macroScore >= thresholds.watchful) macroLabel = "watchful";
 
-  const inputsUsed = REQUIRED_TAGS.filter(
+  const inputsUsed = reqTags.filter(
     (key) => tags[key] !== null && tags[key] !== undefined
   );
 
-  const coverage = inputsUsed.length / REQUIRED_TAGS.length;
+  const coverage = inputsUsed.length / reqTags.length;
 
   let confidence = 0;
   let coverageNote = "no tag signals";
@@ -190,13 +244,9 @@ export function summarizeMacroLine(worldContext) {
 
   const inputsCount = macroView.inputs_used.length;
 
-  const tagLine = [
-    `macro_risk=${fmtTag(worldContext.tags.macro_risk)}`,
-    `recession_fear=${fmtTag(worldContext.tags.recession_fear)}`,
-    `rate_hawkishness=${fmtTag(worldContext.tags.rate_hawkishness)}`,
-    `geopolitical_tension=${fmtTag(worldContext.tags.geopolitical_tension)}`,
-    `energy_shock_risk=${fmtTag(worldContext.tags.energy_shock_risk)}`,
-  ].join(", ");
+  const tagLine = Object.entries(worldContext.tags)
+    .map(([key, value]) => `${key}=${fmtTag(value)}`)
+    .join(", ");
 
   return [
     `${date} · macro=${macroView.macro_score.toFixed(2)} (${macroView.macro_label})`,

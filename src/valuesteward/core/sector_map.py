@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # nosec B404
+import shlex
 from pathlib import Path
 from typing import Dict, Iterable
 
@@ -13,10 +14,12 @@ class SectorMap:
     """Load and auto-expand a symbol -> sector map."""
 
     def __init__(self, path: str | None = None, cache_path: str | None = None) -> None:
-        self.path = Path(path or os.getenv("VS_SECTOR_MAP_PATH", "config/sector-map.json"))
-        self.cache_path = Path(
-            cache_path or os.getenv("VS_SECTOR_CACHE_PATH", "data/sector-cache.json")
+        path_value = path or os.getenv("VS_SECTOR_MAP_PATH") or "config/sector-map.json"
+        cache_value = (
+            cache_path or os.getenv("VS_SECTOR_CACHE_PATH") or "data/sector-cache.json"
         )
+        self.path = Path(path_value)
+        self.cache_path = Path(cache_value)
         self._base = self._load(self.path)
         self._cache = self._load(self.cache_path)
         self._merged = {**self._base, **self._cache}
@@ -55,11 +58,14 @@ class SectorMap:
             return {}
         try:
             payload = json.dumps({"symbols": list(symbols)})
-            result = subprocess.run(
-                cmd,
+            cmd_parts = shlex.split(cmd)
+            if not cmd_parts:
+                return {}
+            # Command is explicitly configured via env by the operator.
+            result = subprocess.run(  # nosec B603
+                cmd_parts,
                 input=payload,
                 text=True,
-                shell=True,
                 check=True,
                 capture_output=True,
             )

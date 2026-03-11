@@ -1,10 +1,19 @@
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..");
 
 function resolvePath(filePath) {
-  return path.isAbsolute(filePath)
+  const abs = path.isAbsolute(filePath)
     ? filePath
-    : path.join(process.cwd(), filePath);
+    : path.resolve(REPO_ROOT, filePath);
+  
+  if (!abs.startsWith(REPO_ROOT)) {
+    throw new Error(`Security Error: Path traversal attempt blocked: ${filePath}`);
+  }
+  return abs;
 }
 
 export async function loadJsonFile({ path: filePath, defaultValue }) {

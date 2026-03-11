@@ -1,0 +1,20 @@
+{
+  "required_tags": [
+    "macro_risk",
+    "rate_hawkishness",
+    "geopolitical_tension",
+    "energy_shock_risk",
+    "recession_fear"
+  ],
+  "weights": {
+    "macro_risk": 0.4,
+    "recession_fear": 0.3,
+    "geopolitical_tension": 0.15,
+    "energy_shock_risk": 0.15
+  },
+  "thresholds": {
+    "crisis_prone": 0.8,
+    "stressed": 0.6,
+    "watchful": 0.3
+  }
+}

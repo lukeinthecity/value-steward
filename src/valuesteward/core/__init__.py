@@ -1,1 +1,1 @@
-"""Core decision logic for Value Steward."""
+"""Core logic for Value Steward (Internal)."""

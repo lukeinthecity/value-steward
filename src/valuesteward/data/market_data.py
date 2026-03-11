@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List
 
 from alpaca.data.historical import StockHistoricalDataClient
@@ -29,7 +29,9 @@ class MarketDataClient:
     ) -> Dict[str, List]:
         """Return daily bars for each symbol over the lookback window."""
 
-        end = datetime.utcnow()
+        # Elite Quant: Alpaca Free Tier requires a 15-min delay for SIP data.
+        # We use 16 mins to be safe.
+        end = datetime.now(timezone.utc) - timedelta(minutes=16)
         start = end - timedelta(days=lookback_days)
         request = StockBarsRequest(
             symbol_or_symbols=list(symbols),
