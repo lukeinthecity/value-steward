@@ -1,8 +1,14 @@
 import fs from "fs";
 import path from "path";
 
+import { filterPhase1Records } from "./phase1Window.js";
 import { trainPolicyWithMetrics } from "./deepTrainer.js";
+import {
+  loadLatestTrainingEntry,
+  writeJsonAtomic,
+} from "./runtimeArtifacts.js";
 import { trainPolicyWithScorecard } from "./scorecardTrainer.js";
+import { getExchangeDateString } from "./timeUtils.js";
 
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
 const HISTORY_PATH = path.join(process.cwd(), "data", "history.jsonl");
@@ -24,16 +30,17 @@ function loadPolicy() {
 }
 
 function savePolicy(policy) {
-  fs.writeFileSync(POLICY_PATH, JSON.stringify(policy, null, 2));
+  writeJsonAtomic(POLICY_PATH, policy);
 }
 
 function loadHistory() {
   if (!fs.existsSync(HISTORY_PATH)) return [];
   const raw = fs.readFileSync(HISTORY_PATH, "utf8");
-  return raw
+  const records = raw
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+  return filterPhase1Records(records);
 }
 
 function appendTrainingLog(entry) {
@@ -77,6 +84,7 @@ export function trainPolicyFromHistoryLocal({
   maxRisk = 0.9,
   minRiskDelta = null,
   worldContext = null,
+  force = false,
 } = {}) {
   const policy = loadPolicy();
   const history = loadHistory();
@@ -94,6 +102,28 @@ export function trainPolicyFromHistoryLocal({
     };
     appendTrainingLog(entry);
     return { updated: false, reason: "policy_load_failed" };
+  }
+
+  const oncePerDay = !["0", "false", "no", "off"].includes(
+    String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase()
+  );
+  const latestTraining = loadLatestTrainingEntry();
+  if (
+    !force &&
+    oncePerDay &&
+    latestTraining?.ranAt &&
+    getExchangeDateString(new Date(latestTraining.ranAt)) ===
+      getExchangeDateString(new Date())
+  ) {
+    return {
+      updated: false,
+      reason: "already_attempted_today",
+      source: latestTraining.source ?? "training-log",
+      oldRisk: policy.risk_level ?? null,
+      newRisk: policy.risk_level ?? null,
+      policyVersion: policy.version ?? 1,
+      metrics: null,
+    };
   }
 
   const scorecardEnabled = !["0", "false", "no", "off"].includes(
@@ -116,6 +146,7 @@ export function trainPolicyFromHistoryLocal({
       maxRisk: parseNumber(process.env.VS_SCORECARD_MAX_RISK, 0.33),
       minBuffer: parseNumber(process.env.VS_SCORECARD_MIN_BUFFER, 0.01),
       maxBuffer: parseNumber(process.env.VS_SCORECARD_MAX_BUFFER, 0.05),
+      force,
     });
 
     if (scorecardTraining) {
@@ -146,7 +177,9 @@ export function trainPolicyFromHistoryLocal({
 
       const blockFallbackReasons = new Set([
         "already_updated_today",
-        "non_read_only_mode",
+        "already_attempted_today",
+        "cooldown",
+        "non_trainable_mode",
       ]);
       if (blockFallbackReasons.has(scorecardTraining.reason)) {
         return scorecardTraining;

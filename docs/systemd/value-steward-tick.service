@@ -7,4 +7,4 @@ Type=oneshot
 User=lukes
 WorkingDirectory=/home/lukes/value-steward
 EnvironmentFile=-/home/lukes/value-steward/.env
-ExecStart=/usr/bin/npm run local:tick
+ExecStart=/usr/bin/npm run local:tick:scheduled

@@ -15,3 +15,12 @@ data/*.jsonl
 data/steward.db
 data/market-holidays.json
 data/world-health.json
+data/history.jsonl
+data/patterns.jsonl
+data/steward-state.json
+data/portfolio-live.json
+data/weekly-tearsheet.html
+data/scorecard-summary.json
+data/scorecard-summary.jsonl
+data/signal-smoothing.json
+heartbeat.json

@@ -33,7 +33,7 @@ async function main() {
   // Trust the scheduler/cron for timing.
   const pythonCmd = resolvePythonCommand();
   const steps = [
-    { label: "final:sync", cmd: "npm", args: ["run", "local:tick"] },
+    { label: "final:portfolio:sync", cmd: "npm", args: ["run", "portfolio:refresh"] },
     {
       label: "scorecard:refresh",
       cmd: pythonCmd,

@@ -1,6 +1,6 @@
 {
   "current_mode": "LIVE",
-  "last_run_at": "2026-03-11T23:30:02.461Z",
+  "last_run_at": "2026-03-20T19:50:16.086198Z",
   "last_mode_transition_reason": "normal",
   "last_known_positions": [
     {
@@ -16,13 +16,19 @@
   ],
   "trading_enabled": true,
   "force_no_trade": false,
-  "control_reason": null,
-  "control_updated_at": null,
-  "daily_starting_equity": 99999.99,
-  "last_equity_reset_date": "2026-03-11",
-  "executions_today": 40,
-  "last_executed_date": "2026-03-11",
-  "last_executed_at": "2026-03-11T23:29:11.016234+00:00",
+  "control_reason": "manual_enable",
+  "control_updated_at": "2026-03-20T16:01:14.815Z",
+  "daily_starting_equity": 99975.94,
+  "last_equity_reset_date": "2026-03-20",
+  "executions_today": 3,
+  "last_executed_date": "2026-03-20",
+  "last_executed_at": "2026-03-20T19:50:16.083939+00:00",
+  "last_health_email_at": "2026-03-16T19:30:21.785Z",
+  "last_health_email_date": "2026-03-16",
+  "phase1_start_date": "2026-03-16",
+  "phase1_milestones_sent": [],
+  "phase1_ready_notified": false,
+  "last_eod_email_date": "2026-03-20",
   "version": 1,
-  "updated_at": "2026-03-11T23:30:02.482Z"
+  "updated_at": "2026-03-20T20:15:14.095Z"
 }

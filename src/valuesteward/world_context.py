@@ -100,6 +100,102 @@ def classify_macro_from_tags(tags: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+_REGIME_SEVERITY = {
+    "calm": 0,
+    "watchful": 1,
+    "stressed": 2,
+    "crisis-prone": 3,
+}
+
+
+def _normalize_regime_label(label: Any) -> Optional[str]:
+    normalized = str(label or "").strip().lower()
+    return normalized if normalized in _REGIME_SEVERITY else None
+
+
+def fuse_macro_regime(
+    macro_view: Optional[Dict[str, Any]],
+    scout_label: Any = None,
+    scout_score: Any = None,
+) -> Dict[str, Any]:
+    guardian_label = _normalize_regime_label((macro_view or {}).get("macro_label"))
+    guardian_score = _safe_float((macro_view or {}).get("macro_score"))
+    scout_norm_label = _normalize_regime_label(scout_label)
+    scout_norm_score = _safe_float(scout_score)
+
+    if guardian_label is None and scout_norm_label is None:
+        return {
+            "final_label": "n/a",
+            "final_score": None,
+            "source": "unavailable",
+            "divergence": False,
+            "fusion_reason": "no_valid_inputs",
+            "guardian_label": (macro_view or {}).get("macro_label"),
+            "guardian_score": guardian_score,
+            "scout_label": scout_norm_label,
+            "scout_score": scout_norm_score,
+        }
+
+    if guardian_label is None:
+        return {
+            "final_label": scout_norm_label,
+            "final_score": scout_norm_score,
+            "source": "scout",
+            "divergence": False,
+            "fusion_reason": "scout_only",
+            "guardian_label": guardian_label,
+            "guardian_score": guardian_score,
+            "scout_label": scout_norm_label,
+            "scout_score": scout_norm_score,
+        }
+
+    if scout_norm_label is None:
+        return {
+            "final_label": guardian_label,
+            "final_score": guardian_score,
+            "source": "guardian",
+            "divergence": False,
+            "fusion_reason": "guardian_only",
+            "guardian_label": guardian_label,
+            "guardian_score": guardian_score,
+            "scout_label": scout_norm_label,
+            "scout_score": scout_norm_score,
+        }
+
+    guardian_severity = _REGIME_SEVERITY[guardian_label]
+    scout_severity = _REGIME_SEVERITY[scout_norm_label]
+    divergence = guardian_label != scout_norm_label
+
+    if scout_severity > guardian_severity:
+        final_label = scout_norm_label
+        final_score = scout_norm_score if scout_norm_score is not None else guardian_score
+        source = "scout_more_cautious"
+        fusion_reason = "scout_more_cautious" if divergence else "aligned"
+    elif guardian_severity > scout_severity:
+        final_label = guardian_label
+        final_score = guardian_score if guardian_score is not None else scout_norm_score
+        source = "guardian_more_cautious"
+        fusion_reason = "guardian_more_cautious" if divergence else "aligned"
+    else:
+        final_label = guardian_label
+        scores = [s for s in (guardian_score, scout_norm_score) if s is not None]
+        final_score = max(scores) if scores else None
+        source = "aligned"
+        fusion_reason = "aligned"
+
+    return {
+        "final_label": final_label,
+        "final_score": final_score,
+        "source": source,
+        "divergence": divergence,
+        "fusion_reason": fusion_reason,
+        "guardian_label": guardian_label,
+        "guardian_score": guardian_score,
+        "scout_label": scout_norm_label,
+        "scout_score": scout_norm_score,
+    }
+
+
 def load_latest_world_context(
     path: Path | str = Path("data/world-context.jsonl"),
 ) -> Optional[Dict[str, Any]]:
@@ -131,6 +227,11 @@ def load_latest_world_context(
                 if entry.get("generated_at"):
                     macro_view = classify_macro_from_tags(entry.get("tags"))
                     entry["macro_view"] = macro_view
+                    entry["final_regime"] = entry.get("final_regime") or fuse_macro_regime(
+                        macro_view,
+                        entry.get("scout_label"),
+                        entry.get("scout_score"),
+                    )
                     return entry
             except (json.JSONDecodeError, TypeError):
                 continue

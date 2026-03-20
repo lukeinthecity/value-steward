@@ -1,6 +1,6 @@
 """Execution engine for Value Steward intents."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import os
 import logging
@@ -10,7 +10,7 @@ from valuesteward.config import ValueStewardSettings, get_settings
 from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.models import IntentRecord, PortfolioSnapshot
-from valuesteward.steward_state import load_steward_state, save_steward_state
+from valuesteward.steward_state import load_steward_state, update_steward_state
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,56 @@ def _today_in_market_tz(now: datetime | None = None) -> str:
     tz = _get_market_timezone()
     now = now or datetime.now(tz=tz)
     return now.astimezone(tz).date().isoformat()
+
+
+def _parse_hhmm(value: str | None, default_hour: int, default_minute: int) -> tuple[int, int]:
+    if not value:
+        return default_hour, default_minute
+    try:
+        hour_str, minute_str = str(value).strip().split(":", 1)
+        hour = int(hour_str)
+        minute = int(minute_str)
+    except Exception:
+        return default_hour, default_minute
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return default_hour, default_minute
+    return hour, minute
+
+
+def _market_close_time(now: datetime) -> datetime | None:
+    from valuesteward.market_holidays import ensure_holiday_file
+
+    tz = _get_market_timezone()
+    local_now = now.astimezone(tz)
+    today_str = local_now.date().isoformat()
+
+    if local_now.weekday() >= 5:
+        return None
+
+    holidays = ensure_holiday_file()
+    if today_str in (holidays.get("holidays") or []):
+        return None
+
+    close_hour, close_minute = _parse_hhmm(
+        os.getenv("VS_MARKET_CLOSE_TIME"),
+        16,
+        0,
+    )
+    for entry in holidays.get("early_closes") or []:
+        if entry.get("date") == today_str:
+            close_hour, close_minute = _parse_hhmm(
+                entry.get("close_time"),
+                close_hour,
+                close_minute,
+            )
+            break
+
+    return local_now.replace(
+        hour=close_hour,
+        minute=close_minute,
+        second=0,
+        microsecond=0,
+    )
 
 def _is_market_open_now(snapshot: PortfolioSnapshot | None = None) -> bool:
     """Check if NYSE market is currently open (9:30 AM - 4:00 PM ET, non-holiday)."""
@@ -92,9 +142,13 @@ class ExecutionEngine:
 
         if last_reset != today or starting_equity is None:
             starting_equity = snapshot.equity
-            state["daily_starting_equity"] = starting_equity
-            state["last_equity_reset_date"] = today
-            save_steward_state(state)
+            update_steward_state(
+                lambda current: {
+                    **current,
+                    "daily_starting_equity": starting_equity,
+                    "last_equity_reset_date": today,
+                }
+            )
             return True, "baseline_captured"
 
         if starting_equity <= 0:
@@ -112,15 +166,44 @@ class ExecutionEngine:
         return True, "ok"
 
     def _record_execution(self, action: str, symbol: str | None, count: int = 1):
-        state = load_steward_state()
         today = _today_in_market_tz()
-        if state.get("last_executed_date") != today:
-            state["executions_today"] = 0
-        
-        state["last_executed_date"] = today
-        state["executions_today"] = state.get("executions_today", 0) + count
-        state["last_executed_at"] = datetime.now(timezone.utc).isoformat()
-        save_steward_state(state)
+        executed_at = datetime.now(timezone.utc).isoformat()
+
+        def mutate(state: dict) -> dict:
+            if state.get("last_executed_date") != today:
+                state["executions_today"] = 0
+            state["last_executed_date"] = today
+            state["executions_today"] = state.get("executions_today", 0) + count
+            state["last_executed_at"] = executed_at
+            return state
+
+        update_steward_state(mutate)
+
+    def is_in_execution_window(self) -> bool:
+        """Check if current time is within the final execution window before market close."""
+        tz = _get_market_timezone()
+        now = datetime.now(tz=tz)
+
+        market_close = _market_close_time(now)
+        if market_close is None:
+            return False
+
+        try:
+            start_before_close = int(
+                os.getenv("VS_EXECUTION_WINDOW_START_MINUTES_BEFORE_CLOSE", "30")
+            )
+        except ValueError:
+            start_before_close = 30
+        try:
+            end_before_close = int(
+                os.getenv("VS_EXECUTION_WINDOW_END_MINUTES_BEFORE_CLOSE", "5")
+            )
+        except ValueError:
+            end_before_close = 5
+
+        window_start = market_close - timedelta(minutes=start_before_close)
+        window_end = market_close - timedelta(minutes=end_before_close)
+        return window_start <= now <= window_end
 
     def execute_intent(self, intent: IntentRecord, snapshot: PortfolioSnapshot) -> None:
         state = load_steward_state()
@@ -130,6 +213,16 @@ class ExecutionEngine:
         if not state.get("trading_enabled", True):
             logger.info("[EXEC] Trading disabled in state.")
             return
+
+        # --- Professional Hardening: Execution Window Guard ---
+        if intent.action_type in {"BUY", "SELL"} or intent.actions:
+            if not self.is_in_execution_window():
+                logger.warning(
+                    f"[EXEC-GATE] Action {intent.action_type} blocked: "
+                    "outside the configured execution window before market close."
+                )
+                return
+        # ------------------------------------------------------
 
         # --- Professional Hardening: Equity Guard ---
         if snapshot.equity <= 0:

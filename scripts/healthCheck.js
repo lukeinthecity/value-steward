@@ -1,5 +1,6 @@
 import { sendHealthEmail } from "../core/emailNotifications.js";
 import { buildHealthSnapshot, shouldSendHealthEmail } from "../core/healthStatus.js";
+import { markHealthEmailSent } from "../core/stewardState.js";
 
 function printIssues(issues) {
   if (!issues.length) {
@@ -22,6 +23,8 @@ async function main() {
   console.log(`- exchange_date=${snapshot.exchange_date}`);
   console.log(`- market_open=${snapshot.market_open}`);
   console.log(`- tick_age_hours=${snapshot.tick?.age_hours ?? "n/a"}`);
+  console.log(`- tick_artifact_age_hours=${snapshot.artifacts?.latest_tick?.age_hours ?? "n/a"}`);
+  console.log(`- portfolio_artifact_age_hours=${snapshot.artifacts?.portfolio?.age_hours ?? "n/a"}`);
   console.log(`- world_age_hours=${snapshot.world?.age_hours ?? "n/a"}`);
   console.log(`- scorecard_days=${snapshot.scorecard?.trading_days ?? 0}`);
   printIssues(snapshot.issues ?? []);
@@ -39,6 +42,7 @@ async function main() {
   }
 
   await sendHealthEmail({ health: snapshot, reason: decision.reason });
+  await markHealthEmailSent();
   console.log("[health] email sent.");
 }
 

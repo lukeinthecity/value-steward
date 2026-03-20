@@ -2,10 +2,24 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from valuesteward.config import ValueStewardSettings
 from valuesteward.core.execution_engine import ExecutionEngine
 from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.models import IntentRecord, PortfolioSnapshot, RiskMode
+
+
+@pytest.fixture(autouse=True)
+def mock_steward_state(tmp_path, monkeypatch):
+    """Ensure sizing tests do not read live operator state."""
+    fake_state = tmp_path / "steward-state.json"
+    monkeypatch.setattr("valuesteward.steward_state.STATE_PATH", fake_state)
+    monkeypatch.setattr(
+        "valuesteward.steward_state.STATE_LOCK_PATH",
+        tmp_path / "steward-state.json.lock",
+    )
+    return fake_state
 
 
 class FakeAlpacaClient:
@@ -21,8 +35,14 @@ class FakeAlpacaClient:
     def get_open_orders(self) -> list:
         return []
 
-    def cancel_open_orders(self, symbol: str) -> None:
-        pass
+    def cancel_open_orders(self, symbol: str) -> int:
+        return 0
+
+    def get_snapshots(self, *args, **kwargs):
+        class Snap:
+            def __init__(self):
+                self.latest_quote = type('Quote', (), {'bid_price': 100, 'ask_price': 101})()
+        return {"SPY": Snap()}
 
 
 def build_snapshot(equity: float) -> PortfolioSnapshot:
@@ -55,7 +75,13 @@ def build_settings(**overrides) -> ValueStewardSettings:
     )
 
 
-def test_effective_capital_clamps_notional() -> None:
+def test_effective_capital_clamps_notional(monkeypatch) -> None:
+    # Bypass window guard for sizing tests
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window", 
+        lambda self: True
+    )
+    
     settings = build_settings(
         max_effective_capital_dollars=20.0,
         max_trade_notional_dollars=100.0,
@@ -74,7 +100,13 @@ def test_effective_capital_clamps_notional() -> None:
     assert engine.alpaca_client.last_notional == 20.0
 
 
-def test_max_trade_notional_clamps() -> None:
+def test_max_trade_notional_clamps(monkeypatch) -> None:
+    # Bypass window guard for sizing tests
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window", 
+        lambda self: True
+    )
+    
     settings = build_settings(
         max_effective_capital_dollars=20.0,
         max_trade_notional_dollars=10.0,
@@ -93,7 +125,13 @@ def test_max_trade_notional_clamps() -> None:
     assert engine.alpaca_client.last_notional == 10.0
 
 
-def test_skip_when_below_min_notional() -> None:
+def test_skip_when_below_min_notional(monkeypatch) -> None:
+    # Bypass window guard for sizing tests
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window", 
+        lambda self: True
+    )
+    
     settings = build_settings(
         max_effective_capital_dollars=20.0,
         max_trade_notional_dollars=10.0,

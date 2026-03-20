@@ -7,16 +7,18 @@
     "train:policy": "node scripts/trainPolicy.js",
     "email:test": "node scripts/testEmail.js",
     "local:tick": "node local/runValueStewardTick.js",
+    "local:tick:scheduled": "node scripts/localTickScheduled.js",
     "portfolio:refresh": "node scripts/portfolioRefresh.js",
     "scorecard:refresh": "node scripts/scorecardRefresh.js",
     "lint:py": "node scripts/lintPy.js",
     "format:py": "node scripts/formatPy.js",
+    "test:js": "node --test --test-concurrency=1 tests-js/**/*.test.js",
     "test:py": ".venv/bin/python3 -m pytest tests/",
     "typecheck:py": "node scripts/typecheckPy.js",
     "security:py": "node scripts/securityPy.js",
     "lint:js": "eslint .",
     "lint": "npm run lint:js && npm run lint:py",
-    "check": "npm run test:py && npm run lint",
+    "check": "npm run test:js && npm run test:py && npm run lint",
     "audit:js": "npm audit",
     "phase1:run": "node scripts/phase1Run.js",
     "phase1:status": "node scripts/phase1Status.js",
@@ -43,6 +45,7 @@
     "world:inspect": "node world/inspectWorldContext.js",
     "world:health": "node world/healthReport.js",
     "world:health:refresh": "node world/healthReport.js --refresh-if-stale",
+    "world:health:scheduled": "WORLD_FEED_AUTO_DISABLE=false node world/healthReport.js --refresh-if-stale",
     "world:run:scheduled": "node scripts/worldRunScheduled.js",
     "eod:run:scheduled": "node scripts/eodRunScheduled.js",
     "report:weekly": "node scripts/weeklyReport.js",
@@ -52,13 +55,14 @@
     "eslint": "^8.57.0"
   },
   "dependencies": {
-    "@alpacahq/alpaca-trade-api": "^1.4.2",
+    "@alpacahq/alpaca-trade-api": "^3.1.3",
     "@google/genai": "^1.44.0",
+    "@massive.com/client-js": "^10.5.0",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^16.0.0",
     "jsdom": "^24.0.0",
     "nodemailer": "^7.0.12",
     "rss-parser": "^3.13.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^6.0.1"
   }
 }

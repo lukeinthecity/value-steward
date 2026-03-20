@@ -1,52 +1,279 @@
+const SECRET_FIELD_CONFIG = [
+  { key: "ALPACA_API_KEY_ID", label: "Alpaca API Key ID", inputId: "conf-alpaca-id" },
+  { key: "ALPACA_SECRET_KEY", label: "Alpaca Secret Key", inputId: "conf-alpaca-secret" },
+  { key: "GOOGLE_GENAI_API_KEY", label: "Gemini API Key", inputId: "conf-gemini-key" },
+  { key: "SMTP_PASS", label: "SMTP App Password", inputId: "conf-smtp-pass" },
+  { key: "MASSIVE_API_KEY", label: "Massive API Key", inputId: "conf-massive-key" },
+];
 
 const elements = {
-  guardianMeter: document.getElementById('guardian-meter'),
-  scoutMeter: document.getElementById('scout-meter'),
-  worldSummary: document.getElementById('world-summary'),
-  hudExposure: document.getElementById('hud-exposure'),
-  hudEquity: document.getElementById('hud-equity'),
-  hudBaseline: document.getElementById('hud-baseline'),
-  intentFeed: document.getElementById('intent-feed'),
-  portfolioPositions: document.getElementById('portfolio-positions'),
-  tickLog: document.getElementById('tick-log'),
-  refreshBtn: document.getElementById('refresh-data'),
-  actionGrid: document.getElementById('action-grid'),
-  // Config Elements
-  confAlpacaId: document.getElementById('conf-alpaca-id'),
-  confAlpacaSecret: document.getElementById('conf-alpaca-secret'),
-  confGeminiKey: document.getElementById('conf-gemini-key'),
-  saveConfigBtn: document.getElementById('save-config')
+  guardianMeter: document.getElementById("guardian-meter"),
+  scoutMeter: document.getElementById("scout-meter"),
+  worldSummary: document.getElementById("world-summary"),
+  hudExposure: document.getElementById("hud-exposure"),
+  hudEquity: document.getElementById("hud-equity"),
+  hudBaseline: document.getElementById("hud-baseline"),
+  intentFeed: document.getElementById("intent-feed"),
+  portfolioPositions: document.getElementById("portfolio-positions"),
+  tickLog: document.getElementById("tick-log"),
+  refreshBtn: document.getElementById("refresh-data"),
+  actionGrid: document.getElementById("action-grid"),
+  nextTick: document.getElementById("next-tick"),
+  tickMeta: document.getElementById("tick-meta"),
+  newsTicker: document.getElementById("news-ticker"),
+  secretStatus: document.getElementById("secret-status"),
+  saveSecretsBtn: document.getElementById("save-secrets"),
+  storageHint: document.getElementById("secret-storage-hint"),
+  secretInputs: Object.fromEntries(
+    SECRET_FIELD_CONFIG.map((field) => [field.key, document.getElementById(field.inputId)])
+  ),
 };
 
 const getApi = () => window.valueSteward;
 
-// Global Ticker State for Infinite Loop
-let marketPrices = { 'SPY': null, 'DIA': null, 'QQQ': null };
 let newsHeadlines = [];
+let tickerOffsetPx = 0;
+let tickerLastFrameAt = null;
+let tickerAnimationFrame = null;
+let tickerTravelWidthPx = 0;
+
+function clearElement(node) {
+  if (!node) return;
+  while (node.firstChild) {
+    node.removeChild(node.firstChild);
+  }
+}
+
+function appendLine(node, text, className) {
+  if (!node) return;
+  const line = document.createElement("div");
+  if (className) line.className = className;
+  line.textContent = text;
+  node.appendChild(line);
+}
 
 function formatCurrency(val) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(val || 0);
 }
 
 function formatPct(val) {
-  return ((val || 0) * 100).toFixed(2) + '%';
+  return `${((val || 0) * 100).toFixed(2)}%`;
 }
 
 function updateUnifiedTicker() {
-  const tickerEl = document.getElementById('news-ticker');
+  const tickerEl = elements.newsTicker;
   if (!tickerEl) return;
 
-  const marketParts = Object.entries(marketPrices)
-    .filter(([, price]) => price !== null)
-    .map(([sym, price]) => `<span class="ticker-item">${sym}: <span class="data-mono">$${price.toFixed(2)}</span></span>`);
+  clearElement(tickerEl);
+  if (!newsHeadlines.length) {
+    tickerEl.textContent = "Awaiting intelligence headlines...";
+    tickerTravelWidthPx = 0;
+    return;
+  }
 
-  const newsParts = newsHeadlines.map(h => `<span>${h}</span>`);
-  
-  const content = [...marketParts, ...newsParts].join('');
-  if (!content) return;
+  const buildStrip = () => {
+    const fragment = document.createDocumentFragment();
+    newsHeadlines.forEach((headline) => {
+      const headlineEl = document.createElement("span");
+      headlineEl.className = "ticker-headline";
+      headlineEl.textContent = headline;
+      fragment.appendChild(headlineEl);
 
-  // Elite Quant: Triple the content for absolute infinite wrapping
-  tickerEl.innerHTML = content + content + content;
+      const dividerEl = document.createElement("span");
+      dividerEl.className = "ticker-divider";
+      dividerEl.textContent = " // ";
+      fragment.appendChild(dividerEl);
+    });
+    return fragment;
+  };
+
+  tickerEl.appendChild(buildStrip());
+  tickerEl.appendChild(buildStrip());
+  tickerEl.appendChild(buildStrip());
+  tickerTravelWidthPx = computeTickerTravelWidth(tickerEl);
+  tickerOffsetPx = normalizeTickerOffset(tickerOffsetPx, tickerTravelWidthPx);
+  tickerEl.style.transform = `translateX(${tickerOffsetPx}px)`;
+  ensureTickerLoop(tickerEl);
+}
+
+function computeTickerTravelWidth(tickerEl) {
+  const totalWidth = Number(tickerEl?.scrollWidth) || 0;
+  return totalWidth > 0 ? totalWidth / 3 : 0;
+}
+
+function normalizeTickerOffset(offsetPx, travelWidthPx) {
+  if (!travelWidthPx) return 0;
+  while (offsetPx <= -travelWidthPx) {
+    offsetPx += travelWidthPx;
+  }
+  while (offsetPx > 0) {
+    offsetPx -= travelWidthPx;
+  }
+  return offsetPx;
+}
+
+function ensureTickerLoop(tickerEl) {
+  if (!tickerEl || tickerAnimationFrame !== null) return;
+
+  const durationSeconds = 60;
+  const step = (timestamp) => {
+    if (tickerLastFrameAt === null) {
+      tickerLastFrameAt = timestamp;
+    }
+
+    const deltaSeconds = Math.max(0, (timestamp - tickerLastFrameAt) / 1000);
+    tickerLastFrameAt = timestamp;
+
+    if (tickerTravelWidthPx > 0) {
+      const pixelsPerSecond = tickerTravelWidthPx / durationSeconds;
+      tickerOffsetPx -= pixelsPerSecond * deltaSeconds;
+      tickerOffsetPx = normalizeTickerOffset(tickerOffsetPx, tickerTravelWidthPx);
+      tickerEl.style.transform = `translateX(${tickerOffsetPx}px)`;
+    }
+
+    tickerAnimationFrame = window.requestAnimationFrame(step);
+  };
+
+  tickerAnimationFrame = window.requestAnimationFrame(step);
+}
+
+function parseTimestamp(value) {
+  if (!value) return 0;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function normalizePosition(position) {
+  if (!position || !position.symbol) return null;
+  return {
+    symbol: position.symbol,
+    side: position.side || "long",
+    marketValue: position.marketValue ?? position.market_value ?? 0,
+    unrealizedPl: position.unrealizedPl ?? position.unrealized_pl ?? null,
+    unrealizedPlPc: position.unrealizedPlPc ?? position.unrealized_plpc ?? null,
+  };
+}
+
+function mergePositionMetrics(positions, fallbackPositions = []) {
+  const fallbackBySymbol = new Map(
+    (fallbackPositions || [])
+      .map(normalizePosition)
+      .filter(Boolean)
+      .map((position) => [position.symbol, position])
+  );
+
+  return (positions || [])
+    .map(normalizePosition)
+    .filter(Boolean)
+    .map((position) => {
+      const fallback = fallbackBySymbol.get(position.symbol);
+      if (!fallback) return position;
+      return {
+        ...position,
+        unrealizedPl:
+          position.unrealizedPl === null ? fallback.unrealizedPl : position.unrealizedPl,
+        unrealizedPlPc:
+          position.unrealizedPlPc === null ? fallback.unrealizedPlPc : position.unrealizedPlPc,
+        side: position.side || fallback.side || "long",
+      };
+    });
+}
+
+function normalizeHudSnapshot(snapshot) {
+  if (!snapshot) return null;
+  if (snapshot.snapshot) {
+    return {
+      equity: snapshot.snapshot.equity ?? 0,
+      cash: snapshot.snapshot.cash ?? 0,
+      grossExposure:
+        snapshot.snapshot.risk_exposure_pct !== undefined &&
+        snapshot.snapshot.risk_exposure_pct !== null &&
+        snapshot.snapshot.equity !== undefined
+          ? snapshot.snapshot.risk_exposure_pct * snapshot.snapshot.equity
+          : 0,
+      ranAt: snapshot.updated_at || snapshot.snapshot.timestamp || null,
+    };
+  }
+  return {
+    equity: snapshot.equity ?? 0,
+    cash: snapshot.cash ?? 0,
+    grossExposure: snapshot.grossExposure ?? 0,
+    ranAt: snapshot.ranAt || snapshot.generated_at || null,
+  };
+}
+
+function resolveHudSnapshot({ history, portfolio, latestTick }) {
+  const candidates = [
+    {
+      timestamp: parseTimestamp(portfolio?.updated_at || portfolio?.snapshot?.timestamp),
+      snapshot: normalizeHudSnapshot(portfolio),
+    },
+    {
+      timestamp: parseTimestamp(latestTick?.generated_at || latestTick?.result?.ranAt),
+      snapshot: normalizeHudSnapshot(latestTick?.result),
+    },
+    {
+      timestamp: parseTimestamp(history?.ranAt),
+      snapshot: normalizeHudSnapshot(history),
+    },
+  ];
+
+  candidates.sort((left, right) => right.timestamp - left.timestamp);
+  return candidates.find((candidate) => candidate.snapshot)?.snapshot || null;
+}
+
+function resolvePositionSnapshot({ history, portfolio, latestTick }) {
+  const latestTickPositions = Array.isArray(latestTick?.result?.positions)
+    ? latestTick.result.positions
+    : [];
+  const candidates = [
+    {
+      source: "portfolio",
+      timestamp: parseTimestamp(portfolio?.updated_at),
+      positions: Array.isArray(portfolio?.positions)
+        ? mergePositionMetrics(portfolio.positions, latestTickPositions)
+        : null,
+    },
+    {
+      source: "latestTick",
+      timestamp: parseTimestamp(latestTick?.generated_at || latestTick?.result?.ranAt),
+      positions: latestTickPositions,
+    },
+    {
+      source: "history",
+      timestamp: parseTimestamp(history?.ranAt),
+      positions: Array.isArray(history?.positions) ? history.positions : null,
+    },
+  ];
+
+  candidates.sort((left, right) => right.timestamp - left.timestamp);
+  const selected = candidates.find((candidate) => candidate.positions !== null) || candidates[0];
+  return {
+    source: selected?.source || "history",
+    positions: selected?.positions || [],
+  };
+}
+
+function buildHoldingDateMap(intents = [], positions = []) {
+  const heldSymbols = new Set((positions || []).map((position) => position.symbol));
+  const openedAtBySymbol = new Map();
+
+  intents.forEach((intent) => {
+    const symbol = intent?.symbol;
+    if (!heldSymbols.has(symbol) || !intent?.timestamp) return;
+    if (intent.action_type === "BUY") {
+      if (!openedAtBySymbol.has(symbol)) {
+        openedAtBySymbol.set(symbol, intent.timestamp);
+      }
+    } else if (intent.action_type === "SELL") {
+      openedAtBySymbol.delete(symbol);
+    }
+  });
+
+  return openedAtBySymbol;
 }
 
 function renderMacro(world) {
@@ -54,52 +281,65 @@ function renderMacro(world) {
     elements.worldSummary.textContent = "Awaiting world context build...";
     return;
   }
-  
-  const gScore = world.macro_view?.macro_score || 0;
-  const sScore = world.scout_score || 0;
-  
-  if (elements.guardianMeter) {
-    const fill = elements.guardianMeter.querySelector('.meter-fill');
-    const text = elements.guardianMeter.querySelector('.data-mono');
-    if (fill) fill.style.width = (gScore * 100) + '%';
-    if (text) text.textContent = gScore.toFixed(2);
-  }
-  
-  if (elements.scoutMeter) {
-    const fill = elements.scoutMeter.querySelector('.meter-fill');
-    const text = elements.scoutMeter.querySelector('.data-mono');
-    if (fill) fill.style.width = (sScore * 100) + '%';
-    if (text) text.textContent = sScore.toFixed(2);
-  }
-  
-  const scoutStatus = world.scout_label ? ` [AI: ${world.scout_label.toUpperCase()}]` : '';
-  elements.worldSummary.innerHTML = `
-    <div class="text-ai" style="margin-bottom: 0.5rem; font-weight: bold;">Guardian: ${world.macro_view?.macro_label?.toUpperCase() || 'CALM'}${scoutStatus}</div>
-    <div>${world.scout_thesis || world.summary || "No macro thesis available."}</div>
-  `;
 
-  // Update Global News State
-  // Elite Quant: Prioritize AI-summarized professional headlines
-  if (world.scout_headlines && world.scout_headlines.length > 0) {
-    newsHeadlines = world.scout_headlines;
+  const guardianScore = world.macro_view?.macro_score || 0;
+  const scoutScore = world.scout_score || 0;
+  const finalRegime = world.final_regime || null;
+
+  if (elements.guardianMeter) {
+    const fill = elements.guardianMeter.querySelector(".meter-fill");
+    const text = elements.guardianMeter.querySelector(".data-mono");
+    if (fill) fill.style.width = `${guardianScore * 100}%`;
+    if (text) text.textContent = guardianScore.toFixed(2);
+  }
+
+  if (elements.scoutMeter) {
+    const fill = elements.scoutMeter.querySelector(".meter-fill");
+    const text = elements.scoutMeter.querySelector(".data-mono");
+    if (fill) fill.style.width = `${scoutScore * 100}%`;
+    if (text) text.textContent = scoutScore.toFixed(2);
+  }
+
+  const guardianLabel = world.macro_view?.macro_label?.toUpperCase() || "N/A";
+  const scoutLabel = world.scout_label?.toUpperCase() || "N/A";
+  const finalLabel = finalRegime?.final_label?.toUpperCase() || guardianLabel;
+  const agreementLabel =
+    finalRegime?.divergence === true
+      ? "Divergent"
+      : finalRegime?.source === "unavailable"
+        ? "Partial"
+        : "Aligned";
+  const fusionSource = finalRegime?.source ? String(finalRegime.source) : "guardian";
+
+  clearElement(elements.worldSummary);
+  appendLine(elements.worldSummary, `System Regime: ${finalLabel}`, "text-ai world-summary-primary");
+  appendLine(
+    elements.worldSummary,
+    `Inputs: Guardian ${guardianLabel} / Scout ${scoutLabel}`,
+    "label-mini"
+  );
+  appendLine(
+    elements.worldSummary,
+    `Agreement: ${agreementLabel} · Fusion: ${fusionSource}`,
+    "label-mini"
+  );
+  appendLine(
+    elements.worldSummary,
+    world.scout_thesis || world.summary || "No macro thesis available.",
+    "world-summary-thesis"
+  );
+
+  if (Array.isArray(world.scout_headlines) && world.scout_headlines.length > 0) {
+    newsHeadlines = world.scout_headlines.map((headline) => String(headline));
   } else if (world.summary) {
-    newsHeadlines = world.summary.split('|').map(s => s.trim());
+    newsHeadlines = String(world.summary)
+      .split("|")
+      .map((part) => part.trim())
+      .filter(Boolean);
+  } else {
+    newsHeadlines = [];
   }
   updateUnifiedTicker();
-}
-
-function startMarketTicker() {
-  const api = getApi();
-  if (!api) return;
-
-  api.onMarketEvent((event) => {
-    if (event.type === 'trade' || event.type === 'bar') {
-      marketPrices[event.symbol] = event.price;
-      updateUnifiedTicker();
-    }
-  });
-
-  api.startMarketStream(['SPY', 'DIA', 'QQQ']);
 }
 
 function renderHUD(snapshot, state) {
@@ -109,121 +349,297 @@ function renderHUD(snapshot, state) {
     return;
   }
 
-  const exposurePct = (snapshot.grossExposure && snapshot.equity) ? snapshot.grossExposure / snapshot.equity : 0;
+  const exposurePct = snapshot.grossExposure && snapshot.equity ? snapshot.grossExposure / snapshot.equity : 0;
   elements.hudExposure.textContent = formatPct(exposurePct);
-  
+
   const equity = snapshot.equity || 0;
   const cash = snapshot.cash || 0;
   elements.hudEquity.textContent = `Equity: ${formatCurrency(equity)} | Cash: ${formatCurrency(cash)}`;
-  
+
   const baseline = state?.daily_starting_equity || equity;
   elements.hudBaseline.textContent = formatCurrency(baseline);
-  
-  const loss = baseline ? (equity / baseline) - 1 : 0;
-  elements.hudEquity.style.color = loss >= 0 ? 'var(--color-bullish)' : 'var(--color-bearish)';
+
+  const loss = baseline ? equity / baseline - 1 : 0;
+  elements.hudEquity.style.color = loss >= 0 ? "var(--color-bullish)" : "var(--color-bearish)";
 }
 
 function renderIntents(intents) {
+  clearElement(elements.intentFeed);
   if (!intents || !intents.length) {
-    elements.intentFeed.innerHTML = '<div class="text-muted">No intents logged yet.</div>';
+    appendLine(elements.intentFeed, "No intents logged yet.", "text-muted");
     return;
   }
-  elements.intentFeed.innerHTML = '';
-  
-  intents.slice().reverse().forEach(intent => {
+
+  intents.slice().reverse().forEach((intent) => {
     let tsString = intent.timestamp;
-    if (tsString && !tsString.endsWith('Z') && !tsString.includes('+')) {
-        tsString += 'Z';
+    if (tsString && !tsString.endsWith("Z") && !tsString.includes("+")) {
+      tsString += "Z";
     }
     const ts = new Date(tsString);
-    
-    const div = document.createElement('div');
-    div.className = 'intent-item data-mono';
-    const colorClass = intent.action_type === 'BUY' ? 'text-bullish' : 
-                       intent.action_type === 'SELL' ? 'text-bearish' : 'text-muted';
-    
-    div.innerHTML = `
-      <span class="text-muted">[${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}]</span>
-      <span class="${colorClass}">${intent.action_type.padEnd(6)}</span>
-      <span style="width: 60px; display: inline-block;">${intent.symbol || '---'}</span>
-      <span class="text-muted">| ${intent.reason_code || 'N/A'}</span>
-      <span class="text-ai" style="margin-left: 10px; font-size: 0.75rem;">${intent.world_scout_label || ''}</span>
-    `;
-    elements.intentFeed.appendChild(div);
+
+    const row = document.createElement("div");
+    row.className = "intent-item data-mono";
+
+    const time = document.createElement("span");
+    time.className = "text-muted";
+    time.textContent = `[${ts.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    })}]`;
+    row.appendChild(time);
+    row.appendChild(document.createTextNode(" "));
+
+    const action = document.createElement("span");
+    action.className =
+      intent.action_type === "BUY"
+        ? "text-bullish"
+        : intent.action_type === "SELL"
+          ? "text-bearish"
+          : "text-muted";
+    action.textContent = String(intent.action_type || "").padEnd(6);
+    row.appendChild(action);
+    row.appendChild(document.createTextNode(" "));
+
+    const symbol = document.createElement("span");
+    symbol.style.width = "60px";
+    symbol.style.display = "inline-block";
+    symbol.textContent = intent.symbol || "---";
+    row.appendChild(symbol);
+    row.appendChild(document.createTextNode(` | ${intent.reason_code || "N/A"}`));
+
+    if (intent.world_scout_label) {
+      const scout = document.createElement("span");
+      scout.className = "text-ai";
+      scout.style.marginLeft = "10px";
+      scout.style.fontSize = "0.75rem";
+      scout.textContent = String(intent.world_scout_label);
+      row.appendChild(scout);
+    }
+
+    elements.intentFeed.appendChild(row);
   });
 }
 
-function renderPositions(snapshot) {
-  elements.portfolioPositions.innerHTML = '';
+function renderPositions(snapshot, holdingDates = new Map()) {
+  clearElement(elements.portfolioPositions);
   const positions = snapshot?.positions || [];
-  
+
   if (!positions.length) {
-    elements.portfolioPositions.innerHTML = '<div class="text-muted">No active positions.</div>';
+    appendLine(elements.portfolioPositions, "No active positions.", "text-muted");
     return;
   }
-  
-  positions.forEach(pos => {
-    const card = document.createElement('div');
-    card.className = 'position-card';
-    
-    const pnl = pos.unrealizedPl || 0;
-    const pnlPct = pos.unrealizedPlPc || 0;
-    
-    card.innerHTML = `
-      <header>
-        <strong class="text-action">${pos.symbol}</strong>
-        <span class="label-mini">${(pos.side || 'long').toUpperCase()}</span>
-      </header>
-      <div class="hud-item ${pnl >= 0 ? 'bullish' : 'bearish'}">
-        <div class="label-mini">PnL</div>
-        <div class="data-mono ${pnl >= 0 ? 'text-bullish' : 'text-bearish'}">
-          ${formatCurrency(pnl)} (${(pnlPct * 100).toFixed(2)}%)
-        </div>
-      </div>
-      <div class="label-mini" style="margin-top: 8px;">Market Value</div>
-      <div class="data-mono">${formatCurrency(pos.marketValue)}</div>
-    `;
+
+  positions.forEach((pos) => {
+    const card = document.createElement("div");
+    card.className = "position-card";
+
+    const header = document.createElement("header");
+    const symbol = document.createElement("strong");
+    symbol.className = "text-action";
+    symbol.textContent = pos.symbol;
+    header.appendChild(symbol);
+
+    const side = document.createElement("span");
+    side.className = "label-mini";
+    side.textContent = String(pos.side || "long").toUpperCase();
+    header.appendChild(side);
+    card.appendChild(header);
+
+    const heldLabel = document.createElement("div");
+    heldLabel.className = "label-mini position-detail-label";
+    heldLabel.style.marginTop = "8px";
+    heldLabel.textContent = "Held Since";
+    card.appendChild(heldLabel);
+
+    const heldValue = document.createElement("div");
+    heldValue.className = "data-mono position-detail-value";
+    heldValue.textContent = holdingDates.get(pos.symbol)
+      ? new Date(holdingDates.get(pos.symbol)).toLocaleDateString()
+      : "n/a";
+    card.appendChild(heldValue);
+
+    if (pos.unrealizedPl === null) {
+      const pnlLabel = document.createElement("div");
+      pnlLabel.className = "label-mini";
+      pnlLabel.style.marginTop = "8px";
+      pnlLabel.textContent = "PnL";
+      card.appendChild(pnlLabel);
+
+      const pending = document.createElement("div");
+      pending.className = "data-mono text-muted";
+      pending.textContent = "Pending refresh";
+      card.appendChild(pending);
+    } else {
+      const pnlHud = document.createElement("div");
+      pnlHud.className = `hud-item ${pos.unrealizedPl >= 0 ? "bullish" : "bearish"}`;
+
+      const pnlLabel = document.createElement("div");
+      pnlLabel.className = "label-mini";
+      pnlLabel.textContent = "PnL";
+      pnlHud.appendChild(pnlLabel);
+
+      const pnlValue = document.createElement("div");
+      pnlValue.className = `data-mono ${pos.unrealizedPl >= 0 ? "text-bullish" : "text-bearish"}`;
+      pnlValue.textContent = `${formatCurrency(pos.unrealizedPl)} (${((pos.unrealizedPlPc || 0) * 100).toFixed(2)}%)`;
+      pnlHud.appendChild(pnlValue);
+      card.appendChild(pnlHud);
+    }
+
+    const marketValueLabel = document.createElement("div");
+    marketValueLabel.className = "label-mini";
+    marketValueLabel.style.marginTop = "8px";
+    marketValueLabel.textContent = "Market Value";
+    card.appendChild(marketValueLabel);
+
+    const marketValue = document.createElement("div");
+    marketValue.className = "data-mono";
+    marketValue.textContent = formatCurrency(pos.marketValue);
+    card.appendChild(marketValue);
+
     elements.portfolioPositions.appendChild(card);
   });
 }
 
-async function loadConfig() {
+function describeSecretStatus(status) {
+  if (!status?.configured) return { text: "Missing", className: "text-bearish" };
+  if (status.source === "secure_store") return { text: "Stored securely", className: "text-bullish" };
+  if (status.source === ".env_fallback") return { text: "Using .env fallback", className: "text-warning" };
+  return { text: "Configured", className: "text-bullish" };
+}
+
+function renderSecretStatus(secretStatus) {
+  clearElement(elements.secretStatus);
+  if (!elements.secretStatus) return;
+
+  if (elements.storageHint) {
+    elements.storageHint.textContent = secretStatus?.storageAvailable
+      ? "Secrets entered here are encrypted in desktop storage. Existing .env values remain as privileged fallback until replaced."
+      : "Secure desktop storage is unavailable on this device. The app can still use existing .env fallback values, but it cannot store new secrets securely here.";
+    elements.storageHint.className = `label-mini ${secretStatus?.storageAvailable ? "" : "text-warning"}`.trim();
+  }
+
+  if (elements.saveSecretsBtn) {
+    elements.saveSecretsBtn.disabled = !secretStatus?.storageAvailable;
+  }
+
+  SECRET_FIELD_CONFIG.forEach((field) => {
+    const row = document.createElement("div");
+    row.className = "secret-row";
+
+    const meta = document.createElement("div");
+    meta.className = "secret-meta";
+
+    const label = document.createElement("div");
+    label.className = "label-mini";
+    label.textContent = field.label;
+    meta.appendChild(label);
+
+    const statusEl = document.createElement("div");
+    const display = describeSecretStatus(secretStatus?.secrets?.[field.key]);
+    statusEl.className = `data-mono secret-status ${display.className}`;
+    statusEl.textContent = display.text;
+    meta.appendChild(statusEl);
+
+    row.appendChild(meta);
+
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "secret-clear";
+    clearButton.dataset.secretKey = field.key;
+    clearButton.textContent = "Clear";
+    const canClear = secretStatus?.storageAvailable && secretStatus?.secrets?.[field.key]?.source === "secure_store";
+    clearButton.disabled = !canClear;
+    if (!canClear) {
+      clearButton.title = secretStatus?.secrets?.[field.key]?.source === ".env_fallback"
+        ? "This credential is coming from .env fallback and cannot be cleared from the desktop UI."
+        : "No securely stored credential to clear.";
+    }
+    row.appendChild(clearButton);
+
+    elements.secretStatus.appendChild(row);
+  });
+}
+
+function collectSecretUpdates() {
+  return Object.fromEntries(
+    Object.entries(elements.secretInputs)
+      .map(([key, input]) => [key, String(input?.value || "").trim()])
+      .filter(([, value]) => value)
+  );
+}
+
+function clearSecretInputs() {
+  Object.values(elements.secretInputs).forEach((input) => {
+    if (input) input.value = "";
+  });
+}
+
+async function saveSecrets() {
   const api = getApi();
-  if (!api) return;
-  const env = api.readEnv();
-  if (elements.confAlpacaId) elements.confAlpacaId.value = env.ALPACA_API_KEY_ID || "";
-  if (elements.confAlpacaSecret) elements.confAlpacaSecret.value = env.ALPACA_SECRET_KEY || "";
-  if (elements.confGeminiKey) elements.confGeminiKey.value = env.GOOGLE_GENAI_API_KEY || "";
+  if (!api || !elements.saveSecretsBtn) return;
+  const updates = collectSecretUpdates();
+  if (!Object.keys(updates).length) {
+    if (elements.tickLog) {
+      elements.tickLog.textContent += "\n[UI] No secret changes submitted.\n";
+    }
+    return;
+  }
+
+  elements.saveSecretsBtn.disabled = true;
+  try {
+    const status = await api.setSecrets(updates);
+    clearSecretInputs();
+    renderSecretStatus(status);
+    if (elements.tickLog) {
+      elements.tickLog.textContent += "\n[UI] Secure secret store updated.\n";
+    }
+  } catch (err) {
+    if (elements.tickLog) {
+      elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+    }
+  } finally {
+    elements.saveSecretsBtn.disabled = false;
+  }
 }
 
 async function loadData() {
   const api = getApi();
   if (!api) return;
-  
-  try {
-    const world = api.readJsonlLatest("data/world-context.jsonl");
-    const intents = api.readJsonl("logs/intent_log.jsonl", 50);
-    const state = api.readJson("data/steward-state.json");
-    const history = api.readJsonlLatest("data/history.jsonl");
-    const tickLog = api.readText("logs/tick.log", 50 * 1024);
 
-    const nextTickEl = document.getElementById('next-tick');
-    const tickMetaEl = document.getElementById('tick-meta');
-    if (state && nextTickEl) {
-      nextTickEl.textContent = state.current_mode || "INACTIVE";
-      nextTickEl.style.color = state.trading_enabled ? 'var(--color-action)' : 'var(--color-warning)';
-      if (tickMetaEl) {
-        const lastRun = state.last_run_at ? new Date(state.last_run_at).toLocaleTimeString() : 'Never';
-        tickMetaEl.textContent = `Last Run: ${lastRun}`;
+  try {
+    const { world, intents, state, history, portfolio, latestTick, tickLog, secretStatus } =
+      (await api.loadDashboardData()) || {};
+
+    if (state && elements.nextTick) {
+      elements.nextTick.textContent = state.current_mode || "INACTIVE";
+      elements.nextTick.style.color = state.trading_enabled ? "var(--color-action)" : "var(--color-warning)";
+      if (elements.tickMeta) {
+        const lastRun = state.last_run_at
+          ? new Date(state.last_run_at).toLocaleString([], {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            })
+          : "Never";
+        elements.tickMeta.textContent = `Last Run: ${lastRun}`;
       }
     }
 
     renderMacro(world);
-    renderHUD(history, state);
+    renderHUD(resolveHudSnapshot({ history, portfolio, latestTick }), state);
     renderIntents(intents);
-    renderPositions(history);
-    
-    if (tickLog) {
+    const positionSnapshot = resolvePositionSnapshot({ history, portfolio, latestTick });
+    const holdingDates = buildHoldingDateMap(intents, positionSnapshot.positions);
+    renderPositions(positionSnapshot, holdingDates);
+    renderSecretStatus(secretStatus);
+
+    if (tickLog && elements.tickLog) {
       elements.tickLog.textContent = tickLog;
       elements.tickLog.scrollTop = elements.tickLog.scrollHeight;
     }
@@ -232,73 +648,104 @@ async function loadData() {
   }
 }
 
-elements.refreshBtn.addEventListener('click', loadData);
+if (elements.refreshBtn) {
+  elements.refreshBtn.addEventListener("click", loadData);
+}
 
-elements.saveConfigBtn.addEventListener('click', () => {
-  const api = getApi();
-  if (!api) return;
-  
-  const updates = {
-    ALPACA_API_KEY_ID: elements.confAlpacaId.value.trim(),
-    ALPACA_SECRET_KEY: elements.confAlpacaSecret.value.trim(),
-    GOOGLE_GENAI_API_KEY: elements.confGeminiKey.value.trim()
-  };
-  
-  api.writeEnv(updates);
-  elements.tickLog.textContent += `\n[UI] Configuration saved to .env and reloaded.\n`;
-  alert("Settings saved successfully.");
-});
+if (elements.saveSecretsBtn) {
+  elements.saveSecretsBtn.addEventListener("click", saveSecrets);
+}
 
-elements.actionGrid.addEventListener('click', async (e) => {
-  const script = e.target.getAttribute('data-script');
-  if (!script) return;
-  
-  e.target.disabled = true;
-  elements.tickLog.textContent += `\n[UI] Spawning ${script}...\n`;
-  
-  try {
-    const api = getApi();
-    if (!api) throw new Error("API Bridge not available");
-    const res = await api.runScript(script);
-    elements.tickLog.textContent += res.output;
-  } catch (err) {
-    elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
-  } finally {
-    e.target.disabled = false;
-    loadData();
-  }
-});
+if (elements.secretStatus) {
+  elements.secretStatus.addEventListener("click", async (event) => {
+    const target = event.target;
+    const secretKey = target?.dataset?.secretKey;
+    if (!secretKey) return;
 
-// Fullscreen Hover Logic
-const topbar = document.querySelector('.topbar');
-const trigger = document.getElementById('fullscreen-trigger');
-
-if (trigger && topbar) {
-  trigger.addEventListener('mouseenter', () => {
-    if (document.body.classList.contains('fullscreen')) {
-      topbar.classList.add('is-visible');
-    }
-  });
-
-  topbar.addEventListener('mouseleave', () => {
-    if (document.body.classList.contains('fullscreen')) {
-      topbar.classList.remove('is-visible');
+    target.disabled = true;
+    try {
+      const api = getApi();
+      if (!api) throw new Error("API Bridge not available");
+      const status = await api.clearSecret(secretKey);
+      renderSecretStatus(status);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[UI] Cleared ${secretKey} from secure storage.\n`;
+      }
+    } catch (err) {
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+      }
+    } finally {
+      target.disabled = false;
     }
   });
 }
 
-// Keyboard Shortcut for Fullscreen Mode
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'F11') {
-    document.body.classList.toggle('fullscreen');
-    if (!document.body.classList.contains('fullscreen')) {
-      topbar.classList.remove('is-visible');
+if (elements.actionGrid) {
+  elements.actionGrid.addEventListener("click", async (e) => {
+    const target = e.target;
+    const script = target?.getAttribute?.("data-script");
+    if (!script) return;
+
+    target.disabled = true;
+    if (elements.tickLog) {
+      elements.tickLog.textContent += `\n[UI] Spawning ${script}...\n`;
+    }
+
+    try {
+      const api = getApi();
+      if (!api) throw new Error("API Bridge not available");
+      const res = await api.runAction(script);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += res?.output || "";
+      }
+    } catch (err) {
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+      }
+    } finally {
+      target.disabled = false;
+      loadData();
+    }
+  });
+}
+
+const topbar = document.querySelector(".topbar");
+const trigger = document.getElementById("fullscreen-trigger");
+
+if (trigger && topbar) {
+  trigger.addEventListener("mouseenter", () => {
+    if (document.body.classList.contains("fullscreen")) {
+      topbar.classList.add("is-visible");
+    }
+  });
+
+  topbar.addEventListener("mouseleave", () => {
+    if (document.body.classList.contains("fullscreen")) {
+      topbar.classList.remove("is-visible");
+    }
+  });
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F11") {
+    document.body.classList.toggle("fullscreen");
+    if (!document.body.classList.contains("fullscreen") && topbar) {
+      topbar.classList.remove("is-visible");
     }
   }
 });
 
-// Initial Load
 loadData();
-loadConfig();
-startMarketTicker();
 setInterval(loadData, 30000);
+
+if (typeof window !== "undefined") {
+  window.__VS_RENDERER_TEST__ = {
+    buildHoldingDateMap,
+    collectSecretUpdates,
+    computeTickerTravelWidth,
+    normalizeTickerOffset,
+    normalizePosition,
+    resolvePositionSnapshot,
+  };
+}

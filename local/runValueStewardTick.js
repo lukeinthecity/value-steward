@@ -13,7 +13,12 @@ import {
   shouldSendHealthEmail,
   shouldSendPhaseEmail,
 } from "../core/healthStatus.js";
-import { loadState } from "../core/stewardState.js";
+import { loadPolicySnapshot } from "../core/runtimeArtifacts.js";
+import {
+  loadState,
+  markHealthEmailSent,
+  markPhaseEmailSent,
+} from "../core/stewardState.js";
 import { isWithinPreCloseWindow } from "../core/timeUtils.js";
 
 async function main() {
@@ -28,17 +33,30 @@ async function main() {
   const marketOpen = clock.is_open;
 
   // 1. Tick
-  const { policy, result } = await runTick({
+  const { policy: tickPolicy, result } = await runTick({
     alpacaConfig,
     marketOpen,
     clock,
   });
+  const isFinalTick = isWithinPreCloseWindow(5, new Date());
+  const trainOnNonFinalTick = !["0", "false", "no", "off"].includes(
+    String(process.env.VS_TRAIN_ON_NON_FINAL_TICK ?? "false").toLowerCase()
+  );
 
   // 2. Local Training (Post-Tick)
-  const training = await trainPolicyFromHistoryLocal({
-    policy,
-    tickResult: result,
-  });
+  const training =
+    isFinalTick || trainOnNonFinalTick
+      ? await trainPolicyFromHistoryLocal({
+          worldContext: result.worldContext,
+        })
+      : {
+          updated: false,
+          reason: "not_final_tick",
+          oldRisk: tickPolicy?.risk_level ?? null,
+          newRisk: tickPolicy?.risk_level ?? null,
+          metrics: null,
+        };
+  const policy = loadPolicySnapshot() ?? tickPolicy;
 
   // 3. Status & Notifications
   const state = await loadState();
@@ -51,12 +69,12 @@ async function main() {
   const healthCheck = shouldSendHealthEmail({ agentState: state, snapshot: health });
   if (healthCheck.send) {
     await sendHealthEmail({ health, reason: healthCheck.reason });
+    await markHealthEmailSent();
   }
 
   // Phase 1 Progress
   const phase = buildPhase1Status();
-  
-  const isFinalTick = isWithinPreCloseWindow(5, new Date());
+
   if (training.updated && isFinalTick) {
     await sendLessonEmail({
       policy,
@@ -69,12 +87,16 @@ async function main() {
   const phaseCheck = shouldSendPhaseEmail({
     agentState: state,
     phase,
-    isFinalDecision: true,
+    isFinalDecision: isFinalTick,
   });
   if (phaseCheck.send) {
     await sendPhaseCheckpointEmail({
       phase,
       exchangeDate: health.exchange_date,
+    });
+    await markPhaseEmailSent({
+      milestones: phaseCheck.milestones ?? [],
+      ready: phaseCheck.reason === "ready",
     });
   }
 

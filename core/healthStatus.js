@@ -1,7 +1,12 @@
 import fs from "fs";
 import path from "path";
 
+import { filterPhase1Records, getPhase1StartDate } from "./phase1Window.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
+import {
+  loadLatestTickSnapshot,
+  loadPortfolioLiveSnapshot,
+} from "./runtimeArtifacts.js";
 import { loadStateSync } from "./stewardState.js";
 import {
   getExchangeDateString,
@@ -72,6 +77,13 @@ function daysSince(value) {
   return hours / 24;
 }
 
+function artifactTimestamp(...values) {
+  const candidate = values.find(
+    (value) => typeof value === "string" && value.trim().length > 0
+  );
+  return candidate ?? null;
+}
+
 function parseMilestones(value) {
   const raw = (value || "").split(",").map((item) => Number(item.trim()));
   const cleaned = raw.filter((item) => Number.isFinite(item) && item > 0);
@@ -88,17 +100,42 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const state = agentState ?? loadStateSync();
   const policyData = policy ?? readJson(POLICY_PATH) ?? {};
   const training = getLatestJsonlEntry(TRAINING_LOG_PATH);
-  const scorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
-  const scorecardRecords = readJsonl(SCORECARD_PATH);
+  const phase1StartDate = getPhase1StartDate({ state });
+  const rawScorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
+  const scorecardSummary =
+    !phase1StartDate || rawScorecardSummary?.phase1_start_date === phase1StartDate
+      ? rawScorecardSummary
+      : null;
+  const scorecardRecords = filterPhase1Records(readJsonl(SCORECARD_PATH), {
+    state,
+  });
   const healthState = readJson(WORLD_HEALTH_PATH) ?? {};
   const activeFeedIds = loadActiveFeedIds();
   const context = worldContext ?? (await loadLatestWorldContext());
+  const latestTick = loadLatestTickSnapshot();
+  const portfolio = loadPortfolioLiveSnapshot();
 
   const tickAgeHours = hoursSince(state.last_run_at);
   const worldAgeHours = context?.generated_at
     ? hoursSince(context.generated_at)
     : null;
   const worldHealthAgeHours = hoursSince(healthState.last_checked);
+  const tickArtifactAt = artifactTimestamp(
+    latestTick?.generated_at,
+    latestTick?.result?.ranAt
+  );
+  const tickArtifactAgeHours = hoursSince(tickArtifactAt);
+  const tickArtifactExchangeDate =
+    latestTick?.exchange_date ??
+    (tickArtifactAt ? getExchangeDateString(new Date(tickArtifactAt)) : null);
+  const portfolioArtifactAt = artifactTimestamp(
+    portfolio?.updated_at,
+    portfolio?.snapshot?.timestamp
+  );
+  const portfolioArtifactAgeHours = hoursSince(portfolioArtifactAt);
+  const portfolioArtifactExchangeDate = portfolioArtifactAt
+    ? getExchangeDateString(new Date(portfolioArtifactAt))
+    : null;
 
   const staleSources = Object.entries(healthState.sources ?? {})
     .filter(([id, entry]) => {
@@ -117,6 +154,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
 
   const issues = [];
   const tickMaxHours = Number(process.env.VS_HEALTH_TICK_MAX_HOURS ?? 2);
+  const portfolioMaxOpen = Number(process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_OPEN ?? 36);
+  const portfolioMaxClosed = Number(process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_CLOSED ?? 72);
   const worldMaxOpen = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_OPEN ?? 6);
   const worldMaxClosed = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_CLOSED ?? 36);
   const worldHealthMax = Number(process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24);
@@ -131,7 +170,35 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   }
 
   const marketOpen = isMarketOpenNow(now);
+  const portfolioLimit = marketOpen ? portfolioMaxOpen : portfolioMaxClosed;
   const worldLimit = marketOpen ? worldMaxOpen : worldMaxClosed;
+
+  if (
+    tickArtifactAgeHours === null ||
+    tickArtifactAgeHours > tickMaxHours ||
+    (tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate)
+  ) {
+    issues.push({
+      level: "warn",
+      code: "tick_artifact_stale",
+      message:
+        tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate
+          ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match ${exchangeDate}.`
+          : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+    });
+  }
+
+  if (
+    portfolioArtifactAgeHours === null ||
+    portfolioArtifactAgeHours > portfolioLimit
+  ) {
+    issues.push({
+      level: "warn",
+      code: "portfolio_artifact_stale",
+      message: `Portfolio artifact age ${portfolioArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${portfolioLimit}h).`,
+    });
+  }
+
   if (worldAgeHours === null || worldAgeHours > worldLimit) {
     issues.push({
       level: "warn",
@@ -174,6 +241,18 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
       last_run_at: state.last_run_at ?? null,
       age_hours: tickAgeHours,
     },
+    artifacts: {
+      latest_tick: {
+        generated_at: tickArtifactAt,
+        age_hours: tickArtifactAgeHours,
+        exchange_date: tickArtifactExchangeDate,
+      },
+      portfolio: {
+        updated_at: portfolioArtifactAt,
+        age_hours: portfolioArtifactAgeHours,
+        exchange_date: portfolioArtifactExchangeDate,
+      },
+    },
     execution: {
       last_executed_at: state.last_executed_at ?? null,
       last_executed_date: state.last_executed_date ?? null,
@@ -182,7 +261,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     training: {
       last_trained_at: training?.ranAt ?? training?.timestamp ?? null,
       last_reason: training?.reason ?? null,
-      policy_version: training?.policyVersion ?? null,
+      policy_version:
+        training?.policyVersionAfter ?? training?.policyVersion ?? null,
     },
     policy: {
       version: policyData?.version ?? null,
@@ -209,15 +289,25 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     scorecard: {
       records: scorecardRecords.length,
       trading_days: tradingDays,
+      phase1_start_date: phase1StartDate,
       summary_generated_at: scorecardSummary?.generated_at ?? null,
+      horizons: scorecardSummary?.horizons ?? {},
     },
     issues,
   };
 }
 
 export function buildPhase1Status() {
-  const scorecardRecords = readJsonl(SCORECARD_PATH);
-  const scorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
+  const state = loadStateSync();
+  const phase1StartDate = getPhase1StartDate({ state });
+  const scorecardRecords = filterPhase1Records(readJsonl(SCORECARD_PATH), {
+    state,
+  });
+  const rawScorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
+  const scorecardSummary =
+    !phase1StartDate || rawScorecardSummary?.phase1_start_date === phase1StartDate
+      ? rawScorecardSummary
+      : null;
   const tradingDays = new Set(
     scorecardRecords
       .map((record) => record.entry_date)
@@ -238,6 +328,7 @@ export function buildPhase1Status() {
   }
 
   return {
+    phase1_start_date: phase1StartDate,
     trading_days: tradingDays,
     records: scorecardRecords.length,
     summary_generated_at: scorecardSummary?.generated_at ?? null,

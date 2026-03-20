@@ -25,14 +25,24 @@ def infer_world_tags(
     # ------------------------------------------------------------------
     # 1. Macro view
     # ------------------------------------------------------------------
+    regime_view = ctx.get("final_regime")
     macro_view = ctx.get("macro_view")
-    if isinstance(macro_view, dict):
-        label_raw = macro_view.get("macro_label", "")
+
+    label_source: dict[str, Any] | None = None
+    if isinstance(regime_view, dict):
+        label_source = regime_view
+    elif isinstance(macro_view, dict):
+        label_source = macro_view
+
+    if label_source is not None:
+        label_key = "final_label" if label_source is regime_view else "macro_label"
+        label_raw = label_source.get(label_key, "")
         label = str(label_raw).strip().upper().replace("-", "_")
         if label and label not in ("", "N/A", "NONE"):
             tags.append(f"MACRO_{label}")
 
-        score = macro_view.get("macro_score")
+        score_key = "final_score" if label_source is regime_view else "macro_score"
+        score = label_source.get(score_key)
         if isinstance(score, (int, float)):
             if score >= 0.6:
                 tags.append("MACRO_SCORE_HIGH")
@@ -41,7 +51,7 @@ def infer_world_tags(
             else:
                 tags.append("MACRO_SCORE_LOW")
 
-        confidence = macro_view.get("confidence")
+        confidence = macro_view.get("confidence") if isinstance(macro_view, dict) else None
         if isinstance(confidence, (int, float)) and confidence < 0.5:
             tags.append("MACRO_DATA_SPARSE")
 
@@ -50,6 +60,9 @@ def infer_world_tags(
         risk_off_labels = {"stressed", "crisis-prone"}
         if str(label_raw).strip().lower() in risk_off_labels:
             tags.append("RISK_OFF_ACTIVE")
+
+        if isinstance(regime_view, dict) and regime_view.get("divergence") is True:
+            tags.append("REGIME_DIVERGENT")
 
     # ------------------------------------------------------------------
     # 2. Individual signal tags (from JS rule-based pipeline)

@@ -194,10 +194,15 @@ class SignalEngine:
 
         today = datetime.now(timezone.utc).date()
         diff = (today - lb_date).days
-        allowed = self.settings.max_signal_age_days
-        if today.weekday() == 0:
+        
+        # --- Professional Hardening: Holiday Tolerance ---
+        # Allow up to 4 days for 3-day weekends/holidays
+        allowed = max(4, self.settings.max_signal_age_days)
+        if today.weekday() == 0: # Monday
             allowed += 2
-        elif today.weekday() == 6:
+        elif today.weekday() == 1: # Tuesday (handles Monday holiday)
+            allowed += 1
+        elif today.weekday() == 6: # Sunday
             allowed += 1
         return diff > allowed
 

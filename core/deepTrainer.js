@@ -1,4 +1,5 @@
 import { evaluateHistoryMetrics } from "./evalMetrics.js";
+import { isTrainingModeAllowed } from "./trainingMode.js";
 
 export function trainPolicyWithMetrics({
   history,
@@ -10,10 +11,10 @@ export function trainPolicyWithMetrics({
   maxRisk = 0.9,
   minRiskDelta = 0,
 }) {
-  if (policy.mode !== "read-only") {
+  if (!isTrainingModeAllowed(policy.mode)) {
     return {
       updated: false,
-      reason: "non_read_only_mode",
+      reason: "non_trainable_mode",
       equityDelta: null,
       oldRisk: policy.risk_level ?? 0.5,
       newRisk: policy.risk_level ?? 0.5,

@@ -4,6 +4,7 @@ import { spawnSync } from "child_process";
 import "dotenv/config";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { sendWeeklyReportEmail } from "../core/emailNotifications.js";
+import { buildDailyPromotionSnapshot, buildWeeklyPromotionSummary } from "../core/promotionMetrics.js";
 
 const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 const INTENT_LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
@@ -61,7 +62,9 @@ async function main() {
         avgDivergence: null,
         significantDisagreements: 0,
         samples: 0
-    }
+    },
+    currentCycle: null,
+    promotion: null,
   };
 
   console.log(`Value Steward Weekly Report (${reportData.startDate} to ${reportData.endDate})`);
@@ -181,6 +184,32 @@ async function main() {
         console.warn("Failed to generate Fact Sheet:", result.stderr);
     }
   }
+
+  const latestPromotion = await buildDailyPromotionSnapshot();
+  reportData.currentCycle = {
+    exchangeDate: latestPromotion.exchange_date,
+    integrityPass: latestPromotion.integrity?.pass ?? null,
+    blockers: latestPromotion.blockers ?? [],
+  };
+  reportData.promotion = buildWeeklyPromotionSummary({
+    records: recentRecords,
+    intents: recentIntents,
+    latestDailyPromotion: latestPromotion,
+  });
+
+  console.log("\nPromotion Framework:");
+  console.log(`  Stage:           ${reportData.promotion.stage}`);
+  console.log(`  Verdict:         ${reportData.promotion.verdict}`);
+  console.log(`  Operational:     ${reportData.promotion.operational_score}`);
+  console.log(`  Risk:            ${reportData.promotion.risk_score}`);
+  console.log(`  Decision:        ${reportData.promotion.decision_score ?? "n/a"}`);
+  console.log(`  Learning:        ${reportData.promotion.learning_score}`);
+  console.log(`  Blockers:        ${reportData.promotion.blockers.length ? reportData.promotion.blockers.join(", ") : "none"}`);
+  console.log(`  Current blockers:${reportData.promotion.current_blockers.length ? ` ${reportData.promotion.current_blockers.join(", ")}` : " none"}`);
+  console.log("\nCurrent Cycle Freshness:");
+  console.log(`  Exchange date:   ${reportData.currentCycle.exchangeDate}`);
+  console.log(`  Integrity pass:  ${reportData.currentCycle.integrityPass}`);
+  console.log(`  Blockers:        ${reportData.currentCycle.blockers.length ? reportData.currentCycle.blockers.join(", ") : "none"}`);
 
   // 6. Email Delivery
   if (shouldEmail) {

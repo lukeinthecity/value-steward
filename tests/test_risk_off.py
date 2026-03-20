@@ -44,3 +44,41 @@ def test_risk_off_flag_set_on_stressed_macro() -> None:
     intent, _ = engine.decide(snapshot, world_tags=["DEFAULT"], world_context=world_context)
     assert intent.risk_off is True
     assert intent.risk_off_reason is not None
+
+
+def test_risk_off_uses_final_regime_when_more_cautious() -> None:
+    settings = ValueStewardSettings(
+        alpaca_api_key_id="test-key",
+        alpaca_secret_key="test-secret",
+        core_symbol="SPY",
+        target_risk_exposure_pct_low=0.20,
+        rebalance_buffer_pct=0.02,
+    )
+    governor = RiskGovernor(mode=RiskMode.LOW, settings=settings)
+    engine = DecisionEngine(
+        risk_governor=governor,
+        pattern_library=PatternLibrary(),
+        settings=settings,
+        portfolio_repository=DummyPortfolioRepository(),
+    )
+    snapshot = PortfolioSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        cash=100_000.0,
+        equity=100_000.0,
+        positions=[],
+        risk_exposure_pct=0.0,
+    )
+    world_context = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "macro_view": {"macro_label": "calm", "macro_score": 0.15},
+        "final_regime": {
+            "final_label": "stressed",
+            "final_score": 0.68,
+            "divergence": True,
+            "fusion_reason": "scout_more_cautious",
+        },
+    }
+
+    intent, _ = engine.decide(snapshot, world_tags=["DEFAULT"], world_context=world_context)
+    assert intent.risk_off is True
+    assert intent.risk_off_reason == "Macro Regime: stressed"

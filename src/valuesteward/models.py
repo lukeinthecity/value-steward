@@ -77,9 +77,14 @@ class IntentRecord(BaseModel):
     policy_force_no_trade: Optional[bool] = None
     world_macro_label: Optional[str] = None
     world_macro_score: Optional[float] = None
+    world_regime_label: Optional[str] = None
+    world_regime_score: Optional[float] = None
+    world_regime_divergence: Optional[bool] = None
+    world_regime_fusion_reason: Optional[str] = None
     world_scout_score: Optional[float] = None
     world_scout_label: Optional[str] = None
     world_scout_thesis: Optional[str] = None
+    world_scout_role: Optional[str] = None
     world_context_generated_at: Optional[str] = None
     world_context_age_minutes: Optional[float] = None
     world_context_sources_used: Optional[int] = None
@@ -112,6 +117,7 @@ class IntentRecord(BaseModel):
     gate_signal_fresh: Optional[bool] = None
     gate_macro_buy_allowed: Optional[bool] = None
     gate_macro_sell_allowed: Optional[bool] = None
+    gate_scout_binding: Optional[bool] = None
     gate_risk_governor_allowed: Optional[bool] = None
     gate_reason: Optional[str] = None
     actions: List[TradeAction] = Field(default_factory=list)

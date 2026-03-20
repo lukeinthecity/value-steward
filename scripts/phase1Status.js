@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
 
+import { filterPhase1Records, getPhase1StartDate } from "../core/phase1Window.js";
+import { loadStateSync } from "../core/stewardState.js";
+
 function readJsonl(filePath) {
   if (!fs.existsSync(filePath)) return [];
   const raw = fs.readFileSync(filePath, "utf8");
@@ -30,7 +33,9 @@ function fmtMaybe(value) {
 const scorecardPath = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 const summaryPath = path.join(process.cwd(), "data", "scorecard-summary.json");
 
-const scorecardRecords = readJsonl(scorecardPath);
+const state = loadStateSync();
+const phase1StartDate = getPhase1StartDate({ state });
+const scorecardRecords = filterPhase1Records(readJsonl(scorecardPath), { state });
 const uniqueDays = new Set(
   scorecardRecords
     .map((record) => record.entry_date)
@@ -45,8 +50,12 @@ if (fs.existsSync(summaryPath)) {
     summary = null;
   }
 }
+if (phase1StartDate && summary?.phase1_start_date !== phase1StartDate) {
+  summary = null;
+}
 
 console.log("[phase1] Progress");
+console.log(`- phase1_start_date=${phase1StartDate ?? "n/a"}`);
 console.log(`- scorecard_records=${scorecardRecords.length}`);
 console.log(`- trading_days=${uniqueDays.size} / 60`);
 if (summary?.generated_at) {

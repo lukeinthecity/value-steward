@@ -4,9 +4,17 @@ export async function runValueSteward({
   mode,
   marketOpen,
   clock,
+  worldContext = null,
   nowOverride,
 }) {
   const now = nowOverride ?? new Date().toISOString();
+  if (!policy || typeof policy !== "object") {
+    throw new Error("runValueSteward requires a policy snapshot.");
+  }
+  const riskLevel = Number(policy.risk_level);
+  if (!Number.isFinite(riskLevel)) {
+    throw new Error("runValueSteward requires policy.risk_level.");
+  }
 
   // 1. Read account info from Alpaca (READ-ONLY)
   const account = await alpaca.getAccount();
@@ -83,7 +91,7 @@ export async function runValueSteward({
     cashUtilization = Math.max(0, Math.min(1, raw));
   }
 
-  const targetCashFraction = 1 - policy.risk_level;
+  const targetCashFraction = 1 - riskLevel;
   const grossExposure = longMarketValue + shortMarketValue;
   const netExposure = longMarketValue - shortMarketValue;
   const maxPositionWeight =
@@ -96,8 +104,6 @@ export async function runValueSteward({
           )
         )
       : null;
-  const worldContext = null;
-
   const result = {
     ranAt: now,
     marketOpen: isMarketOpen,
@@ -110,7 +116,7 @@ export async function runValueSteward({
     marginMultiplier: Number.isNaN(marginMultiplier) ? null : marginMultiplier,
     mode: policy.mode,
     agentMode: mode ?? null,
-    risk_level: policy.risk_level,
+    risk_level: riskLevel,
     targetCashFraction,
     equityToBuyingPower,
     cashUtilization,

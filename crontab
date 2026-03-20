@@ -1,19 +1,28 @@
-# Value Steward Institutional Cron (UTC TIMING)
-# Market Hours (ET) converted to UTC (assuming EDT / UTC-4)
+# Value Steward Institutional Cron (LOCAL EDT TIMING)
+# Aligned to System Clock: EDT (UTC-4)
 
-# world:run - every 30 mins from 13:00 to 19:00 UTC (9am-3pm ET)
-# plus lead run at 19:25 UTC (3:25pm ET)
-*/30 13-18 * * 1-5 /usr/bin/npm --prefix /app run world:run >> /app/logs/cron.log 2>&1
-25 19 * * 1-5 /usr/bin/npm --prefix /app run world:run >> /app/logs/cron.log 2>&1
+# world:run - every 30 mins from 9:00 AM to 3:00 PM ET
+*/30 09-14 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
 
-# local:tick - Closing Sequence (19:30, 19:40, 19:50, 19:55 UTC)
-30,40,50,55 19 * * 1-5 /usr/bin/npm --prefix /app run local:tick >> /app/logs/cron.log 2>&1
+# world:run - Lead run at 3:25 PM ET
+25 15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
 
-# eod:run - daily after market data becomes public (4:20 PM ET)
-20 20 * * 1-5 cd /home/lukes/value-steward && npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
+# world:health scheduler - refresh feed health/context twice daily, including weekends/holidays.
+5 6,18 * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:health:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+
+# local:tick scheduler - runs every 5 minutes from 12:30 PM ET onward;
+# wrapper self-gates to the execution slots before close (handles early closes).
+30-55/5 12 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+*/5 13-15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+
+# eod:run scheduler - runs every 5 minutes through the post-close window;
+# wrapper self-gates to 15-90 minutes after close (handles early closes).
+15-59/5 13 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
+*/5 14-16 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
+0-30/5 17 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
 
 # health:check - hourly
-0 * * * * /usr/bin/npm --prefix /app run health:check >> /app/logs/cron.log 2>&1
+0 * * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run health:check >> /home/lukes/value-steward/logs/cron.log 2>&1
 
-# report:weekly - Sunday 10pm UTC (6pm ET)
-0 22 * * 0 /usr/bin/npm --prefix /app run report:weekly -- --send-email >> /app/logs/cron.log 2>&1
+# report:weekly - Sunday 6:00 PM ET
+0 18 * * 0 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run report:weekly -- --send-email >> /home/lukes/value-steward/logs/cron.log 2>&1

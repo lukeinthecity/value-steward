@@ -10,6 +10,7 @@ from typing import Any, List, Literal, cast, Callable
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
+from alpaca.common.enums import Sort
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockSnapshotRequest
@@ -83,6 +84,10 @@ class AlpacaClient:
                 continue
             if getattr(asset, "asset_class", "").lower() != "us_equity":
                 continue
+            # --- Elite Quant: Fractional Check ---
+            if getattr(asset, "fractionable", False) is not True:
+                continue
+            # --------------------------------------
             symbol = getattr(asset, "symbol", None)
             if symbol:
                 symbols.append(symbol)
@@ -124,6 +129,16 @@ class AlpacaClient:
     @retry_alpaca()
     def get_open_orders(self):
         request = GetOrdersRequest(status=QueryOrderStatus.OPEN)
+        return self._trading_client.get_orders(filter=request)
+
+    @retry_alpaca()
+    def get_recent_orders(self, limit: int = 20):
+        request = GetOrdersRequest(
+            status=QueryOrderStatus.ALL,
+            limit=limit,
+            direction=Sort.DESC,
+            nested=True,
+        )
         return self._trading_client.get_orders(filter=request)
 
     @retry_alpaca()

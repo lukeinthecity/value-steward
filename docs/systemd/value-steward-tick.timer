@@ -1,8 +1,8 @@
 [Unit]
-Description=Value Steward Local Tick Timer (market hours)
+Description=Value Steward Local Tick Timer (execution scheduler)
 
 [Timer]
-OnCalendar=Mon..Fri 09:30..15:45/15
+OnCalendar=Mon..Fri 12:30..15:55/5
 Timezone=America/New_York
 Persistent=true
 AccuracySec=1min

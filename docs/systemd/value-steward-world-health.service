@@ -1,0 +1,11 @@
+[Unit]
+Description=Value Steward World Health Refresh
+After=network.target
+
+[Service]
+Type=oneshot
+User=lukes
+WorkingDirectory=/home/lukes/value-steward
+EnvironmentFile=-/home/lukes/value-steward/.env
+Environment=WORLD_FEED_AUTO_DISABLE=false
+ExecStart=/usr/bin/npm run world:health:scheduled

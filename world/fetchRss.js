@@ -115,7 +115,7 @@ function pruneOld(entries) {
   });
 }
 
-async function fetchJsonWithTimeout(url, { timeoutMs, headers }) {
+async function fetchTextWithTimeout(url, { timeoutMs, headers }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -127,7 +127,7 @@ async function fetchJsonWithTimeout(url, { timeoutMs, headers }) {
     if (!res.ok) {
       throw new Error(`http_${res.status}`);
     }
-    return await res.json();
+    return await res.text();
   } finally {
     clearTimeout(timeout);
   }
@@ -149,12 +149,7 @@ async function main() {
       "[world] SEC feeds may return 403 without a real contact in WORLD_RSS_USER_AGENT."
     );
   }
-  const parser = new Parser({
-    headers: {
-      "User-Agent": userAgent,
-      Accept: "application/rss+xml, application/xml, text/xml, */*",
-    },
-  });
+  const parser = new Parser();
   const existing = loadInbox();
   const existingKeys = new Set(existing.map(buildKey));
 
@@ -165,13 +160,14 @@ async function main() {
     console.log(`[world] fetch ${source.id}...`);
     try {
       if (source.format === "calendar_json") {
-        const data = await fetchJsonWithTimeout(source.rss_url, {
-          timeoutMs: WORLD_RSS_TIMEOUT_MS,
+        const res = await fetch(source.rss_url, {
           headers: {
             "User-Agent": userAgent,
             Accept: "application/json, */*",
           },
         });
+        if (!res.ok) throw new Error(`http_${res.status}`);
+        const data = await res.json();
         const items = Array.isArray(data)
           ? data
           : Array.isArray(data?.events)
@@ -191,12 +187,18 @@ async function main() {
           added += 1;
         }
       } else {
-        const feed = await Promise.race([
-          parser.parseURL(source.rss_url),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("timeout")), WORLD_RSS_TIMEOUT_MS)
-          ),
-        ]);
+        const rawText = await fetchTextWithTimeout(source.rss_url, {
+          timeoutMs: WORLD_RSS_TIMEOUT_MS,
+          headers: {
+            "User-Agent": userAgent,
+            Accept: "application/rss+xml, application/xml, text/xml, */*",
+          },
+        });
+        
+        // Elite Quant: Clean raw XML before parsing to handle BOM or leading whitespace
+        const cleanedText = rawText.trim();
+        const feed = await parser.parseString(cleanedText);
+        
         for (const item of feed.items ?? []) {
           if (isPaywalled({ sourceId: source.id, item })) continue;
           const normalized = normalizeItem({ sourceId: source.id, item });

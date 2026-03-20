@@ -81,6 +81,11 @@ class IntentLogger:
                 if intent.world_macro_score is not None
                 else "n/a"
             )
+            regime_score = (
+                f"{intent.world_regime_score:.2f}"
+                if intent.world_regime_score is not None
+                else "n/a"
+            )
             scout_score = (
                 f"{intent.world_scout_score:.2f}"
                 if intent.world_scout_score is not None
@@ -88,6 +93,9 @@ class IntentLogger:
             )
             macro = (
                 f" world_macro={intent.world_macro_label or '-'} score={score} "
+                f"regime={intent.world_regime_label or '-'} regime_score={regime_score} "
+                f"divergence={intent.world_regime_divergence} "
+                f"fusion={intent.world_regime_fusion_reason or '-'} "
                 f"scout={intent.world_scout_label or '-'} scout_score={scout_score}"
             )
             if intent.world_scout_thesis:

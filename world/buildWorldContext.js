@@ -8,12 +8,17 @@ import {
   filterRecent,
   validateContext,
   classifyMacroFromTags,
+  fuseMacroRegime,
   toWorldDateString,
   getWorldTimeZone,
 } from "./contextUtils.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
 import { observeWorld } from "./shadowObserver.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
+import {
+  fetchMassiveMacroContext,
+  summarizeMassiveMacroContext,
+} from "./massiveMacro.js";
 import { startSpinner } from "./spinner.js";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
@@ -176,6 +181,11 @@ async function main() {
     baseContext.corpus_preview = corpusPreview;
   }
 
+  const massiveMacro = await fetchMassiveMacroContext();
+  baseContext.massive_macro = massiveMacro;
+  baseContext.massive_macro_summary =
+    summarizeMassiveMacroContext(massiveMacro);
+
   try {
     const { context: builtContext, digest } = await makeMacroDigest({
       baseContext,
@@ -197,6 +207,12 @@ async function main() {
       ...(builtContext ?? {}),
       tags: builtContext?.tags ?? baseContext.tags,
       summary: builtContext?.summary ?? baseContext.summary,
+      massive_macro:
+        builtContext?.massive_macro ?? baseContext.massive_macro ?? null,
+      massive_macro_summary:
+        builtContext?.massive_macro_summary ??
+        baseContext.massive_macro_summary ??
+        null,
     };
 
     if (tagsValid) {
@@ -233,6 +249,12 @@ async function main() {
     contextToUse = { ...contextToUse, ...scoutResult };
     // ------------------------------------------
 
+    contextToUse.final_regime = fuseMacroRegime({
+      macroView: contextToUse.macro_view,
+      scoutLabel: contextToUse.scout_label,
+      scoutScore: contextToUse.scout_score,
+    });
+
     if (!validateContext(contextToUse)) {
       console.error(
         "[world] context validation failed; using rule-based base context"
@@ -242,6 +264,11 @@ async function main() {
         scout_score: contextToUse.scout_score,
         scout_label: contextToUse.scout_label,
         scout_thesis: contextToUse.scout_thesis,
+        final_regime: contextToUse.final_regime,
+        massive_macro: contextToUse.massive_macro ?? baseContext.massive_macro,
+        massive_macro_summary:
+          contextToUse.massive_macro_summary ??
+          baseContext.massive_macro_summary,
         notes: `rule-based world context (validation fallback) | scout: ${contextToUse.scout_label}`,
       };
       fallback.slot = slot;

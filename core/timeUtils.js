@@ -262,27 +262,45 @@ function loadHolidayList() {
   const holidayPath =
     process.env.VS_MARKET_HOLIDAYS_FILE ||
     path.join(process.cwd(), "data", "market-holidays.json");
+  const generated = generateHolidayCalendar();
   if (!fs.existsSync(holidayPath)) {
-    return generateHolidayCalendar();
+    return generated;
   }
   try {
     const payload = JSON.parse(fs.readFileSync(holidayPath, "utf8"));
-    const holidays = Array.isArray(payload?.holidays) ? payload.holidays : [];
+    const holidays = Array.isArray(payload?.holidays)
+      ? payload.holidays
+      : generated.holidays;
     const earlyClosesRaw = Array.isArray(payload?.early_closes)
       ? payload.early_closes
       : [];
-    const earlyCloses = earlyClosesRaw
+    const earlyCloses = [
+      ...generated.earlyCloses,
+      ...earlyClosesRaw
+        .map((entry) => {
+          if (typeof entry === "string") return { date: entry, close_time: "13:00" };
+          if (entry && typeof entry === "object" && entry.date) {
+            return {
+              date: entry.date,
+              close_time: entry.close_time || "13:00",
+            };
+          }
+          return null;
+        })
+        .filter(Boolean),
+    ]
+      .reverse()
+      .filter(
+        (entry, index, all) =>
+          all.findIndex((candidate) => candidate.date === entry.date) === index
+      )
+      .reverse()
       .map((entry) => {
-        if (typeof entry === "string") return { date: entry, close_time: "13:00" };
-        if (entry && typeof entry === "object" && entry.date) {
-          return {
-            date: entry.date,
-            close_time: entry.close_time || "13:00",
-          };
-        }
-        return null;
-      })
-      .filter(Boolean);
+        return {
+          date: entry.date,
+          close_time: entry.close_time || "13:00",
+        };
+      });
     return {
       holidays: holidays.filter((item) => typeof item === "string"),
       earlyCloses,
@@ -300,6 +318,11 @@ export function isMarketHolidayDate(dateString) {
 export function isMarketHoliday(date = new Date()) {
   const today = getExchangeDateString(date);
   return isMarketHolidayDate(today);
+}
+
+export function isTradingDay(date = new Date()) {
+  const today = getExchangeDateString(date);
+  return !isWeekendDate(today) && !isMarketHolidayDate(today);
 }
 
 export function getEarlyCloseTime(dateString) {
@@ -333,10 +356,28 @@ export function minutesUntilClose(date = new Date()) {
 }
 
 export function isWithinPreCloseWindow(windowMinutes, date = new Date()) {
-  const today = getExchangeDateString(date);
-  if (isWeekendDate(today) || isMarketHolidayDate(today)) return false;
+  if (!isTradingDay(date)) return false;
   const minutes = minutesUntilClose(date);
   return minutes > 0 && minutes <= windowMinutes;
+}
+
+export function minutesSinceClose(date = new Date()) {
+  if (!isTradingDay(date)) return null;
+  const parts = getExchangeParts(date);
+  const { close } = getMarketOpenClose(date);
+  const nowMinutes = (parts.hour || 0) * 60 + (parts.minute || 0);
+  const closeMinutes = close.hour * 60 + close.minute;
+  return nowMinutes - closeMinutes;
+}
+
+export function isWithinPostCloseWindow(
+  startMinutesAfterClose,
+  endMinutesAfterClose,
+  date = new Date()
+) {
+  const minutes = minutesSinceClose(date);
+  if (minutes === null) return false;
+  return minutes >= startMinutesAfterClose && minutes <= endMinutesAfterClose;
 }
 
 export function minutesUntilOpen(date = new Date()) {
@@ -348,10 +389,19 @@ export function minutesUntilOpen(date = new Date()) {
 }
 
 export function isWithinPreOpenWindow(windowMinutes, date = new Date()) {
-  const today = getExchangeDateString(date);
-  if (isWeekendDate(today) || isMarketHolidayDate(today)) return false;
+  if (!isTradingDay(date)) return false;
   const minutes = minutesUntilOpen(date);
   return minutes > 0 && minutes <= windowMinutes;
+}
+
+export function isWithinMinutesBeforeCloseSlots(
+  slotMinutes,
+  date = new Date()
+) {
+  if (!isTradingDay(date)) return false;
+  if (!Array.isArray(slotMinutes) || !slotMinutes.length) return false;
+  const minutes = minutesUntilClose(date);
+  return slotMinutes.includes(minutes);
 }
 
 export function getNextMarketOpen(date = new Date()) {

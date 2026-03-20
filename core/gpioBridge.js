@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import { loadStateSync, saveStateSync } from "./stewardState.js";
+import { loadStateSync, updateStateSync } from "./stewardState.js";
 
 const DEFAULT_GPIO_PATH = path.join(process.cwd(), "data", "gpio-state.json");
 
@@ -48,9 +48,8 @@ export function loadGpioState(filePath = DEFAULT_GPIO_PATH) {
 export function applyGpioStateToControl({ filePath } = {}) {
   const gpioState = loadGpioState(filePath);
   const state = loadStateSync();
-  
+
   const next = {
-    ...state,
     trading_enabled:
       gpioState.trading_enabled !== null
         ? gpioState.trading_enabled
@@ -72,6 +71,12 @@ export function applyGpioStateToControl({ filePath } = {}) {
     return { updated: false, state, gpio: gpioState };
   }
 
-  const saved = saveStateSync(next);
+  const saved = updateStateSync((draft) => {
+    draft.trading_enabled = next.trading_enabled;
+    draft.force_no_trade = next.force_no_trade;
+    draft.control_reason = next.control_reason;
+    draft.control_updated_at = next.control_updated_at;
+    return draft;
+  });
   return { updated: true, state: saved, gpio: gpioState };
 }

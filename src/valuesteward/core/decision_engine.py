@@ -157,6 +157,10 @@ class DecisionEngine:
     def _macro_score(self, world_context: dict | None) -> float | None:
         if not world_context or not isinstance(world_context, dict):
             return None
+        final_regime = world_context.get("final_regime") or {}
+        final_score = final_regime.get("final_score")
+        if isinstance(final_score, (int, float)):
+            return float(final_score)
         macro_view = world_context.get("macro_view") or {}
         score = macro_view.get("macro_score")
         return float(score) if isinstance(score, (int, float)) else None
@@ -164,6 +168,10 @@ class DecisionEngine:
     def _macro_label(self, world_context: dict | None) -> str | None:
         if not world_context or not isinstance(world_context, dict):
             return None
+        final_regime = world_context.get("final_regime") or {}
+        final_label = final_regime.get("final_label")
+        if final_label is not None:
+            return str(final_label)
         macro_view = world_context.get("macro_view") or {}
         label = macro_view.get("macro_label")
         return str(label) if label is not None else None
@@ -298,6 +306,7 @@ class DecisionEngine:
             "gate_signal_present": selected_signal is not None,
             "gate_macro_buy_allowed": None,
             "gate_macro_sell_allowed": None,
+            "gate_scout_binding": False,
             "core_symbol": self.settings.core_symbol,
             "target_risk_exposure_pct": target,
             "rebalance_buffer_pct": buffer,

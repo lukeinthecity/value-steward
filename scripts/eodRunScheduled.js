@@ -1,23 +1,43 @@
-import fs from "fs";
-import path from "path";
 import { spawn } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
 
-import { getExchangeDateString } from "../core/timeUtils.js";
+import {
+  getExchangeDateString,
+  isWithinPostCloseWindow,
+} from "../core/timeUtils.js";
+import { loadStateSync } from "../core/stewardState.js";
 
-const EOD_STATE_PATH = path.join(process.cwd(), "data", "eod-state.json");
-
-function readState() {
-  if (!fs.existsSync(EOD_STATE_PATH)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(EOD_STATE_PATH, "utf8"));
-  } catch {
-    return null;
-  }
+function shouldLogSkip() {
+  return ["1", "true", "yes", "on"].includes(
+    String(process.env.VS_SCHEDULE_LOG_SKIPS ?? "false").toLowerCase()
+  );
 }
 
-function writeState(payload) {
-  fs.mkdirSync(path.dirname(EOD_STATE_PATH), { recursive: true });
-  fs.writeFileSync(EOD_STATE_PATH, JSON.stringify(payload, null, 2));
+export function shouldRunScheduledEod({
+  now = new Date(),
+  force = false,
+  lastEodDate = null,
+  postCloseStart = Number(
+    process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_START ?? 15
+  ),
+  postCloseEnd = Number(process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_END ?? 90),
+} = {}) {
+  const today = getExchangeDateString(now);
+  if (force) {
+    return { run: true, reason: "forced", exchangeDate: today };
+  }
+  if (lastEodDate === today) {
+    return { run: false, reason: "already_sent", exchangeDate: today };
+  }
+  if (!isWithinPostCloseWindow(postCloseStart, postCloseEnd, now)) {
+    return {
+      run: false,
+      reason: "outside_post_close_window",
+      exchangeDate: today,
+    };
+  }
+  return { run: true, reason: "window_open", exchangeDate: today };
 }
 
 function runCommand(label, cmd, args) {
@@ -37,14 +57,19 @@ function runCommand(label, cmd, args) {
   });
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const force = args.includes("--force");
+export async function main(argv = process.argv.slice(2)) {
+  const force = argv.includes("--force");
+  const state = loadStateSync();
+  const decision = shouldRunScheduledEod({
+    now: new Date(),
+    force,
+    lastEodDate: state.last_eod_email_date ?? null,
+  });
 
-  const today = getExchangeDateString(new Date());
-  const existing = readState();
-  if (!force && existing?.last_eod_date === today) {
-    console.log(`[eod:schedule] EOD already ran for ${today}; skipping.`);
+  if (!decision.run) {
+    if (shouldLogSkip()) {
+      console.log(`[eod:schedule] Skipping (${decision.reason}).`);
+    }
     process.exit(0);
   }
 
@@ -52,14 +77,15 @@ async function main() {
   if (!result.ok) {
     process.exit(result.code ?? 1);
   }
-
-  writeState({
-    last_eod_date: today,
-    last_run_at: new Date().toISOString(),
-  });
 }
 
-main().catch((err) => {
-  console.error("[eod:schedule] failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[eod:schedule] failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

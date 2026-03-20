@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any, cast
+from uuid import UUID
 
 import click
 import statistics
@@ -29,6 +30,12 @@ from valuesteward.data.portfolio_repository import PortfolioRepository
 from valuesteward.logging_utils.intent_logger import IntentLogger
 from valuesteward.logging_utils.notifications import NotificationService
 from valuesteward.policy import apply_policy_to_settings, load_policy
+from valuesteward.runtime_integrity import verify_runtime_expectations
+from valuesteward.steward_state import (
+    get_phase1_start_date,
+    is_on_or_after_phase1_start,
+    load_steward_state,
+)
 
 
 @click.group()
@@ -69,6 +76,26 @@ def _iso(value) -> str | None:
     return str(value)
 
 
+def _json_scalar(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, UUID):
+        return str(value)
+    raw_value = getattr(value, "value", None)
+    if isinstance(raw_value, (str, int, float, bool)):
+        return raw_value
+    return str(value)
+
+
+def _write_json_atomic(output_path: Path, payload: dict) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_name(
+        f"{output_path.name}.{os.getpid()}.{int(datetime.now(timezone.utc).timestamp() * 1000)}.tmp"
+    )
+    tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    tmp_path.replace(output_path)
+
+
 def _format_account(account) -> dict:
     return {
         "status": getattr(account, "status", None),
@@ -87,17 +114,17 @@ def _format_account(account) -> dict:
 
 def _format_order(order) -> dict:
     return {
-        "id": getattr(order, "id", None),
-        "symbol": getattr(order, "symbol", None),
-        "side": getattr(order, "side", None),
-        "status": getattr(order, "status", None),
-        "qty": getattr(order, "qty", None),
-        "notional": getattr(order, "notional", None),
-        "type": getattr(order, "type", None),
-        "time_in_force": getattr(order, "time_in_force", None),
+        "id": _json_scalar(getattr(order, "id", None)),
+        "symbol": _json_scalar(getattr(order, "symbol", None)),
+        "side": _json_scalar(getattr(order, "side", None)),
+        "status": _json_scalar(getattr(order, "status", None)),
+        "qty": _json_scalar(getattr(order, "qty", None)),
+        "notional": _json_scalar(getattr(order, "notional", None)),
+        "type": _json_scalar(getattr(order, "type", None)),
+        "time_in_force": _json_scalar(getattr(order, "time_in_force", None)),
         "submitted_at": _iso(getattr(order, "submitted_at", None)),
         "filled_at": _iso(getattr(order, "filled_at", None)),
-        "filled_avg_price": getattr(order, "filled_avg_price", None),
+        "filled_avg_price": _json_scalar(getattr(order, "filled_avg_price", None)),
     }
 
 
@@ -133,6 +160,11 @@ def portfolio(out: str) -> None:
         print(f"[WARN] Failed to fetch open orders: {exc}")
         orders = []
     try:
+        recent_orders = alpaca_client.get_recent_orders(limit=20)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] Failed to fetch recent orders: {exc}")
+        recent_orders = []
+    try:
         clock = alpaca_client.get_clock()
     except Exception as exc:  # noqa: BLE001
         print(f"[WARN] Failed to fetch market clock: {exc}")
@@ -150,12 +182,13 @@ def portfolio(out: str) -> None:
         },
         "positions": [p.model_dump() for p in positions],
         "open_orders": [_format_order(order) for order in orders],
+        "recent_orders": [_format_order(order) for order in recent_orders],
+        "last_order": _format_order(recent_orders[0]) if recent_orders else None,
         "clock": _format_clock(clock) if clock else None,
     }
 
     output_path = Path(out)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _write_json_atomic(output_path, payload)
     print(json.dumps(payload, indent=2))
 
 
@@ -229,6 +262,13 @@ def manual_order(symbol: str, side: str, notional: float) -> None:
 @main.command()
 def tick() -> None:
     """Run one full decision cycle of the Value Steward."""
+
+    integrity = verify_runtime_expectations()
+    print(
+        "[RUNTIME] "
+        f"git_head={integrity.get('git_head') or 'n/a'} "
+        f"dirty={integrity.get('git_dirty') if integrity.get('git_dirty') is not None else 'n/a'}"
+    )
 
     settings = get_settings()
     policy, policy_warnings = load_policy()
@@ -304,6 +344,26 @@ def tick() -> None:
                 if world_context
                 else None
             ),
+            "world_regime_label": (
+                world_context.get("final_regime", {}).get("final_label")
+                if world_context
+                else None
+            ),
+            "world_regime_score": (
+                world_context.get("final_regime", {}).get("final_score")
+                if world_context
+                else None
+            ),
+            "world_regime_divergence": (
+                world_context.get("final_regime", {}).get("divergence")
+                if world_context
+                else None
+            ),
+            "world_regime_fusion_reason": (
+                world_context.get("final_regime", {}).get("fusion_reason")
+                if world_context
+                else None
+            ),
             "world_scout_score": (
                 world_context.get("scout_score") if world_context else None
             ),
@@ -313,6 +373,7 @@ def tick() -> None:
             "world_scout_thesis": (
                 world_context.get("scout_thesis") if world_context else None
             ),
+            "world_scout_role": "advisory",
             "world_context_generated_at": (
                 cast(str, world_context.get("generated_at")).replace("+00:00", "Z")
                 if world_context and world_context.get("generated_at")
@@ -349,6 +410,17 @@ def tick() -> None:
 
     # Then log it
     intent_logger.log_intent(intent)
+    
+    # --- Professional Hardening: State Update ---
+    from valuesteward.steward_state import update_steward_state
+    run_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    update_steward_state(
+        lambda state: {
+            **state,
+            "last_run_at": run_at,
+        }
+    )
+    # --------------------------------------------
     
     # --- Professional Hardening: SQLite Sync ---
     try:
@@ -578,14 +650,31 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
     if not benchmark_symbol:
         benchmark_symbol = (os.getenv("VS_SIGNAL_BENCHMARK", "SPY") or "SPY").strip().upper()
 
+    steward_state = load_steward_state()
+    phase1_start_date = get_phase1_start_date(steward_state)
+
     symbols = {
         symbol
         for intent in intents
         if (symbol := _resolve_symbol(intent)) is not None
+        and is_on_or_after_phase1_start(intent.timestamp, steward_state)
     }
     symbols.add(benchmark_symbol)
 
-    earliest = min(intent.timestamp.date() for intent in intents)
+    filtered_intents = [
+        intent
+        for intent in intents
+        if is_on_or_after_phase1_start(intent.timestamp, steward_state)
+    ]
+    if not filtered_intents:
+        print(
+            "No intents found within the active Phase 1 window."
+            if phase1_start_date
+            else "No intents found."
+        )
+        return
+
+    earliest = min(intent.timestamp.date() for intent in filtered_intents)
     today = datetime.now(timezone.utc).date()
     lookback_days = (today - earliest).days + max_horizon + 5
     lookback_days = max(lookback_days, max_horizon + 10)
@@ -614,7 +703,7 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
                 continue
 
     new_records = []
-    for intent in intents:
+    for intent in filtered_intents:
         if intent.id in existing_ids:
             continue
         symbol = _resolve_symbol(intent)
@@ -721,7 +810,13 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
     all_records = []
     for line in out_path.read_text(encoding="utf-8").splitlines():
         try:
-            all_records.append(json.loads(line))
+            payload = json.loads(line)
+            if not is_on_or_after_phase1_start(
+                payload.get("entry_date") or payload.get("timestamp"),
+                steward_state,
+            ):
+                continue
+            all_records.append(payload)
         except json.JSONDecodeError:
             continue
 
@@ -731,6 +826,7 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
     print("\nScorecard summary")
     summary_payload: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "phase1_start_date": phase1_start_date.isoformat() if phase1_start_date else None,
         "total_records": len(all_records),
         "horizons": {},
     }

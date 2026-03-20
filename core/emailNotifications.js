@@ -106,6 +106,7 @@ export async function sendLessonEmail({
   result,
   training,
   worldContext,
+  promotion = null,
   emailMode = "update",
   lastOrder = null,
   tradingDays = 0,
@@ -176,6 +177,37 @@ export async function sendLessonEmail({
     } tradingEnabled=${result.tradeGate?.tradingEnabled ?? "n/a"}`,
     `- Downtime seconds: ${result.downtimeSeconds ?? "n/a"}`,
     "",
+    "Integrity Check:",
+    `- Pass: ${promotion?.integrity?.pass ?? "n/a"}`,
+    `- Health issues: ${
+      promotion?.health_issue_counts
+        ? `warn=${promotion.health_issue_counts.warn} error=${promotion.health_issue_counts.error}`
+        : "n/a"
+    }`,
+    `- Controls: tradingEnabled=${promotion?.integrity?.controls?.trading_enabled ?? "n/a"} forceNoTrade=${promotion?.integrity?.controls?.force_no_trade ?? "n/a"}`,
+    "",
+    "Cap Compliance:",
+    `- Pass: ${promotion?.cap_compliance?.pass ?? "n/a"}`,
+    `- Max effective cap: ${promotion?.cap_compliance?.max_effective_capital_dollars ?? "n/a"}`,
+    `- Max trade cap: ${promotion?.cap_compliance?.max_trade_notional_dollars ?? "n/a"}`,
+    `- Largest position value: ${promotion?.cap_compliance?.max_position_value ?? "n/a"}`,
+    `- Oversized positions: ${promotion?.cap_compliance?.oversized_count ?? "n/a"}`,
+    "",
+    "Artifact Reconciliation:",
+    `- Pass: ${promotion?.reconciliation?.pass ?? "n/a"}`,
+    `- Position count match: ${promotion?.reconciliation?.position_count_match ?? "n/a"}`,
+    `- Equity match: ${promotion?.reconciliation?.equity_match ?? "n/a"}`,
+    `- Equity difference: ${promotion?.reconciliation?.equity_difference ?? "n/a"}`,
+    "",
+    "Scale Status:",
+    `- Stage: ${promotion?.stage ?? "n/a"}`,
+    `- Verdict: ${promotion?.verdict ?? "n/a"}`,
+    `- Blockers: ${
+      Array.isArray(promotion?.blockers) && promotion.blockers.length
+        ? promotion.blockers.join(", ")
+        : "none"
+    }`,
+    "",
     "World Context:",
   ];
 
@@ -185,12 +217,21 @@ export async function sendLessonEmail({
     );
   } else {
     const macroView = worldContext.macro_view ?? null;
+    const finalRegime = worldContext.final_regime ?? null;
     const macroScore = macroView?.macro_score;
     const macroLabel = macroView?.macro_label;
     const macroLine =
       macroScore !== null && macroScore !== undefined
         ? `${Number(macroScore).toFixed(2)} (${macroLabel ?? "n/a"})`
         : "n/a (no tags yet)";
+    const regimeLine =
+      finalRegime?.final_label
+        ? `${finalRegime.final_label} score=${
+            typeof finalRegime.final_score === "number"
+              ? Number(finalRegime.final_score).toFixed(2)
+              : "n/a"
+          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${finalRegime.fusion_reason ?? "n/a"}`
+        : "n/a";
 
     const tags = worldContext.tags ?? {};
     const macroTags = [
@@ -201,6 +242,7 @@ export async function sendLessonEmail({
 
     bodyLines.push(
       `- Date: ${worldContext.date ?? "n/a"}`,
+      `- Regime: ${regimeLine}`,
       `- Macro: ${macroLine} · ${macroTags}`,
       `- Geopolitics: ${formatTag(tags.geopolitical_tension)}`,
       `- Energy shock risk: ${formatTag(tags.energy_shock_risk)}`,
@@ -211,6 +253,10 @@ export async function sendLessonEmail({
       }`,
       `- Raw items in window: ${worldContext.raw_count ?? "n/a"}`
     );
+
+    if (worldContext.massive_macro_summary) {
+      bodyLines.push(`- Massive macro: ${worldContext.massive_macro_summary}`);
+    }
 
     if (worldContext.summary) {
       bodyLines.push("", "Macro digest summary:", worldContext.summary);
@@ -298,6 +344,14 @@ export async function sendHealthEmail({ health, reason = "scheduled" }) {
     "Tick:",
     `- Last run: ${health.tick?.last_run_at ?? "n/a"}`,
     `- Age (hours): ${formatNumber(health.tick?.age_hours)}`,
+    "",
+    "Artifacts:",
+    `- Latest tick generated at: ${health.artifacts?.latest_tick?.generated_at ?? "n/a"}`,
+    `- Latest tick age (hours): ${formatNumber(health.artifacts?.latest_tick?.age_hours)}`,
+    `- Latest tick exchange date: ${health.artifacts?.latest_tick?.exchange_date ?? "n/a"}`,
+    `- Portfolio updated at: ${health.artifacts?.portfolio?.updated_at ?? "n/a"}`,
+    `- Portfolio age (hours): ${formatNumber(health.artifacts?.portfolio?.age_hours)}`,
+    `- Portfolio exchange date: ${health.artifacts?.portfolio?.exchange_date ?? "n/a"}`,
     "",
     "World context:",
     `- Generated at: ${health.world?.generated_at ?? "n/a"}`,
@@ -457,13 +511,53 @@ export async function sendWeeklyReportEmail({ report }) {
       );
       }
 
-      if (report.horizons.length > 0) {
+  if (report.horizons.length > 0) {
     bodyLines.push("Performance Scorecard:");
     report.horizons.forEach((h) => {
       bodyLines.push(`  - Horizon ${h.name}D: Ret=${h.avgReturn} Excess=${h.avgExcess} HitRate=${h.buyHitRate || 'n/a'}`);
     });
   } else {
     bodyLines.push("Performance Scorecard: No data collected for this period.");
+  }
+
+  if (report.promotion) {
+    bodyLines.push(
+      "",
+      "Promotion Framework:",
+      `  - Stage: ${report.promotion.stage}`,
+      `  - Verdict: ${report.promotion.verdict}`,
+      `  - Operational score: ${report.promotion.operational_score}`,
+      `  - Risk score: ${report.promotion.risk_score}`,
+      `  - Decision score: ${report.promotion.decision_score ?? "n/a"}`,
+      `  - Learning score: ${report.promotion.learning_score}`,
+      `  - 1D excess vs benchmark: ${formatPercent(report.promotion.metrics?.avg_excess_benchmark_1d)}`,
+      `  - 1D excess vs cash: ${formatPercent(report.promotion.metrics?.avg_excess_cash_1d)}`,
+      `  - 1D buy hit rate: ${formatPercent(report.promotion.metrics?.buy_hit_rate_1d)}`,
+      `  - Blockers: ${
+        report.promotion.blockers?.length
+          ? report.promotion.blockers.join(", ")
+          : "none"
+      }`,
+      `  - Current blockers: ${
+        report.promotion.current_blockers?.length
+          ? report.promotion.current_blockers.join(", ")
+          : "none"
+      }`
+    );
+  }
+
+  if (report.currentCycle) {
+    bodyLines.push(
+      "",
+      "Current Cycle Freshness:",
+      `  - Exchange date: ${report.currentCycle.exchangeDate ?? "n/a"}`,
+      `  - Integrity pass: ${report.currentCycle.integrityPass ?? "n/a"}`,
+      `  - Blockers: ${
+        report.currentCycle.blockers?.length
+          ? report.currentCycle.blockers.join(", ")
+          : "none"
+      }`
+    );
   }
 
   bodyLines.push(

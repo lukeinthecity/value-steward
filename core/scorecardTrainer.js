@@ -1,6 +1,10 @@
 import fs from "fs";
 import path from "path";
+
+import { filterPhase1Records, getPhase1StartDate } from "./phase1Window.js";
+import { loadStateSync } from "./stewardState.js";
 import { getExchangeDateString } from "./timeUtils.js";
+import { isTrainingModeAllowed } from "./trainingMode.js";
 
 const DEFAULT_SCORECARD_PATH = path.join(
   process.cwd(),
@@ -11,7 +15,7 @@ const DEFAULT_SCORECARD_PATH = path.join(
 function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
   if (!fs.existsSync(scorecardPath)) return [];
   const raw = fs.readFileSync(scorecardPath, "utf8");
-  return raw
+  const records = raw
     .split("\n")
     .filter(Boolean)
     .map((line) => {
@@ -22,6 +26,7 @@ function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
       }
     })
     .filter(Boolean);
+  return filterPhase1Records(records, { state: loadStateSync() });
 }
 
 function parseNumber(value, fallback) {
@@ -119,6 +124,7 @@ export function trainPolicyWithScorecard({
   maxRisk = 0.33,
   minBuffer = 0.01,
   maxBuffer = 0.05,
+  force = false,
 } = {}) {
   if (!policy) {
     return {
@@ -129,10 +135,10 @@ export function trainPolicyWithScorecard({
     };
   }
 
-  if (policy.mode !== "read-only") {
+  if (!isTrainingModeAllowed(policy.mode)) {
     return {
       updated: false,
-      reason: "non_read_only_mode",
+      reason: "non_trainable_mode",
       fallback: false,
       source: "scorecard",
     };
@@ -140,9 +146,10 @@ export function trainPolicyWithScorecard({
 
   const records = loadScorecardRecords(scorecardPath);
   if (!records.length) {
+    const phase1StartDate = getPhase1StartDate();
     return {
       updated: false,
-      reason: "no_scorecard",
+      reason: phase1StartDate ? "no_phase1_scorecard" : "no_scorecard",
       fallback: true,
       source: "scorecard",
     };
@@ -150,7 +157,7 @@ export function trainPolicyWithScorecard({
 
   const lastScorecardAt = parseDateString(policy.lastScorecardAt);
   const today = getExchangeDateString();
-  if (lastScorecardAt) {
+  if (lastScorecardAt && !force) {
     const minDaysBetween = Math.max(
       0,
       Math.floor(

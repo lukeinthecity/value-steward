@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import { classifyMacroFromTags } from "./contextUtils.js";
+import { classifyMacroFromTags, fuseMacroRegime } from "./contextUtils.js";
 
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
@@ -29,7 +29,14 @@ export async function loadLatestWorldContext() {
     const parsed = parseLatest(raw);
     if (!parsed) return null;
     const macroView = classifyMacroFromTags(parsed.tags ?? null);
-    return { ...parsed, macro_view: macroView };
+    const finalRegime =
+      parsed.final_regime ??
+      fuseMacroRegime({
+        macroView,
+        scoutLabel: parsed.scout_label,
+        scoutScore: parsed.scout_score,
+      });
+    return { ...parsed, macro_view: macroView, final_regime: finalRegime };
   } catch (err) {
     console.error(
       "[world] loadLatestWorldContext failed:",

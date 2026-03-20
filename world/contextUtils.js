@@ -227,6 +227,105 @@ export function classifyMacroFromTags(tags) {
   };
 }
 
+const REGIME_SEVERITY = {
+  calm: 0,
+  watchful: 1,
+  stressed: 2,
+  "crisis-prone": 3,
+};
+
+function normalizeRegimeLabel(label) {
+  const normalized = String(label ?? "").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(REGIME_SEVERITY, normalized)
+    ? normalized
+    : null;
+}
+
+export function fuseMacroRegime({ macroView, scoutLabel, scoutScore }) {
+  const guardianLabel = normalizeRegimeLabel(macroView?.macro_label);
+  const scoutNormLabel = normalizeRegimeLabel(scoutLabel);
+  const guardianScore =
+    typeof macroView?.macro_score === "number" ? macroView.macro_score : null;
+  const scoutNormScore =
+    typeof scoutScore === "number" ? scoutScore : null;
+
+  if (!guardianLabel && !scoutNormLabel) {
+    return {
+      final_label: "n/a",
+      final_score: null,
+      source: "unavailable",
+      divergence: false,
+      fusion_reason: "no_valid_inputs",
+      guardian_label: macroView?.macro_label ?? null,
+      guardian_score: guardianScore,
+      scout_label: scoutNormLabel,
+      scout_score: scoutNormScore,
+    };
+  }
+
+  const guardianSeverity =
+    guardianLabel !== null ? REGIME_SEVERITY[guardianLabel] : -1;
+  const scoutSeverity =
+    scoutNormLabel !== null ? REGIME_SEVERITY[scoutNormLabel] : -1;
+
+  let finalLabel = guardianLabel ?? scoutNormLabel;
+  let finalScore = guardianScore ?? scoutNormScore ?? null;
+  let source = guardianLabel ? "guardian" : "scout";
+  let fusionReason = guardianLabel ? "guardian_only" : "scout_only";
+
+  if (guardianLabel && scoutNormLabel) {
+    const divergence = guardianLabel !== scoutNormLabel;
+    if (scoutSeverity > guardianSeverity) {
+      finalLabel = scoutNormLabel;
+      finalScore = scoutNormScore ?? guardianScore ?? null;
+      source = "scout_more_cautious";
+      fusionReason = divergence
+        ? "scout_more_cautious"
+        : "aligned";
+    } else if (guardianSeverity > scoutSeverity) {
+      finalLabel = guardianLabel;
+      finalScore = guardianScore ?? scoutNormScore ?? null;
+      source = "guardian_more_cautious";
+      fusionReason = divergence
+        ? "guardian_more_cautious"
+        : "aligned";
+    } else {
+      finalLabel = guardianLabel;
+      finalScore = Math.max(
+        guardianScore ?? Number.NEGATIVE_INFINITY,
+        scoutNormScore ?? Number.NEGATIVE_INFINITY,
+      );
+      finalScore = Number.isFinite(finalScore) ? finalScore : null;
+      source = "aligned";
+      fusionReason = "aligned";
+    }
+
+    return {
+      final_label: finalLabel,
+      final_score: finalScore,
+      source,
+      divergence,
+      fusion_reason: fusionReason,
+      guardian_label: guardianLabel,
+      guardian_score: guardianScore,
+      scout_label: scoutNormLabel,
+      scout_score: scoutNormScore,
+    };
+  }
+
+  return {
+    final_label: finalLabel,
+    final_score: finalScore,
+    source,
+    divergence: false,
+    fusion_reason: fusionReason,
+    guardian_label: guardianLabel,
+    guardian_score: guardianScore,
+    scout_label: scoutNormLabel,
+    scout_score: scoutNormScore,
+  };
+}
+
 /**
  * Human-readable one-line summary for logs / inspector.
  */

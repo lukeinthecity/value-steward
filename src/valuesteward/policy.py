@@ -30,6 +30,9 @@ class PolicySnapshot(BaseModel):
     target_risk_exposure_pct_medium: float | None = None
     target_risk_exposure_pct_high: float | None = None
     rebalance_buffer_pct: float | None = None
+    max_effective_capital_dollars: float | None = None
+    max_trade_notional_dollars: float | None = None
+    min_trade_notional_dollars: float | None = None
     trade_gate_overrides: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
@@ -53,6 +56,17 @@ def _validate_percent(
         return
     if not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
         warnings.append(f"Invalid {key}={value}; expected 0..1.")
+        policy[key] = None
+
+
+def _validate_positive_number(
+    policy: dict[str, Any], key: str, warnings: list[str]
+) -> None:
+    value = policy.get(key)
+    if value is None:
+        return
+    if not isinstance(value, (int, float)) or float(value) <= 0:
+        warnings.append(f"Invalid {key}={value}; expected > 0.")
         policy[key] = None
 
 
@@ -81,6 +95,9 @@ def validate_policy(raw_policy: Any) -> tuple[dict[str, Any], list[str]]:
     _validate_percent(policy, "target_risk_exposure_pct_medium", warnings)
     _validate_percent(policy, "target_risk_exposure_pct_high", warnings)
     _validate_percent(policy, "rebalance_buffer_pct", warnings)
+    _validate_positive_number(policy, "max_effective_capital_dollars", warnings)
+    _validate_positive_number(policy, "max_trade_notional_dollars", warnings)
+    _validate_positive_number(policy, "min_trade_notional_dollars", warnings)
 
     trade_gate = policy.get("trade_gate_overrides")
     if trade_gate is None:
@@ -128,6 +145,18 @@ def apply_policy_to_settings(
         )
     if isinstance(policy.get("rebalance_buffer_pct"), (int, float)):
         updates["rebalance_buffer_pct"] = float(policy["rebalance_buffer_pct"])
+    if isinstance(policy.get("max_effective_capital_dollars"), (int, float)):
+        updates["max_effective_capital_dollars"] = float(
+            policy["max_effective_capital_dollars"]
+        )
+    if isinstance(policy.get("max_trade_notional_dollars"), (int, float)):
+        updates["max_trade_notional_dollars"] = float(
+            policy["max_trade_notional_dollars"]
+        )
+    if isinstance(policy.get("min_trade_notional_dollars"), (int, float)):
+        updates["min_trade_notional_dollars"] = float(
+            policy["min_trade_notional_dollars"]
+        )
 
     mapped_mode = risk_level_to_mode(policy.get("risk_level"))
     if mapped_mode:

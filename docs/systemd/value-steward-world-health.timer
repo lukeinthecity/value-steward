@@ -1,0 +1,12 @@
+[Unit]
+Description=Value Steward World Health Timer
+
+[Timer]
+OnCalendar=*-*-* 06,18:05:00
+Timezone=America/New_York
+Persistent=true
+AccuracySec=1min
+Unit=value-steward-world-health.service
+
+[Install]
+WantedBy=timers.target

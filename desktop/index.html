@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Value Steward Console</title>
     <link rel="stylesheet" href="styles.css" />
@@ -33,7 +34,7 @@
       <main class="grid">
         <!-- 1. Macro Intelligence -->
         <section class="panel medium">
-          <h2>Macro Intelligence</h2>
+          <h2>Intelligence Panel</h2>
           <div class="macro-meter-group">
             <div class="meter-col" id="guardian-meter">
               <div class="label-mini">Guardian (Rules)</div>
@@ -96,18 +97,24 @@
           </div>
         </section>
 
-        <!-- 6. Configuration -->
+
         <section class="panel medium">
-          <h2>System Configuration</h2>
+          <h2>Credential Vault</h2>
+          <p id="secret-storage-hint" class="label-mini">Secure desktop storage status loading...</p>
           <div class="settings-form">
             <div class="label-mini">Alpaca API Key ID</div>
-            <input type="password" id="conf-alpaca-id" placeholder="Enter Alpaca ID..." style="width: 100%; margin-bottom: 0.5rem;">
+            <input type="password" id="conf-alpaca-id" placeholder="Paste new key id" autocomplete="off" />
             <div class="label-mini">Alpaca Secret Key</div>
-            <input type="password" id="conf-alpaca-secret" placeholder="Enter Alpaca Secret..." style="width: 100%; margin-bottom: 0.5rem;">
+            <input type="password" id="conf-alpaca-secret" placeholder="Paste new secret key" autocomplete="off" />
             <div class="label-mini">Gemini API Key</div>
-            <input type="password" id="conf-gemini-key" placeholder="Enter Gemini Key..." style="width: 100%; margin-bottom: 1rem;">
-            <button id="save-config" class="primary" style="width: 100%;">Save & Hot-Reload</button>
+            <input type="password" id="conf-gemini-key" placeholder="Paste new Gemini key" autocomplete="off" />
+            <div class="label-mini">SMTP App Password</div>
+            <input type="password" id="conf-smtp-pass" placeholder="Paste new SMTP app password" autocomplete="off" />
+            <div class="label-mini">Massive API Key</div>
+            <input type="password" id="conf-massive-key" placeholder="Paste new Massive key" autocomplete="off" />
+            <button id="save-secrets" class="primary" type="button">Save Securely</button>
           </div>
+          <div id="secret-status" class="secret-status-list"></div>
         </section>
 
         <section class="panel medium">
