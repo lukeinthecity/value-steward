@@ -1,22 +1,24 @@
 # Value Steward Institutional Cron (LOCAL EDT TIMING)
 # Aligned to System Clock: EDT (UTC-4)
 
-# world:run - every 30 mins from 9:00 AM to 3:00 PM ET
+# world:run - Lead run at 8:30 AM ET and then every 30 mins during market hours
+30 08 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
 */30 09-14 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
 
 # world:run - Lead run at 3:25 PM ET
 25 15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
 
+# portfolio:refresh - Morning sync at 9:00 AM ET (Ensures fresh data for Monday open)
+0 09 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run portfolio:refresh >> /home/lukes/value-steward/logs/cron.log 2>&1
+
 # world:health scheduler - refresh feed health/context twice daily, including weekends/holidays.
 5 6,18 * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:health:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 
-# local:tick scheduler - runs every 5 minutes from 12:30 PM ET onward;
-# wrapper self-gates to the execution slots before close (handles early closes).
+# local:tick scheduler - runs every 5 minutes from 12:30 PM ET onward
 30-55/5 12 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 */5 13-15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 
-# eod:run scheduler - runs every 5 minutes through the post-close window;
-# wrapper self-gates to 15-90 minutes after close (handles early closes).
+# eod:run scheduler - runs every 5 minutes through the post-close window
 15-59/5 13 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
 */5 14-16 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
 0-30/5 17 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
