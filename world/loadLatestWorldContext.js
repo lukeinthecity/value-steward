@@ -9,7 +9,14 @@ function parseLatest(raw) {
   const entries = raw
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 
   if (!entries.length) return null;
 

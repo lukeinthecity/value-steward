@@ -4,6 +4,7 @@ import path from "path";
 import { filterPhase1Records } from "./phase1Window.js";
 import { trainPolicyWithMetrics } from "./deepTrainer.js";
 import {
+  appendJsonlLineSync,
   loadLatestTrainingEntry,
   writeJsonAtomic,
 } from "./runtimeArtifacts.js";
@@ -44,8 +45,7 @@ function loadHistory() {
 }
 
 function appendTrainingLog(entry) {
-  fs.mkdirSync(path.dirname(TRAINING_LOG_PATH), { recursive: true });
-  fs.appendFileSync(TRAINING_LOG_PATH, `${JSON.stringify(entry)}\n`);
+  appendJsonlLineSync(TRAINING_LOG_PATH, entry);
 }
 
 function parseNumber(value, fallback) {

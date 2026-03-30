@@ -15,19 +15,10 @@ const SECRET_KEYS = [
 ];
 
 const SCRIPT_MAP = {
-  "train:policy": ["npm", ["run", "train:policy"]],
-  "email:test": ["npm", ["run", "email:test"]],
   "local:tick": ["npm", ["run", "local:tick"]],
-  "portfolio:refresh": ["npm", ["run", "portfolio:refresh"]],
   "report:weekly": ["npm", ["run", "report:weekly"]],
-  "world:fetch": ["npm", ["run", "world:fetch"]],
-  "world:hydrate": ["npm", ["run", "world:hydrate"]],
   "world:build": ["npm", ["run", "world:build"]],
   "world:run": ["npm", ["run", "world:run"]],
-  "world:inspect": ["npm", ["run", "world:inspect"]],
-  "world:health": ["npm", ["run", "world:health"]],
-  "world:health:refresh": ["npm", ["run", "world:health:refresh"]],
-  desktop: ["npm", ["run", "desktop"]],
 };
 
 function resolveWithinRoot(relPath) {
@@ -237,12 +228,14 @@ function loadDashboardData() {
     history: safeReadJsonlLatest("data/history.jsonl"),
     portfolio: safeReadJson("data/portfolio-live.json"),
     latestTick: safeReadJson("data/latest-tick.json"),
-    tickLog: safeReadText("logs/tick.log", 50 * 1024),
     secretStatus: getSecretStatuses(),
   };
 }
 
 function runScript(name) {
+  if (typeof name !== "string") {
+    return Promise.resolve({ ok: false, error: "script_not_allowed" });
+  }
   const entry = SCRIPT_MAP[name];
   if (!entry) {
     return Promise.resolve({ ok: false, error: "script_not_allowed" });
@@ -253,25 +246,18 @@ function runScript(name) {
       cwd: repoRoot,
       env: buildRuntimeEnv(),
       shell: false,
+      stdio: "ignore",
     });
-    let output = "";
-    const maxBytes = 64 * 1024;
-
-    const append = (chunk) => {
-      const text = chunk.toString();
-      output += text;
-      if (output.length > maxBytes) {
-        output = output.slice(output.length - maxBytes);
-      }
-    };
-
-    child.stdout.on("data", append);
-    child.stderr.on("data", append);
     child.on("error", (err) => {
-      output += `\n${err?.message ?? err}`;
+      resolve({
+        ok: false,
+        error: err?.message ?? String(err),
+        code: 1,
+        signal: null,
+      });
     });
     child.on("close", (code, signal) => {
-      resolve({ ok: code === 0, code, signal, output });
+      resolve({ ok: code === 0, code, signal });
     });
   });
 }

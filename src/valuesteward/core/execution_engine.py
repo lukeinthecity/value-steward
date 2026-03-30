@@ -239,6 +239,7 @@ class ExecutionEngine:
             return
 
         open_orders = self.alpaca_client.get_open_orders()
+        deployed_notional = self._current_deployed_notional(snapshot)
 
         # --- MULTI ACTION BLOCK ---
         if intent.actions:
@@ -253,6 +254,18 @@ class ExecutionEngine:
                 # ------------------------------------
 
                 side = action.side.lower()
+                if side == "buy":
+                    target_notional = self._clamp_to_sandbox_headroom(
+                        target_notional,
+                        deployed_notional,
+                    )
+                    if target_notional < self.settings.min_trade_notional_dollars:
+                        logger.info(
+                            "[EXEC] MULTI buy blocked by sandbox cap. "
+                            f"deployed=${deployed_notional:.2f} "
+                            f"max=${self.settings.max_sandbox_deployed_dollars:.2f}"
+                        )
+                        continue
                 
                 # Check for partial fills
                 remaining_notional = target_notional
@@ -287,10 +300,17 @@ class ExecutionEngine:
                 price = self.alpaca_client.submit_steward_order(
                     symbol=symbol,
                     side=cast(Literal["buy", "sell"], side),
-                    notional=round(remaining_notional, 2)
+                    notional=round(remaining_notional, 2),
                 )
                 if price:
                     action.reason = f"{action.reason or ''} mid_price={price:.2f}".strip()
+                if side == "buy":
+                    deployed_notional += remaining_notional
+                elif side == "sell":
+                    deployed_notional = max(
+                        deployed_notional - remaining_notional,
+                        0.0,
+                    )
                 executed += 1
             
             if executed:
@@ -320,6 +340,18 @@ class ExecutionEngine:
                 if pos:
                     target_notional = min(target_notional, pos.market_value)
                 else:
+                    return
+            else:
+                target_notional = self._clamp_to_sandbox_headroom(
+                    target_notional,
+                    deployed_notional,
+                )
+                if target_notional < self.settings.min_trade_notional_dollars:
+                    logger.info(
+                        "[EXEC] Buy blocked by sandbox cap. "
+                        f"deployed=${deployed_notional:.2f} "
+                        f"max=${self.settings.max_sandbox_deployed_dollars:.2f}"
+                    )
                     return
 
             remaining_notional = target_notional
@@ -360,3 +392,20 @@ class ExecutionEngine:
             )
             intent.expected_price = price
             self._record_execution(intent.action_type, target_symbol)
+
+    def _current_deployed_notional(self, snapshot: PortfolioSnapshot) -> float:
+        return sum(
+            max(float(position.market_value), 0.0)
+            for position in snapshot.positions
+        )
+
+    def _clamp_to_sandbox_headroom(
+        self,
+        target_notional: float,
+        deployed_notional: float,
+    ) -> float:
+        remaining_headroom = max(
+            self.settings.max_sandbox_deployed_dollars - deployed_notional,
+            0.0,
+        )
+        return min(target_notional, remaining_headroom)
