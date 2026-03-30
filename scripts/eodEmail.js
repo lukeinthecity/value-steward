@@ -3,7 +3,9 @@ import fs from "fs";
 import path from "path";
 
 import {
+  assertMatchingCycleIds,
   extractLatestOrderFromPortfolioSnapshot,
+  getArtifactCycleId,
   loadLatestTickSnapshot,
   loadLatestTrainingEntry,
   loadPolicySnapshot,
@@ -14,6 +16,10 @@ import { loadStateSync } from "../core/stewardState.js";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { sendLessonEmail } from "../core/emailNotifications.js";
 import { markEodEmailSent } from "../core/stewardState.js";
+import {
+  loadIntentLog,
+  summarizeDecisionsForExchangeDate,
+} from "../core/decisionReview.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import { startSpinner } from "../world/spinner.js";
 import { buildDailyPromotionSnapshot } from "../core/promotionMetrics.js";
@@ -62,6 +68,22 @@ function resolveReportExchangeDate(tickSnapshot, worldContext) {
     worldContext?.date ??
     getExchangeDateString(new Date())
   );
+}
+
+function requireSameCycleArtifacts({ tickSnapshot, portfolio, worldContext }) {
+  const cycleCheck = assertMatchingCycleIds([
+    { label: "tick", cycleId: getArtifactCycleId(tickSnapshot) },
+    { label: "portfolio", cycleId: getArtifactCycleId(portfolio) },
+    { label: "world", cycleId: getArtifactCycleId(worldContext) },
+  ]);
+  if (!cycleCheck.ok) {
+    const mismatchSummary = cycleCheck.mismatches
+      .map((entry) => `${entry.label}=${entry.cycleId}`)
+      .join(", ");
+    throw new Error(
+      `Artifact cycle mismatch for EOD. expected=${cycleCheck.expectedCycleId} mismatches=${mismatchSummary}`
+    );
+  }
 }
 
 function parseNumber(value) {
@@ -157,16 +179,29 @@ async function main() {
       : null;
   const worldContext = await loadLatestWorldContext();
   requireCurrentExchangeDate("World context", worldContext?.generated_at);
+  requireSameCycleArtifacts({ tickSnapshot, portfolio, worldContext });
   const reportExchangeDate = resolveReportExchangeDate(tickSnapshot, worldContext);
   const tradingDays = getTradingDays(state);
   
   stopSpinner.update(1);
 
   const result = buildSnapshotResult({ portfolio, tickSnapshot, policy });
-  const lastOrder = extractLatestOrderFromPortfolioSnapshot(portfolio, {
-    exchangeDate: reportExchangeDate,
-    requireExecuted: true,
-  });
+  const lastOrder =
+    extractLatestOrderFromPortfolioSnapshot(portfolio, {
+      exchangeDate: reportExchangeDate,
+      requireExecuted: true,
+    }) ??
+    extractLatestOrderFromPortfolioSnapshot(portfolio, {
+      exchangeDate: reportExchangeDate,
+      requireExecuted: false,
+    });
+  const decisionReview = summarizeDecisionsForExchangeDate(
+    loadIntentLog(),
+    reportExchangeDate,
+    {
+      portfolio,
+    }
+  );
   const training = buildTrainingSummary(trainingEntry, policy);
   const promotion = await buildDailyPromotionSnapshot({
     state,
@@ -187,6 +222,7 @@ async function main() {
     promotion,
     emailMode: "summary",
     lastOrder,
+    decisionReview,
     tradingDays
   });
   await markEodEmailSent();

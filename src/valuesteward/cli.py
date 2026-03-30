@@ -170,7 +170,9 @@ def portfolio(out: str) -> None:
         print(f"[WARN] Failed to fetch market clock: {exc}")
         clock = None
 
+    cycle_id = os.getenv("VS_ARTIFACT_CYCLE_ID") or None
     payload = {
+        "cycle_id": cycle_id,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "account": _format_account(account),
         "snapshot": {
@@ -693,58 +695,60 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
 
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    existing_ids = set()
+    existing_records: dict[str, dict[str, Any]] = {}
     if out_path.exists():
         for line in out_path.read_text(encoding="utf-8").splitlines():
             try:
                 payload = json.loads(line)
-                existing_ids.add(payload.get("intent_id"))
             except json.JSONDecodeError:
                 continue
+            intent_id = payload.get("intent_id")
+            if isinstance(intent_id, str) and intent_id:
+                existing_records[intent_id] = payload
 
-    new_records = []
+    def compute_returns(
+        symbol_name: str | None,
+        entry_date: date,
+    ) -> tuple[date | None, float | None, dict[str, float | None]]:
+        if not symbol_name:
+            return None, None, {}
+        series = series_by_symbol.get(symbol_name)
+        if not series:
+            return None, None, {}
+        dates, closes = series
+        if not dates:
+            return None, None, {}
+        idx = None
+        for i, dt in enumerate(dates):
+            if dt >= entry_date:
+                idx = i
+                break
+        if idx is None:
+            return None, None, {}
+        entry_dt = dates[idx]
+        entry_close = closes.get(entry_dt)
+        returns: dict[str, float | None] = {}
+        for horizon in horizon_list:
+            target_idx = idx + horizon
+            if target_idx >= len(dates):
+                returns[str(horizon)] = None
+                continue
+            target_dt = dates[target_idx]
+            target_close = closes.get(target_dt)
+            if entry_close is None or target_close is None:
+                returns[str(horizon)] = None
+                continue
+            returns[str(horizon)] = (target_close / entry_close) - 1.0
+        return entry_dt, entry_close, returns
+
+    refreshed_records: dict[str, dict[str, Any]] = {}
+    added_count = 0
+    updated_count = 0
     for intent in filtered_intents:
-        if intent.id in existing_ids:
-            continue
         symbol = _resolve_symbol(intent)
         entry_date = intent.timestamp.date()
-
-        def compute_returns(
-            symbol_name: str | None,
-        ) -> tuple[date | None, float | None, dict[str, float | None]]:
-            if not symbol_name:
-                return None, None, {}
-            series = series_by_symbol.get(symbol_name)
-            if not series:
-                return None, None, {}
-            dates, closes = series
-            if not dates:
-                return None, None, {}
-            idx = None
-            for i, dt in enumerate(dates):
-                if dt >= entry_date:
-                    idx = i
-                    break
-            if idx is None:
-                return None, None, {}
-            entry_dt = dates[idx]
-            entry_close = closes.get(entry_dt)
-            returns: dict = {}
-            for horizon in horizon_list:
-                target_idx = idx + horizon
-                if target_idx >= len(dates):
-                    returns[str(horizon)] = None
-                    continue
-                target_dt = dates[target_idx]
-                target_close = closes.get(target_dt)
-                if entry_close is None or target_close is None:
-                    returns[str(horizon)] = None
-                    continue
-                returns[str(horizon)] = (target_close / entry_close) - 1.0
-            return entry_dt, entry_close, returns
-
-        entry_dt, entry_close, symbol_returns = compute_returns(symbol)
-        _, _, benchmark_returns = compute_returns(benchmark_symbol)
+        entry_dt, entry_close, symbol_returns = compute_returns(symbol, entry_date)
+        _, _, benchmark_returns = compute_returns(benchmark_symbol, entry_date)
 
         horizons_payload = {}
         for horizon in horizon_list:
@@ -797,15 +801,32 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
             "world_macro_score": intent.world_macro_score,
             "horizons": horizons_payload,
         }
-        new_records.append(record)
+        previous = existing_records.get(intent.id)
+        if previous is None:
+            added_count += 1
+        elif previous != record:
+            updated_count += 1
+        refreshed_records[intent.id] = record
 
-    if new_records:
-        with out_path.open("a", encoding="utf-8") as handle:
-            for record in new_records:
-                handle.write(json.dumps(record) + "\n")
-        print(f"Scorecard entries added: {len(new_records)}")
+    merged_records = []
+    preserved_ids = set(refreshed_records)
+    for payload in existing_records.values():
+        intent_id = payload.get("intent_id")
+        if intent_id not in preserved_ids:
+            merged_records.append(payload)
+    merged_records.extend(refreshed_records.values())
+    merged_records.sort(key=lambda payload: payload.get("timestamp") or "")
+
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        for record in merged_records:
+            handle.write(json.dumps(record) + "\n")
+    tmp_path.replace(out_path)
+
+    if added_count or updated_count:
+        print(f"Scorecard entries added: {added_count}; updated: {updated_count}")
     else:
-        print("No new intents to score.")
+        print("No scorecard changes.")
 
     all_records = []
     for line in out_path.read_text(encoding="utf-8").splitlines():

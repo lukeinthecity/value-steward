@@ -10,8 +10,11 @@ import {
 import { loadStateSync } from "./stewardState.js";
 import {
   getExchangeDateString,
+  getExchangeParts,
+  getMarketOpenClose,
   getMarketTimeZone,
   isMarketOpenNow,
+  isTradingDay,
 } from "./timeUtils.js";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -84,6 +87,36 @@ function artifactTimestamp(...values) {
   return candidate ?? null;
 }
 
+
+function getPreviousTradingDateString(date = new Date()) {
+  const cursor = new Date(date);
+  cursor.setUTCDate(cursor.getUTCDate() - 1);
+  while (!isTradingDay(cursor)) {
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return getExchangeDateString(cursor);
+}
+
+function getExpectedTickExchangeDate(now = new Date()) {
+  const exchangeDate = getExchangeDateString(now);
+  if (!isTradingDay(now)) {
+    return exchangeDate;
+  }
+
+  const parts = getExchangeParts(now);
+  const { close } = getMarketOpenClose(now);
+  const nowMinutes = (parts.hour || 0) * 60 + (parts.minute || 0);
+  const closeMinutes = close.hour * 60 + close.minute;
+  const executionStartMinutes =
+    closeMinutes -
+    Number(process.env.VS_EXECUTION_WINDOW_START_MINUTES_BEFORE_CLOSE ?? 30);
+
+  if (nowMinutes < executionStartMinutes) {
+    return getPreviousTradingDateString(now);
+  }
+  return exchangeDate;
+}
+
 function parseMilestones(value) {
   const raw = (value || "").split(",").map((item) => Number(item.trim()));
   const cleaned = raw.filter((item) => Number.isFinite(item) && item > 0);
@@ -116,6 +149,11 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolio = loadPortfolioLiveSnapshot();
 
   const tickAgeHours = hoursSince(state.last_run_at);
+  const tickRunExchangeDate = state.last_run_at
+    ? getExchangeDateString(new Date(state.last_run_at))
+    : null;
+  const expectedTickExchangeDate = getExpectedTickExchangeDate(now);
+  const tickShouldBeCurrent = expectedTickExchangeDate === exchangeDate;
   const worldAgeHours = context?.generated_at
     ? hoursSince(context.generated_at)
     : null;
@@ -161,11 +199,19 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const worldHealthMax = Number(process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24);
   const scorecardMaxDays = Number(process.env.VS_HEALTH_SCORECARD_MAX_DAYS ?? 7);
 
-  if (tickAgeHours === null || tickAgeHours > tickMaxHours) {
+  if (tickShouldBeCurrent) {
+    if (tickAgeHours === null || tickAgeHours > tickMaxHours) {
+      issues.push({
+        level: "warn",
+        code: "tick_stale",
+        message: `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+      });
+    }
+  } else if (tickRunExchangeDate !== expectedTickExchangeDate) {
     issues.push({
       level: "warn",
       code: "tick_stale",
-      message: `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+      message: `Latest tick date ${tickRunExchangeDate ?? "n/a"} does not match expected pre-close baseline ${expectedTickExchangeDate}.`,
     });
   }
 
@@ -173,18 +219,26 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolioLimit = marketOpen ? portfolioMaxOpen : portfolioMaxClosed;
   const worldLimit = marketOpen ? worldMaxOpen : worldMaxClosed;
 
-  if (
-    tickArtifactAgeHours === null ||
-    tickArtifactAgeHours > tickMaxHours ||
-    (tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate)
-  ) {
+  if (tickShouldBeCurrent) {
+    if (
+      tickArtifactAgeHours === null ||
+      tickArtifactAgeHours > tickMaxHours ||
+      (tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate)
+    ) {
+      issues.push({
+        level: "warn",
+        code: "tick_artifact_stale",
+        message:
+          tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate
+            ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match ${exchangeDate}.`
+            : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+      });
+    }
+  } else if (tickArtifactExchangeDate !== expectedTickExchangeDate) {
     issues.push({
       level: "warn",
       code: "tick_artifact_stale",
-      message:
-        tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate
-          ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match ${exchangeDate}.`
-          : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+      message: `Latest tick artifact exchange date ${tickArtifactExchangeDate ?? "n/a"} does not match expected pre-close baseline ${expectedTickExchangeDate}.`,
     });
   }
 
@@ -297,8 +351,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   };
 }
 
-export function buildPhase1Status() {
-  const state = loadStateSync();
+export function buildPhase1Status({ agentState } = {}) {
+  const state = agentState ?? loadStateSync();
   const phase1StartDate = getPhase1StartDate({ state });
   const scorecardRecords = filterPhase1Records(readJsonl(SCORECARD_PATH), {
     state,

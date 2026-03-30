@@ -53,6 +53,18 @@ export function writeJsonAtomic(filePath, payload) {
   return payload;
 }
 
+export function appendJsonlLineSync(filePath, entry) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const fd = fs.openSync(filePath, "a");
+  try {
+    const line = `${JSON.stringify(entry)}\n`;
+    fs.writeSync(fd, line, null, "utf8");
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export function loadPolicySnapshot() {
   return readJson(getPolicyPath());
 }
@@ -71,6 +83,42 @@ export function loadLatestTrainingEntry() {
 
 export function loadPortfolioLiveSnapshot() {
   return readJson(getPortfolioLivePath());
+}
+
+export function buildArtifactCycleId({
+  exchangeDate,
+  slot = null,
+  sourceTimestamp = null,
+} = {}) {
+  if (!exchangeDate || !sourceTimestamp) return null;
+  const normalizedSlot = slot ? String(slot).trim() : "unspecified";
+  return `${exchangeDate}:${normalizedSlot}:${sourceTimestamp}`;
+}
+
+export function getArtifactCycleId(artifact) {
+  return artifact?.cycle_id ?? artifact?.result?.cycle_id ?? null;
+}
+
+export function assertMatchingCycleIds(pairs = []) {
+  const present = pairs.filter((pair) => pair?.cycleId);
+  if (present.length <= 1) {
+    return {
+      ok: true,
+      expectedCycleId: present[0]?.cycleId ?? null,
+      mismatches: [],
+    };
+  }
+
+  const expectedCycleId = present[0].cycleId;
+  const mismatches = present.filter((pair) => pair.cycleId !== expectedCycleId);
+  return {
+    ok: mismatches.length === 0,
+    expectedCycleId,
+    mismatches: mismatches.map((pair) => ({
+      label: pair.label,
+      cycleId: pair.cycleId,
+    })),
+  };
 }
 
 function parseDateMs(value) {

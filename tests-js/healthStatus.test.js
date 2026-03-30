@@ -121,6 +121,9 @@ test("health snapshot filters scorecard progress to the configured phase1 start 
     mode: "rebalance",
     risk_level: 0.2,
   });
+  writeJson(path.join("data", "steward-state.json"), {
+    phase1_start_date: "2026-03-16",
+  });
   writeJson(path.join("data", "scorecard-summary.json"), {
     generated_at: "2026-03-13T20:15:00.000Z",
     phase1_start_date: "2026-03-13",
@@ -136,9 +139,12 @@ test("health snapshot filters scorecard progress to the configured phase1 start 
   ]);
 
   const { buildHealthSnapshot, buildPhase1Status } = await importHealthStatus();
+  const phaseState = {
+    phase1_start_date: "2026-03-16",
+  };
   const snapshot = await buildHealthSnapshot({
     agentState: {
-      phase1_start_date: "2026-03-16",
+      ...phaseState,
       last_run_at: "2026-03-16T20:00:00.000Z",
       last_executed_at: null,
       last_executed_date: null,
@@ -158,7 +164,7 @@ test("health snapshot filters scorecard progress to the configured phase1 start 
       raw_count: 10,
     },
   });
-  const phase = buildPhase1Status();
+  const phase = buildPhase1Status({ agentState: phaseState });
 
   assert.equal(snapshot.scorecard.trading_days, 1);
   assert.equal(snapshot.scorecard.records, 1);
@@ -236,4 +242,96 @@ test("health snapshot flags stale tick and portfolio artifacts", async (t) => {
   assert.equal(snapshot.artifacts.portfolio.exchange_date, "2026-03-15");
   assert.equal(issueCodes.includes("tick_artifact_stale"), true);
   assert.equal(issueCodes.includes("portfolio_artifact_stale"), true);
+});
+
+test("health snapshot accepts previous trading day tick before pre-close window", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-preclose-"));
+  process.chdir(tmpDir);
+
+  const RealDate = Date;
+  const frozenNow = new RealDate("2026-03-27T14:56:11.853Z");
+  global.Date = class extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        return new RealDate(frozenNow);
+      }
+      return new RealDate(...args);
+    }
+
+    static now() {
+      return frozenNow.getTime();
+    }
+
+    static parse(value) {
+      return RealDate.parse(value);
+    }
+
+    static UTC(...args) {
+      return RealDate.UTC(...args);
+    }
+  };
+
+  t.after(() => {
+    global.Date = RealDate;
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("config", "policy.json"), {
+    version: 53,
+    mode: "rebalance",
+    risk_level: 0.2,
+  });
+  writeJson(path.join("data", "steward-state.json"), {
+    current_mode: "LIVE",
+    last_run_at: "2026-03-26T19:55:17.319Z",
+    executions_today: 0,
+  });
+  writeJson(path.join("data", "latest-tick.json"), {
+    generated_at: "2026-03-26T19:55:17.319Z",
+    exchange_date: "2026-03-26",
+    result: {
+      ranAt: "2026-03-26T19:55:17.319Z",
+    },
+  });
+  writeJson(path.join("data", "portfolio-live.json"), {
+    updated_at: "2026-03-27T13:00:00.000Z",
+    snapshot: {
+      timestamp: "2026-03-27T13:00:00.000Z",
+      equity: 100000,
+      cash: 99950,
+    },
+    positions: [],
+  });
+  writeJson(path.join("data", "world-health.json"), {
+    last_checked: "2026-03-27T14:30:00.000Z",
+    sources: {},
+  });
+
+  const { buildHealthSnapshot } = await importHealthStatus();
+  const snapshot = await buildHealthSnapshot({
+    agentState: {
+      current_mode: "LIVE",
+      last_run_at: "2026-03-26T19:55:17.319Z",
+      executions_today: 0,
+    },
+    policy: {
+      version: 53,
+      mode: "rebalance",
+      risk_level: 0.2,
+    },
+    worldContext: {
+      generated_at: "2026-03-27T14:30:00.000Z",
+      date: "2026-03-27",
+      slot: "midday",
+      macro_view: { macro_label: "watchful", macro_score: 0.35 },
+      sources_used: ["source-a"],
+      raw_count: 10,
+    },
+  });
+
+  const issueCodes = snapshot.issues.map((issue) => issue.code);
+  assert.equal(issueCodes.includes("tick_stale"), false);
+  assert.equal(issueCodes.includes("tick_artifact_stale"), false);
 });

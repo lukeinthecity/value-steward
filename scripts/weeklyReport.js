@@ -5,6 +5,9 @@ import "dotenv/config";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { sendWeeklyReportEmail } from "../core/emailNotifications.js";
 import { buildDailyPromotionSnapshot, buildWeeklyPromotionSummary } from "../core/promotionMetrics.js";
+import { buildSystemLogicExplanation } from "../core/systemLogicExplanation.js";
+import { summarizeDecisionReview } from "../core/decisionReview.js";
+import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
 const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 const INTENT_LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
@@ -65,12 +68,14 @@ async function main() {
     },
     currentCycle: null,
     promotion: null,
+    systemLogic: null,
+    decisionReview: null,
   };
 
   console.log(`Value Steward Weekly Report (${reportData.startDate} to ${reportData.endDate})`);
   console.log("=".repeat(60));
   
-  // 1. Intelligence Divergence (Guardian vs Scout)
+  // 1. System Logic Divergence (Deterministic vs Probabilistic)
   const divergenceValues = recentIntents
     .filter(i => (i.world_macro_score !== null && i.world_macro_score !== undefined) && 
                  (i.world_scout_score !== null && i.world_scout_score !== undefined))
@@ -110,14 +115,25 @@ async function main() {
     if (i.reason_code === "BLOCKED_BY_RISK_GOVERNOR" || i.reason_code === "DAILY_LOSS_LIMIT") reportData.holdSummary.blockedByRisk++;
     if (i.reason_code === "WORLD_STALE" || i.reason_code === "SIGNAL_STALE") reportData.holdSummary.staleData++;
   });
+  reportData.decisionReview = summarizeDecisionReview(recentIntents);
 
   console.log("\nDecision Summary:");
   Object.entries(reportData.actions).forEach(([type, count]) => {
     console.log(`  ${type}: ${count}`);
   });
+  if (reportData.decisionReview) {
+    console.log("\nDecision Review:");
+    console.log(`  Summary:         ${reportData.decisionReview.summary}`);
+    console.log(
+      `  Dominant reasons:${reportData.decisionReview.top_reasons.length ? ` ${reportData.decisionReview.top_reasons.map((entry) => `${entry.label} (${entry.count})`).join(", ")}` : " none"}`
+    );
+    console.log(
+      `  Active symbols:  ${reportData.decisionReview.top_symbols.length ? reportData.decisionReview.top_symbols.map((entry) => `${entry.label} (${entry.count})`).join(", ") : "none"}`
+    );
+  }
 
   if (reportData.intelligence.samples > 0) {
-    console.log(`\nIntelligence Divergence (Guardian vs Scout):`);
+    console.log(`\nSystem Logic Divergence (Deterministic vs Probabilistic):`);
     console.log(`  Avg Divergence:   ${reportData.intelligence.avgDivergence}`);
     console.log(`  Significant (>.3): ${reportData.intelligence.significantDisagreements} instances (${reportData.intelligence.samples} samples)`);
   }
@@ -186,6 +202,10 @@ async function main() {
   }
 
   const latestPromotion = await buildDailyPromotionSnapshot();
+  const latestWorldContext = await loadLatestWorldContext();
+  if (latestWorldContext) {
+    reportData.systemLogic = buildSystemLogicExplanation(latestWorldContext);
+  }
   reportData.currentCycle = {
     exchangeDate: latestPromotion.exchange_date,
     integrityPass: latestPromotion.integrity?.pass ?? null,
@@ -210,6 +230,15 @@ async function main() {
   console.log(`  Exchange date:   ${reportData.currentCycle.exchangeDate}`);
   console.log(`  Integrity pass:  ${reportData.currentCycle.integrityPass}`);
   console.log(`  Blockers:        ${reportData.currentCycle.blockers.length ? reportData.currentCycle.blockers.join(", ") : "none"}`);
+
+  if (reportData.systemLogic) {
+    console.log("\nCurrent System Logic:");
+    console.log(`  Regime:          ${reportData.systemLogic.final_label}`);
+    console.log(`  ${reportData.systemLogic.baseline_summary}`);
+    console.log(`  ${reportData.systemLogic.overlay_summary}`);
+    console.log(`  ${reportData.systemLogic.resolution_summary}`);
+    console.log(`  ${reportData.systemLogic.decision_impact_summary}`);
+  }
 
   // 6. Email Delivery
   if (shouldEmail) {

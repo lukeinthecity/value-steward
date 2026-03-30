@@ -16,6 +16,10 @@ import { scoreWorldTags } from "./ruleBasedTags.js";
 import { observeWorld } from "./shadowObserver.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
 import {
+  appendJsonlLineSync,
+  buildArtifactCycleId,
+} from "../core/runtimeArtifacts.js";
+import {
   fetchMassiveMacroContext,
   summarizeMassiveMacroContext,
 } from "./massiveMacro.js";
@@ -25,36 +29,40 @@ const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
-function loadInbox() {
-  if (!fs.existsSync(INBOX_PATH)) return [];
-  const raw = fs.readFileSync(INBOX_PATH, "utf8");
+function parseJsonl(raw) {
   return raw
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function loadInbox() {
+  if (!fs.existsSync(INBOX_PATH)) return [];
+  const raw = fs.readFileSync(INBOX_PATH, "utf8");
+  return parseJsonl(raw);
 }
 
 function loadContext() {
   if (!fs.existsSync(CONTEXT_PATH)) return [];
   const raw = fs.readFileSync(CONTEXT_PATH, "utf8");
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  return parseJsonl(raw);
 }
 
 function loadHydrated() {
   if (!fs.existsSync(HYDRATED_PATH)) return [];
   const raw = fs.readFileSync(HYDRATED_PATH, "utf8");
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  return parseJsonl(raw);
 }
 
 function appendContext(entry) {
-  const line = JSON.stringify(entry);
-  fs.appendFileSync(CONTEXT_PATH, line + "\n");
+  appendJsonlLineSync(CONTEXT_PATH, entry);
 }
 
 /**
@@ -158,6 +166,11 @@ async function main() {
   const hydratedFailed = hydratedRecent.filter((entry) => entry.ok === false);
   const baseContext = buildBaseContext({ entries: recent, date });
   baseContext.slot = slot;
+  baseContext.cycle_id = buildArtifactCycleId({
+    exchangeDate: date,
+    slot,
+    sourceTimestamp: baseContext.generated_at,
+  });
 
   baseContext.hydration = {
     inbox_recent: recent.length,
@@ -214,6 +227,13 @@ async function main() {
         baseContext.massive_macro_summary ??
         null,
     };
+    contextToUse.cycle_id =
+      contextToUse.cycle_id ??
+      buildArtifactCycleId({
+        exchangeDate: contextToUse.date ?? date,
+        slot: contextToUse.slot ?? slot,
+        sourceTimestamp: contextToUse.generated_at ?? baseContext.generated_at,
+      });
 
     if (tagsValid) {
       const tagKeys = Object.keys(tags);

@@ -5,6 +5,7 @@ import path from "path";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 
+import { appendJsonlLineSync } from "../core/runtimeArtifacts.js";
 import { startSpinner } from "./spinner.js";
 
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
@@ -29,7 +30,7 @@ function loadJsonl(filePath) {
 }
 
 function appendJsonl(filePath, entry) {
-  fs.appendFileSync(filePath, JSON.stringify(entry) + "\n");
+  appendJsonlLineSync(filePath, entry);
 }
 
 function sleep(ms) {

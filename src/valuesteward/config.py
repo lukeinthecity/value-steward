@@ -52,6 +52,9 @@ class ValueStewardSettings(BaseSettings):
     max_effective_capital_dollars: float = Field(
         default=20.0, validation_alias="MAX_EFFECTIVE_CAPITAL_DOLLARS", gt=0
     )
+    max_sandbox_deployed_dollars: float = Field(
+        default=20.0, validation_alias="MAX_SANDBOX_DEPLOYED_DOLLARS", gt=0
+    )
     max_trade_notional_dollars: float = Field(
         default=5.0, validation_alias="MAX_TRADE_NOTIONAL_DOLLARS", gt=0
     )
@@ -101,6 +104,7 @@ def get_settings() -> ValueStewardSettings:
             target_risk_exposure_pct_medium=0.40,
             rebalance_buffer_pct=0.02,
             max_effective_capital_dollars=20.0,
+            max_sandbox_deployed_dollars=20.0,
             max_trade_notional_dollars=5.0,
             min_trade_notional_dollars=1.0,
             max_symbols_per_day=5,

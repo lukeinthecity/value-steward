@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
+import { buildSystemLogicExplanation } from "./systemLogicExplanation.js";
 
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
@@ -19,7 +20,7 @@ async function generateAISummary({ type, data }) {
     Your Reporting Framework:
     1. Performance Attribution: Explain the "Why" behind the results (e.g., regime shifts, momentum quality).
     2. Capital Discipline: Highlight adherence to the 3% kill-switch and 2.0 SD Vol-Stops.
-    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the 'Guardian' and 'Scout' scores.
+    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the deterministic and probabilistic views.
 
     Avoid flowery language. Use terms like 'alpha decay', 'volatility clustering', 'regime change', and 'convexity'.
   `;
@@ -109,6 +110,7 @@ export async function sendLessonEmail({
   promotion = null,
   emailMode = "update",
   lastOrder = null,
+  decisionReview = null,
   tradingDays = 0,
 }) {
   const config = loadEmailConfig("lesson email");
@@ -208,6 +210,53 @@ export async function sendLessonEmail({
         : "none"
     }`,
     "",
+    "Decision Review:",
+    `- Decision intents: ${decisionReview?.total_intents ?? 0}`,
+    `- Intent counts: ${
+      decisionReview?.action_counts && Object.keys(decisionReview.action_counts).length
+        ? Object.entries(decisionReview.action_counts)
+            .map(([action, count]) => `${action}=${count}`)
+            .join(", ")
+        : "none"
+    }`,
+    `- Orders submitted: ${decisionReview?.orders_submitted ?? 0}`,
+    `- Orders filled: ${decisionReview?.orders_filled ?? 0}`,
+    `- Order statuses: ${
+      decisionReview?.order_status_counts &&
+      Object.keys(decisionReview.order_status_counts).length
+        ? Object.entries(decisionReview.order_status_counts)
+            .map(([status, count]) => `${status}=${count}`)
+            .join(", ")
+        : "none"
+    }`,
+    `- Dominant reasons: ${
+      Array.isArray(decisionReview?.top_reasons) && decisionReview.top_reasons.length
+        ? decisionReview.top_reasons
+            .map((entry) => `${entry.label} (${entry.count})`)
+            .join(", ")
+        : "none"
+    }`,
+    `- Symbols with submitted orders: ${
+      Array.isArray(decisionReview?.submitted_symbols) && decisionReview.submitted_symbols.length
+        ? decisionReview.submitted_symbols.join(", ")
+        : "none"
+    }`,
+    `- Symbols with filled orders: ${
+      Array.isArray(decisionReview?.filled_symbols) && decisionReview.filled_symbols.length
+        ? decisionReview.filled_symbols.join(", ")
+        : "none"
+    }`,
+    `- Decision summary: ${decisionReview?.summary ?? "No decision activity recorded."}`,
+    ...(Array.isArray(decisionReview?.action_ledger) && decisionReview.action_ledger.length
+      ? [
+          "- Action ledger:",
+          ...decisionReview.action_ledger.map(
+            (entry) =>
+              `  - ${entry.symbol}: ${entry.action_type} — ${entry.reason_code} (${entry.regime_label})`
+          ),
+        ]
+      : ["- Action ledger: none"]),
+    "",
     "World Context:",
   ];
 
@@ -220,6 +269,8 @@ export async function sendLessonEmail({
     const finalRegime = worldContext.final_regime ?? null;
     const macroScore = macroView?.macro_score;
     const macroLabel = macroView?.macro_label;
+    const scoutLabel = worldContext.scout_label ?? "n/a";
+    const logicExplanation = buildSystemLogicExplanation(worldContext);
     const macroLine =
       macroScore !== null && macroScore !== undefined
         ? `${Number(macroScore).toFixed(2)} (${macroLabel ?? "n/a"})`
@@ -230,7 +281,7 @@ export async function sendLessonEmail({
             typeof finalRegime.final_score === "number"
               ? Number(finalRegime.final_score).toFixed(2)
               : "n/a"
-          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${finalRegime.fusion_reason ?? "n/a"}`
+          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${describeFusionReason(finalRegime.fusion_reason)}`
         : "n/a";
 
     const tags = worldContext.tags ?? {};
@@ -242,7 +293,13 @@ export async function sendLessonEmail({
 
     bodyLines.push(
       `- Date: ${worldContext.date ?? "n/a"}`,
-      `- Regime: ${regimeLine}`,
+      `- System Regime: ${regimeLine}`,
+      `- System Logic: Deterministic=${macroLabel ?? "n/a"} · Probabilistic=${scoutLabel}`,
+      `- ${logicExplanation.baseline_summary}`,
+      `- ${logicExplanation.overlay_summary}`,
+      `- ${logicExplanation.resolution_summary}`,
+      `- ${logicExplanation.decision_impact_summary}`,
+      `- Decision rationale: ${decisionReview?.summary ?? "No decision activity recorded."}`,
       `- Macro: ${macroLine} · ${macroTags}`,
       `- Geopolitics: ${formatTag(tags.geopolitical_tension)}`,
       `- Energy shock risk: ${formatTag(tags.energy_shock_risk)}`,
@@ -308,6 +365,31 @@ function formatNumber(value, digits = 2) {
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
   return `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+function describeFusionReason(value) {
+  switch (value) {
+    case "deterministic_only":
+    case "guardian_only":
+      return "Deterministic only";
+    case "probabilistic_only":
+    case "scout_only":
+      return "Probabilistic only";
+    case "probabilistic_more_cautious":
+    case "scout_more_cautious":
+      return "Probabilistic view more cautious";
+    case "deterministic_more_cautious":
+    case "guardian_more_cautious":
+      return "Deterministic view more cautious";
+    case "aligned":
+      return "Aligned";
+    case "no_valid_inputs":
+      return "Inputs unavailable";
+    default:
+      return String(value || "n/a")
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase());
+  }
 }
 
 export async function sendHealthEmail({ health, reason = "scheduled" }) {
@@ -502,9 +584,44 @@ export async function sendWeeklyReportEmail({ report }) {
       );
       }
 
+  if (report.decisionReview) {
+    bodyLines.push(
+      "",
+      "Decision Review:",
+      `  - Dominant reasons: ${
+        report.decisionReview.top_reasons?.length
+          ? report.decisionReview.top_reasons
+              .map((entry) => `${entry.label} (${entry.count})`)
+              .join(", ")
+          : "none"
+      }`,
+      `  - Most active symbols: ${
+        report.decisionReview.top_symbols?.length
+          ? report.decisionReview.top_symbols
+              .map((entry) => `${entry.label} (${entry.count})`)
+              .join(", ")
+          : "none"
+      }`,
+      `  - Dominant regimes: ${
+        report.decisionReview.dominant_regimes?.length
+          ? report.decisionReview.dominant_regimes
+              .map((entry) => `${entry.label} (${entry.count})`)
+              .join(", ")
+          : "none"
+      }`,
+      `  - Executed symbols: ${
+        report.decisionReview.executed_symbols?.length
+          ? report.decisionReview.executed_symbols.join(", ")
+          : "none"
+      }`,
+      `  - Summary: ${report.decisionReview.summary}`,
+      ""
+    );
+  }
+
       if (report.intelligence && report.intelligence.samples > 0) {
       bodyLines.push(
-        "Intelligence Divergence (Guardian vs Scout):",
+        "System Logic Divergence (Deterministic vs Probabilistic):",
         `  - Avg Divergence:   ${report.intelligence.avgDivergence}`,
         `  - Significant (>0.3): ${report.intelligence.significantDisagreements} instances`,
         ""
@@ -543,6 +660,18 @@ export async function sendWeeklyReportEmail({ report }) {
           ? report.promotion.current_blockers.join(", ")
           : "none"
       }`
+    );
+  }
+
+  if (report.systemLogic) {
+    bodyLines.push(
+      "",
+      "Current System Logic:",
+      `  - Regime: ${report.systemLogic.final_label}`,
+      `  - ${report.systemLogic.baseline_summary}`,
+      `  - ${report.systemLogic.overlay_summary}`,
+      `  - ${report.systemLogic.resolution_summary}`,
+      `  - ${report.systemLogic.decision_impact_summary}`
     );
   }
 

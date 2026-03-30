@@ -7,6 +7,7 @@ import { computeCanTrade } from "./tradeGate.js";
 import { applyGpioStateToControl } from "./gpioBridge.js";
 import { getExchangeDateString } from "./timeUtils.js";
 import {
+  buildArtifactCycleId,
   loadPolicySnapshot,
   saveLatestTickSnapshot,
 } from "./runtimeArtifacts.js";
@@ -179,6 +180,13 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     throw new Error("Policy snapshot unavailable after Python tick.");
   }
   const worldContext = await loadLatestWorldContext().catch(() => null);
+  const cycleId =
+    worldContext?.cycle_id ??
+    buildArtifactCycleId({
+      exchangeDate: getExchangeDateString(new Date()),
+      slot: worldContext?.slot ?? "tick",
+      sourceTimestamp: worldContext?.generated_at ?? now,
+    });
   const tradeGate = computeCanTrade({
     mode: state.current_mode,
     internetOk: null,
@@ -197,6 +205,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   saveLatestTickSnapshot({
     generated_at: new Date().toISOString(),
     exchange_date: getExchangeDateString(new Date()),
+    cycle_id: cycleId,
     python_exit_code: exitCode,
     policy: {
       version: policy.version ?? null,
@@ -227,6 +236,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     saveLatestTickSnapshot({
       generated_at: new Date().toISOString(),
       exchange_date: getExchangeDateString(new Date()),
+      cycle_id: cycleId,
       python_exit_code: exitCode,
       policy: {
         version: policy.version ?? null,
@@ -249,6 +259,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     saveLatestTickSnapshot({
       generated_at: new Date().toISOString(),
       exchange_date: getExchangeDateString(new Date()),
+      cycle_id: cycleId,
       python_exit_code: exitCode,
       policy: {
         version: policy.version ?? null,
