@@ -93,6 +93,17 @@ class IntentRecord(BaseModel):
     signal_score: Optional[float] = None
     signal_score_raw: Optional[float] = None
     signal_score_smoothed: Optional[float] = None
+    execution_quality_score: Optional[float] = None
+    signal_fill_rate: Optional[float] = None
+    signal_expire_rate: Optional[float] = None
+    signal_submission_rate: Optional[float] = None
+    signal_repeat_attempt_penalty: Optional[float] = None
+    signal_realized_alpha_prior: Optional[float] = None
+    signal_alpha_prior_avg_excess_benchmark: Optional[float] = None
+    signal_alpha_prior_sample_count: Optional[int] = None
+    signal_intraday_persistence_score: Optional[float] = None
+    signal_intraday_persistence_seen_count: Optional[int] = None
+    signal_intraday_persistence_day_count: Optional[int] = None
     signal_trend_strength: Optional[float] = None
     signal_volatility: Optional[float] = None
     signal_drawdown: Optional[float] = None

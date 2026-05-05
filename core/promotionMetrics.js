@@ -83,6 +83,12 @@ function buildCapCompliance({ portfolio, policy }) {
   const caps = currentCapSettings(policy);
   const positions = Array.isArray(portfolio?.positions) ? portfolio.positions : [];
   const tolerance = Number(process.env.VS_POSITION_CAP_TOLERANCE_MULTIPLIER ?? 1.25);
+  const totalDeployed = positions.reduce((sum, position) => {
+    const marketValue = Math.abs(
+      parseNumber(position.market_value ?? position.marketValue) ?? 0
+    );
+    return sum + marketValue;
+  }, 0);
   const oversizedPositions = positions
     .map((position) => ({
       symbol: position.symbol,
@@ -99,10 +105,14 @@ function buildCapCompliance({ portfolio, policy }) {
   }, 0);
   return {
     ...caps,
+    total_deployed_dollars: totalDeployed,
     max_position_value: maxPositionValue,
     oversized_positions: oversizedPositions,
     oversized_count: oversizedPositions.length,
-    pass: oversizedPositions.length === 0,
+    total_deployed_over_cap: totalDeployed > caps.max_effective_capital_dollars + 0.01,
+    pass:
+      oversizedPositions.length === 0 &&
+      totalDeployed <= caps.max_effective_capital_dollars + 0.01,
   };
 }
 

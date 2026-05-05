@@ -158,7 +158,11 @@ test("health snapshot filters scorecard progress to the configured phase1 start 
       raw_count: 10,
     },
   });
-  const phase = buildPhase1Status();
+  const phase = buildPhase1Status({
+    agentState: {
+      phase1_start_date: "2026-03-16",
+    },
+  });
 
   assert.equal(snapshot.scorecard.trading_days, 1);
   assert.equal(snapshot.scorecard.records, 1);
@@ -236,4 +240,95 @@ test("health snapshot flags stale tick and portfolio artifacts", async (t) => {
   assert.equal(snapshot.artifacts.portfolio.exchange_date, "2026-03-15");
   assert.equal(issueCodes.includes("tick_artifact_stale"), true);
   assert.equal(issueCodes.includes("portfolio_artifact_stale"), true);
+});
+
+test("health snapshot accepts prior trading-day tick artifacts on market holidays", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-holiday-"));
+  process.chdir(tmpDir);
+
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("config", "policy.json"), {
+    version: 8,
+    mode: "rebalance",
+    risk_level: 0.2,
+  });
+  writeJson(path.join("data", "steward-state.json"), {
+    current_mode: "LIVE",
+    last_run_at: "2026-04-02T19:55:12.000Z",
+    executions_today: 0,
+  });
+  writeJson(path.join("data", "latest-tick.json"), {
+    generated_at: "2026-04-02T19:55:12.000Z",
+    exchange_date: "2026-04-02",
+    result: {
+      ranAt: "2026-04-02T19:55:12.000Z",
+    },
+  });
+  writeJson(path.join("data", "portfolio-live.json"), {
+    updated_at: "2026-04-03T13:00:04.000Z",
+    snapshot: {
+      timestamp: "2026-04-03T13:00:04.000Z",
+      equity: 100000,
+      cash: 100000,
+    },
+    positions: [],
+  });
+  writeJson(path.join("data", "world-health.json"), {
+    last_checked: "2026-04-03T20:00:00.000Z",
+    sources: {},
+  });
+
+  const RealDate = Date;
+  global.Date = class extends RealDate {
+    constructor(value) {
+      super(value ?? "2026-04-03T20:15:00.000Z");
+    }
+
+    static now() {
+      return new RealDate("2026-04-03T20:15:00.000Z").getTime();
+    }
+
+    static parse(value) {
+      return RealDate.parse(value);
+    }
+
+    static UTC(...args) {
+      return RealDate.UTC(...args);
+    }
+  };
+  t.after(() => {
+    global.Date = RealDate;
+  });
+
+  const { buildHealthSnapshot } = await importHealthStatus();
+  const snapshot = await buildHealthSnapshot({
+    agentState: {
+      current_mode: "LIVE",
+      last_run_at: "2026-04-02T19:55:12.000Z",
+      executions_today: 0,
+    },
+    policy: {
+      version: 8,
+      mode: "rebalance",
+      risk_level: 0.2,
+    },
+    worldContext: {
+      generated_at: "2026-04-03T19:30:00.000Z",
+      date: "2026-04-03",
+      slot: "pre_close",
+      macro_view: { macro_label: "watchful", macro_score: 0.35 },
+      sources_used: ["source-a"],
+      raw_count: 10,
+    },
+  });
+
+  const issueCodes = snapshot.issues.map((issue) => issue.code);
+  assert.equal(snapshot.tick.expected_exchange_date, "2026-04-02");
+  assert.equal(issueCodes.includes("tick_stale"), false);
+  assert.equal(issueCodes.includes("tick_artifact_stale"), false);
 });

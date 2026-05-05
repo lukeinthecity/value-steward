@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 
 import { classifyMacroFromTags, fuseMacroRegime } from "./contextUtils.js";
+import { buildArtifactCycleId } from "../core/runtimeArtifacts.js";
 
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 
@@ -36,7 +37,19 @@ export async function loadLatestWorldContext() {
         scoutLabel: parsed.scout_label,
         scoutScore: parsed.scout_score,
       });
-    return { ...parsed, macro_view: macroView, final_regime: finalRegime };
+    const cycleId =
+      parsed.cycle_id ??
+      buildArtifactCycleId({
+        exchangeDate: parsed.date,
+        worldContextGeneratedAt: parsed.generated_at,
+        worldContextSlot: parsed.slot,
+      });
+    return {
+      ...parsed,
+      cycle_id: cycleId,
+      macro_view: macroView,
+      final_regime: finalRegime,
+    };
   } catch (err) {
     console.error(
       "[world] loadLatestWorldContext failed:",

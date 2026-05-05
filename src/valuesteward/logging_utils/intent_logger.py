@@ -124,9 +124,14 @@ class IntentLogger:
                 else "n/a"
             )
             sector = intent.signal_sector or "-"
+            exec_quality = (
+                f"{intent.execution_quality_score:.2f}"
+                if intent.execution_quality_score is not None
+                else "n/a"
+            )
             signal = (
                 f" signal={intent.signal_symbol or '-'} sector={sector} "
-                f"score={score} day_return={day_ret}"
+                f"score={score} exec_quality={exec_quality} day_return={day_ret}"
             )
 
         plan = ""

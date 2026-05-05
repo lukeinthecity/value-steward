@@ -10,8 +10,12 @@ import {
 import { loadStateSync } from "./stewardState.js";
 import {
   getExchangeDateString,
+  getExchangeParts,
   getMarketTimeZone,
+  getMarketOpenClose,
+  getPreviousTradingDate,
   isMarketOpenNow,
+  isTradingDay,
 } from "./timeUtils.js";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -84,6 +88,42 @@ function artifactTimestamp(...values) {
   return candidate ?? null;
 }
 
+function parseExecutionSlots(
+  value = process.env.VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE
+) {
+  const fallback = [30, 20, 10, 5];
+  if (!value) return fallback;
+  const parsed = String(value)
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((part) => Number.isFinite(part) && part >= 0);
+  return parsed.length
+    ? Array.from(new Set(parsed)).sort((a, b) => b - a)
+    : fallback;
+}
+
+function getExpectedTickExchangeDate(now = new Date()) {
+  if (!isTradingDay(now)) {
+    return getPreviousTradingDate(now);
+  }
+
+  const slots = parseExecutionSlots();
+  const firstExecutionMinutesBeforeClose = slots.length
+    ? Math.max(...slots)
+    : 30;
+  const parts = getExchangeParts(now);
+  const { close } = getMarketOpenClose(now);
+  const nowMinutes = (parts.hour || 0) * 60 + (parts.minute || 0);
+  const closeMinutes = close.hour * 60 + close.minute;
+  const minutesUntilClose = closeMinutes - nowMinutes;
+
+  if (minutesUntilClose > firstExecutionMinutesBeforeClose) {
+    return getPreviousTradingDate(now);
+  }
+
+  return getExchangeDateString(now);
+}
+
 function parseMilestones(value) {
   const raw = (value || "").split(",").map((item) => Number(item.trim()));
   const cleaned = raw.filter((item) => Number.isFinite(item) && item > 0);
@@ -116,6 +156,10 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolio = loadPortfolioLiveSnapshot();
 
   const tickAgeHours = hoursSince(state.last_run_at);
+  const tickExpectedExchangeDate = getExpectedTickExchangeDate(now);
+  const tickLastRunExchangeDate = state.last_run_at
+    ? getExchangeDateString(new Date(state.last_run_at))
+    : null;
   const worldAgeHours = context?.generated_at
     ? hoursSince(context.generated_at)
     : null;
@@ -160,12 +204,18 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const worldMaxClosed = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_CLOSED ?? 36);
   const worldHealthMax = Number(process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24);
   const scorecardMaxDays = Number(process.env.VS_HEALTH_SCORECARD_MAX_DAYS ?? 7);
+  const tickMeetsDateExpectation =
+    tickLastRunExchangeDate !== null &&
+    tickLastRunExchangeDate === tickExpectedExchangeDate;
 
-  if (tickAgeHours === null || tickAgeHours > tickMaxHours) {
+  if (!tickMeetsDateExpectation && (tickAgeHours === null || tickAgeHours > tickMaxHours)) {
     issues.push({
       level: "warn",
       code: "tick_stale",
-      message: `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
+      message:
+        tickLastRunExchangeDate !== null
+          ? `Last tick exchange date ${tickLastRunExchangeDate} does not match expected ${tickExpectedExchangeDate}.`
+          : `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
     });
   }
 
@@ -173,17 +223,13 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolioLimit = marketOpen ? portfolioMaxOpen : portfolioMaxClosed;
   const worldLimit = marketOpen ? worldMaxOpen : worldMaxClosed;
 
-  if (
-    tickArtifactAgeHours === null ||
-    tickArtifactAgeHours > tickMaxHours ||
-    (tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate)
-  ) {
+  if (tickArtifactExchangeDate !== tickExpectedExchangeDate) {
     issues.push({
       level: "warn",
       code: "tick_artifact_stale",
       message:
-        tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate
-          ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match ${exchangeDate}.`
+        tickArtifactExchangeDate !== null
+          ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match expected ${tickExpectedExchangeDate}.`
           : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
     });
   }
@@ -240,6 +286,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     tick: {
       last_run_at: state.last_run_at ?? null,
       age_hours: tickAgeHours,
+      expected_exchange_date: tickExpectedExchangeDate,
+      last_run_exchange_date: tickLastRunExchangeDate,
     },
     artifacts: {
       latest_tick: {
@@ -297,8 +345,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   };
 }
 
-export function buildPhase1Status() {
-  const state = loadStateSync();
+export function buildPhase1Status({ agentState } = {}) {
+  const state = agentState ?? loadStateSync();
   const phase1StartDate = getPhase1StartDate({ state });
   const scorecardRecords = filterPhase1Records(readJsonl(SCORECARD_PATH), {
     state,

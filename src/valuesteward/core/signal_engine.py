@@ -14,6 +14,9 @@ from pydantic import Field
 from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.data.market_data import MarketDataClient
 from valuesteward.config import ValueStewardSettings
+from valuesteward.core.execution_quality import load_execution_quality_map
+from valuesteward.core.intraday_persistence import load_intraday_persistence_map
+from valuesteward.core.realized_alpha import load_realized_alpha_prior_map
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,17 @@ class SymbolSignal:
     score_raw: float | None = None
     score_smoothed: float | None = None
     last_bar_date: date | None = None
+    execution_quality_score: float | None = None
+    fill_rate: float | None = None
+    expire_rate: float | None = None
+    submission_rate: float | None = None
+    repeat_attempt_penalty: float | None = None
+    realized_alpha_prior: float | None = None
+    realized_alpha_avg_excess_benchmark: float | None = None
+    realized_alpha_sample_count: int | None = None
+    intraday_persistence_score: float | None = None
+    intraday_persistence_seen_count: int | None = None
+    intraday_persistence_day_count: int | None = None
 
 
 @dataclass
@@ -341,6 +355,25 @@ class SignalEngine:
         if not signals:
             return SignalResult(len(symbols), 0, skipped, [], {})
 
+        execution_quality_by_symbol = load_execution_quality_map(
+            [signal.symbol for signal in signals]
+        )
+        alpha_prior_by_symbol = load_realized_alpha_prior_map(
+            [signal.symbol for signal in signals]
+        )
+        alpha_prior_weight = self._get_env_float(
+            "VS_SIGNAL_ALPHA_PRIOR_WEIGHT", 0.10
+        )
+        intraday_persistence_by_symbol = load_intraday_persistence_map(
+            [signal.symbol for signal in signals],
+            lookback_days=self._get_env_int(
+                "VS_INTRADAY_PERSISTENCE_LOOKBACK_DAYS", 5
+            ),
+        )
+        intraday_persistence_weight = self._get_env_float(
+            "VS_SIGNAL_INTRADAY_PERSISTENCE_WEIGHT", 0.05
+        )
+
         m_ranks = self._percentile_ranks([s.momentum_raw for s in signals], True)
         v_ranks = self._percentile_ranks([s.volatility for s in signals], False)
         d_ranks = self._percentile_ranks([s.drawdown for s in signals], False)
@@ -354,6 +387,46 @@ class SignalEngine:
                 + w_rank_vol * s.vol_rank 
                 + w_rank_dd * s.drawdown_rank
             )
+            s.score_raw = s.score
+            quality = execution_quality_by_symbol.get(s.symbol)
+            if quality:
+                s.execution_quality_score = quality.quality_score
+                s.fill_rate = quality.fill_rate
+                s.expire_rate = quality.expire_rate
+                s.submission_rate = quality.submission_rate
+                s.repeat_attempt_penalty = quality.repeat_attempt_penalty
+                s.score = (0.90 * s.score) + (0.10 * quality.quality_score)
+            else:
+                s.execution_quality_score = 0.5
+                s.fill_rate = 0.5
+                s.expire_rate = 0.0
+                s.submission_rate = 0.5
+                s.repeat_attempt_penalty = 0.0
+            alpha_prior = alpha_prior_by_symbol.get(s.symbol)
+            if alpha_prior:
+                s.realized_alpha_prior = alpha_prior.quality_score
+                s.realized_alpha_avg_excess_benchmark = (
+                    alpha_prior.avg_excess_benchmark
+                )
+                s.realized_alpha_sample_count = alpha_prior.sample_count
+                s.score += alpha_prior_weight * (alpha_prior.quality_score - 0.5)
+            else:
+                s.realized_alpha_prior = 0.5
+                s.realized_alpha_avg_excess_benchmark = 0.0
+                s.realized_alpha_sample_count = 0
+            intraday_prior = intraday_persistence_by_symbol.get(s.symbol)
+            if intraday_prior:
+                s.intraday_persistence_score = intraday_prior.quality_score
+                s.intraday_persistence_seen_count = intraday_prior.seen_count
+                s.intraday_persistence_day_count = intraday_prior.day_count
+                s.score += intraday_persistence_weight * (
+                    intraday_prior.quality_score - 0.5
+                )
+            else:
+                s.intraday_persistence_score = 0.5
+                s.intraday_persistence_seen_count = 0
+                s.intraday_persistence_day_count = 0
+            s.score_smoothed = s.score
 
         signals.sort(key=lambda x: x.score, reverse=True)
         return SignalResult(

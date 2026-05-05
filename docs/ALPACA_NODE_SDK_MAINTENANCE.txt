@@ -1,0 +1,134 @@
+Value Steward: Alpaca Node SDK Maintenance / Replacement Strategy
+=================================================================
+
+Date: 2026-04-01
+
+Context
+-------
+This repo currently uses the official Node package `@alpacahq/alpaca-trade-api` on the JS side.
+That package currently pulls an old Axios dependency in our installed tree:
+- `@alpacahq/alpaca-trade-api@3.1.3 -> axios@0.21.4`
+
+This is not the reported malicious Axios version from the March 31, 2026 npm supply-chain incident.
+However, it is still old dependency surface and should be treated as maintenance debt.
+
+Current JS-side usage surface
+-----------------------------
+The Node/Electron side uses only a small subset of the Alpaca SDK:
+- `getClock()`
+- `getAccount()`
+- `getPositions()`
+
+Observed call sites:
+- `local/runValueStewardTick.js`
+- `core/tick.js`
+- `core/runValueSteward.js`
+
+Important architecture note:
+- Trade execution and most broker-sensitive logic already live on the Python side.
+- The Node side is primarily doing read-only enrichment and scheduling support.
+- That means replacing the Node SDK is low-risk compared with replacing the Python execution layer.
+
+Recommendation
+--------------
+Do not rush a transitive Axios override into the old Alpaca SDK.
+
+Preferred strategy:
+- Replace the Node Alpaca SDK with a very small local REST client built on native `fetch`.
+- Keep Python broker execution unchanged.
+- Limit the new JS client to read-only endpoints unless there is a strong reason to expand it.
+
+Why this is the right move
+--------------------------
+1. Small surface area
+- Only 3 broker reads are currently used on the Node side.
+
+2. Reduced supply-chain risk
+- Removes dependency on the old SDK and its old Axios subtree.
+
+3. Cleaner ownership
+- Python remains authoritative for execution.
+- Node becomes a thin read-only observer for dashboard/scheduler enrichment.
+
+4. Easier testing
+- A local wrapper around 3 endpoints is easier to mock and validate than a large third-party SDK.
+
+Proposed replacement design
+---------------------------
+Create a small module, for example:
+- `core/alpacaRestClient.js`
+
+Minimal API:
+- `getClock()`
+- `getAccount()`
+- `getPositions()`
+
+Implementation notes:
+- Use native `fetch` in Node.
+- Read credentials from existing env handling.
+- Base URL should be explicit and environment-driven.
+- Default to paper trading endpoint for this project.
+- Validate HTTP status codes and JSON response shape.
+- Fail closed with explicit error messages.
+
+Suggested endpoint mapping
+--------------------------
+These should be verified against current Alpaca docs before implementation.
+Likely mappings:
+- `GET /v2/clock`
+- `GET /v2/account`
+- `GET /v2/positions`
+
+Migration plan
+--------------
+Phase 1: Introduce wrapper
+- Add `core/alpacaRestClient.js`
+- Mirror the current JS-side methods only
+- Add focused tests for success/error handling
+
+Phase 2: Swap read-only call sites
+- `local/runValueStewardTick.js`
+- `core/tick.js`
+- `core/runValueSteward.js`
+
+Phase 3: Remove package usage
+- Confirm no remaining imports of `@alpacahq/alpaca-trade-api`
+- Remove the dependency from `package.json`
+- Regenerate lockfile
+- Run full checks
+
+Phase 4: Post-swap validation
+- Verify morning portfolio refresh
+- Verify local tick read-only enrichment
+- Verify EOD snapshot/reporting still reconcile
+
+Do not do this
+--------------
+- Do not force an Axios override blindly into the old SDK without compatibility testing.
+- Do not move Python execution logic into Node as part of this cleanup.
+- Do not expand the JS wrapper into write/trade operations unless explicitly needed.
+
+When to act
+-----------
+Recommended timing:
+- Not an emergency hotfix.
+- Good candidate for the next dependency-hygiene pass after stable operations are confirmed.
+
+Trigger conditions to prioritize replacement:
+- Another Axios/npm ecosystem incident
+- Need to refresh dependencies anyway
+- Alpaca SDK remains unmaintained or stale
+- Security review requires reducing old transitive dependency surface
+
+Validation checklist for future-us
+----------------------------------
+Before merge:
+- `rg "@alpacahq/alpaca-trade-api"` returns no active JS imports
+- `npm ls axios --all` no longer shows the Alpaca SDK subtree
+- `npm run check` passes
+- Dashboard/tick/EOD artifacts still reconcile across one live cycle
+
+Bottom line
+-----------
+The current JS-side Alpaca SDK usage is small enough that a controlled replacement with a local
+read-only `fetch` client is the preferred long-term maintenance strategy.

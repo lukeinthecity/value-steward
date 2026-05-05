@@ -3,7 +3,9 @@ import fs from "fs";
 import path from "path";
 
 import {
+  assertMatchingCycleIds,
   extractLatestOrderFromPortfolioSnapshot,
+  loadIntradayObservations,
   loadLatestTickSnapshot,
   loadLatestTrainingEntry,
   loadPolicySnapshot,
@@ -78,15 +80,18 @@ function buildSnapshotResult({ portfolio, tickSnapshot, policy }) {
   const netExposure = positions.reduce((sum, position) => {
     return sum + (parseNumber(position.market_value ?? position.marketValue) ?? 0);
   }, 0);
+  const equity =
+    parseNumber(account.equity) ??
+    parseNumber(portfolio?.snapshot?.equity) ??
+    parseNumber(tickSnapshot?.result?.equity) ??
+    0;
+  const grossExposurePct = equity > 0 ? grossExposure / equity : null;
+  const netExposurePct = equity > 0 ? netExposure / equity : null;
 
   return {
     ranAt: portfolio?.updated_at ?? tickSnapshot?.result?.ranAt ?? new Date().toISOString(),
     marketOpen: portfolio?.clock?.is_open ?? tickSnapshot?.result?.marketOpen ?? false,
-    equity:
-      parseNumber(account.equity) ??
-      parseNumber(portfolio?.snapshot?.equity) ??
-      parseNumber(tickSnapshot?.result?.equity) ??
-      0,
+    equity,
     buyingPower:
       parseNumber(account.buying_power) ??
       parseNumber(tickSnapshot?.result?.buyingPower) ??
@@ -94,6 +99,8 @@ function buildSnapshotResult({ portfolio, tickSnapshot, policy }) {
     numPositions: positions.length,
     grossExposure,
     netExposure,
+    grossExposurePct,
+    netExposurePct,
     downtimeSeconds: tickSnapshot?.result?.downtimeSeconds ?? null,
     tradeGate: tickSnapshot?.result?.tradeGate ?? {
       mode: tickSnapshot?.result?.agentMode ?? policy?.mode ?? null,
@@ -129,6 +136,46 @@ function buildTrainingSummary(entry, policy) {
   };
 }
 
+function summarizeIntradayObservations(rows = []) {
+  if (!rows.length) return null;
+  const sorted = rows.slice().sort((left, right) => {
+    return String(left.observed_at ?? "").localeCompare(String(right.observed_at ?? ""));
+  });
+  const candidateCounts = new Map();
+  let regimeShiftCount = 0;
+  let previousRegime = null;
+  let maxPositions = 0;
+
+  for (const row of sorted) {
+    const regime = row?.world?.regime_label ?? null;
+    if (previousRegime && regime && regime !== previousRegime) {
+      regimeShiftCount += 1;
+    }
+    previousRegime = regime ?? previousRegime;
+    maxPositions = Math.max(maxPositions, row?.account?.position_count ?? 0);
+    for (const candidate of row?.top_candidates ?? []) {
+      const symbol = candidate?.symbol;
+      if (!symbol) continue;
+      candidateCounts.set(symbol, (candidateCounts.get(symbol) ?? 0) + 1);
+    }
+  }
+
+  const persistentCandidates = Array.from(candidateCounts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 3)
+    .map(([symbol, count]) => `${symbol}(${count})`);
+
+  return {
+    count: sorted.length,
+    times: sorted.map((row) => row.exchange_time).filter(Boolean),
+    first_regime: sorted[0]?.world?.regime_label ?? null,
+    last_regime: sorted[sorted.length - 1]?.world?.regime_label ?? null,
+    regime_shift_count: regimeShiftCount,
+    max_positions: maxPositions,
+    persistent_candidates: persistentCandidates,
+  };
+}
+
 async function main() {
   const stopSpinner = startSpinner("generating eod email", { total: 3 });
   const state = loadStateSync();
@@ -157,14 +204,25 @@ async function main() {
       : null;
   const worldContext = await loadLatestWorldContext();
   requireCurrentExchangeDate("World context", worldContext?.generated_at);
+  assertMatchingCycleIds([
+    { label: "tick", payload: tickSnapshot },
+    { label: "portfolio", payload: portfolio },
+    { label: "world", payload: worldContext },
+  ]);
   const reportExchangeDate = resolveReportExchangeDate(tickSnapshot, worldContext);
   const tradingDays = getTradingDays(state);
   
   stopSpinner.update(1);
 
   const result = buildSnapshotResult({ portfolio, tickSnapshot, policy });
-  const lastOrder = extractLatestOrderFromPortfolioSnapshot(portfolio, {
+  const intradaySummary = summarizeIntradayObservations(
+    loadIntradayObservations(reportExchangeDate)
+  );
+  const lastOrderToday = extractLatestOrderFromPortfolioSnapshot(portfolio, {
     exchangeDate: reportExchangeDate,
+    requireExecuted: true,
+  });
+  const lastBrokerOrder = extractLatestOrderFromPortfolioSnapshot(portfolio, {
     requireExecuted: true,
   });
   const training = buildTrainingSummary(trainingEntry, policy);
@@ -186,7 +244,9 @@ async function main() {
     worldContext,
     promotion,
     emailMode: "summary",
-    lastOrder,
+    intradaySummary,
+    lastOrderToday,
+    lastBrokerOrder,
     tradingDays
   });
   await markEodEmailSent();

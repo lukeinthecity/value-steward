@@ -2,9 +2,10 @@ import fs from "fs";
 import path from "path";
 
 import { filterPhase1Records } from "./phase1Window.js";
+import { normalizePolicySnapshot } from "./policySnapshot.js";
 import { trainPolicyWithMetrics } from "./deepTrainer.js";
 import {
-  loadLatestTrainingEntry,
+  appendJsonlLineSync,
   writeJsonAtomic,
 } from "./runtimeArtifacts.js";
 import { trainPolicyWithScorecard } from "./scorecardTrainer.js";
@@ -26,11 +27,11 @@ const TRAINING_LOG_PATH = path.join(
 function loadPolicy() {
   if (!fs.existsSync(POLICY_PATH)) return null;
   const raw = fs.readFileSync(POLICY_PATH, "utf8");
-  return JSON.parse(raw);
+  return normalizePolicySnapshot(JSON.parse(raw));
 }
 
 function savePolicy(policy) {
-  writeJsonAtomic(POLICY_PATH, policy);
+  writeJsonAtomic(POLICY_PATH, normalizePolicySnapshot(policy));
 }
 
 function loadHistory() {
@@ -44,8 +45,26 @@ function loadHistory() {
 }
 
 function appendTrainingLog(entry) {
-  fs.mkdirSync(path.dirname(TRAINING_LOG_PATH), { recursive: true });
-  fs.appendFileSync(TRAINING_LOG_PATH, `${JSON.stringify(entry)}\n`);
+  appendJsonlLineSync(TRAINING_LOG_PATH, entry);
+}
+
+function loadLatestTrainingEntryBySource(source) {
+  if (!fs.existsSync(TRAINING_LOG_PATH)) return null;
+  const lines = fs
+    .readFileSync(TRAINING_LOG_PATH, "utf8")
+    .split("\n")
+    .filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const entry = JSON.parse(lines[index]);
+      if ((entry?.source ?? "history") === source) {
+        return entry;
+      }
+    } catch {
+      // ignore malformed historical rows
+    }
+  }
+  return null;
 }
 
 function parseNumber(value, fallback) {
@@ -85,6 +104,8 @@ export function trainPolicyFromHistoryLocal({
   minRiskDelta = null,
   worldContext = null,
   force = false,
+  allowScorecard = true,
+  allowHistory = true,
 } = {}) {
   const policy = loadPolicy();
   const history = loadHistory();
@@ -107,29 +128,32 @@ export function trainPolicyFromHistoryLocal({
   const oncePerDay = !["0", "false", "no", "off"].includes(
     String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase()
   );
-  const latestTraining = loadLatestTrainingEntry();
-  if (
-    !force &&
-    oncePerDay &&
-    latestTraining?.ranAt &&
-    getExchangeDateString(new Date(latestTraining.ranAt)) ===
-      getExchangeDateString(new Date())
-  ) {
-    return {
-      updated: false,
-      reason: "already_attempted_today",
-      source: latestTraining.source ?? "training-log",
-      oldRisk: policy.risk_level ?? null,
-      newRisk: policy.risk_level ?? null,
-      policyVersion: policy.version ?? 1,
-      metrics: null,
-    };
-  }
 
-  const scorecardEnabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase()
-  );
+  const scorecardEnabled =
+    allowScorecard &&
+    !["0", "false", "no", "off"].includes(
+      String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase()
+    );
   if (scorecardEnabled) {
+    const latestScorecardTraining = loadLatestTrainingEntryBySource("scorecard");
+    if (
+      !force &&
+      oncePerDay &&
+      latestScorecardTraining?.ranAt &&
+      getExchangeDateString(new Date(latestScorecardTraining.ranAt)) ===
+        getExchangeDateString(new Date())
+    ) {
+      return {
+        updated: false,
+        reason: "already_attempted_today",
+        source: "scorecard",
+        oldRisk: policy.risk_level ?? null,
+        newRisk: policy.risk_level ?? null,
+        policyVersion: policy.version ?? 1,
+        metrics: null,
+      };
+    }
+
     const scorecardTraining = trainPolicyWithScorecard({
       policy,
       scorecardPath: SCORECARD_PATH,
@@ -139,6 +163,10 @@ export function trainPolicyFromHistoryLocal({
       signedThreshold: parseNumber(
         process.env.VS_SCORECARD_SIGNED_THRESHOLD,
         0
+      ),
+      benchmarkThreshold: parseNumber(
+        process.env.VS_SCORECARD_BENCHMARK_THRESHOLD,
+        parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0)
       ),
       riskStep: parseNumber(process.env.VS_SCORECARD_RISK_STEP, 0.01),
       bufferStep: parseNumber(process.env.VS_SCORECARD_BUFFER_STEP, 0.005),
@@ -181,10 +209,44 @@ export function trainPolicyFromHistoryLocal({
         "cooldown",
         "non_trainable_mode",
       ]);
-      if (blockFallbackReasons.has(scorecardTraining.reason)) {
+      if (
+        blockFallbackReasons.has(scorecardTraining.reason) ||
+        history.length === 0
+      ) {
         return scorecardTraining;
       }
     }
+  }
+
+  if (!allowHistory) {
+    return {
+      updated: false,
+      reason: "history_disabled",
+      source: "history",
+      oldRisk: policy.risk_level ?? null,
+      newRisk: policy.risk_level ?? null,
+      policyVersion: policy.version ?? 1,
+      metrics: null,
+    };
+  }
+
+  const latestHistoryTraining = loadLatestTrainingEntryBySource("history");
+  if (
+    !force &&
+    oncePerDay &&
+    latestHistoryTraining?.ranAt &&
+    getExchangeDateString(new Date(latestHistoryTraining.ranAt)) ===
+      getExchangeDateString(new Date())
+  ) {
+    return {
+      updated: false,
+      reason: "already_attempted_today",
+      source: "history",
+      oldRisk: policy.risk_level ?? null,
+      newRisk: policy.risk_level ?? null,
+      policyVersion: policy.version ?? 1,
+      metrics: null,
+    };
   }
 
   const resolvedEquityDeltaThreshold = parseNumber(

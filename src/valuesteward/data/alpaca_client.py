@@ -20,6 +20,31 @@ from valuesteward.models import PortfolioSnapshot, Position
 
 logger = logging.getLogger(__name__)
 
+NOISY_NAME_PATTERNS = (
+    "acquisition corp",
+    "acquisition corporation",
+    "blank check",
+    "special purpose acquisition",
+    "spac",
+    "ultra buffer",
+    "defined outcome",
+    "target outcome",
+    "buffer etf",
+    "warrant",
+    "rights",
+    "unit",
+)
+
+
+def _is_noisy_asset(asset: Any) -> bool:
+    name = str(getattr(asset, "name", "") or "").lower()
+    symbol = str(getattr(asset, "symbol", "") or "").upper()
+    if any(pattern in name for pattern in NOISY_NAME_PATTERNS):
+        return True
+    if symbol.endswith("W") or symbol.endswith("R") or symbol.endswith("U"):
+        return True
+    return False
+
 def retry_alpaca(retries: int = 3, backoff: float = 1.0):
     """Decorator for institutional-grade exponential backoff."""
     def decorator(func: Callable):
@@ -86,6 +111,8 @@ class AlpacaClient:
                 continue
             # --- Elite Quant: Fractional Check ---
             if getattr(asset, "fractionable", False) is not True:
+                continue
+            if _is_noisy_asset(asset):
                 continue
             # --------------------------------------
             symbol = getattr(asset, "symbol", None)

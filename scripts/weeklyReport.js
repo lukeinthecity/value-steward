@@ -70,7 +70,7 @@ async function main() {
   console.log(`Value Steward Weekly Report (${reportData.startDate} to ${reportData.endDate})`);
   console.log("=".repeat(60));
   
-  // 1. Intelligence Divergence (Guardian vs Scout)
+  // 1. System Logic Divergence (Deterministic vs Probabilistic)
   const divergenceValues = recentIntents
     .filter(i => (i.world_macro_score !== null && i.world_macro_score !== undefined) && 
                  (i.world_scout_score !== null && i.world_scout_score !== undefined))
@@ -117,7 +117,7 @@ async function main() {
   });
 
   if (reportData.intelligence.samples > 0) {
-    console.log(`\nIntelligence Divergence (Guardian vs Scout):`);
+    console.log(`\nSystem Logic Divergence (Deterministic vs Probabilistic):`);
     console.log(`  Avg Divergence:   ${reportData.intelligence.avgDivergence}`);
     console.log(`  Significant (>.3): ${reportData.intelligence.significantDisagreements} instances (${reportData.intelligence.samples} samples)`);
   }

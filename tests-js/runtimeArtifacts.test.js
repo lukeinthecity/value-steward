@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { extractLatestOrderFromPortfolioSnapshot } from "../core/runtimeArtifacts.js";
+import {
+  assertMatchingCycleIds,
+  appendIntradayObservation,
+  buildArtifactCycleId,
+  buildHistoryEntryFromTickResult,
+  extractLatestOrderFromPortfolioSnapshot,
+  getArtifactCycleId,
+  loadIntradayObservations,
+} from "../core/runtimeArtifacts.js";
 
 test("extractLatestOrderFromPortfolioSnapshot prefers most recent same-day order", () => {
   const portfolio = {
@@ -91,4 +102,118 @@ test("extractLatestOrderFromPortfolioSnapshot ignores newer non-executed orders 
 
   assert.equal(latest.symbol, "WMB");
   assert.equal(latest.status, "filled");
+});
+
+test("buildHistoryEntryFromTickResult preserves lean training fields", () => {
+  const entry = buildHistoryEntryFromTickResult({
+    exchangeDate: "2026-04-06",
+    generatedAt: "2026-04-06T19:55:10.000Z",
+    cycleId: "2026-04-06:pre_close:2026-04-06T19:00:00.000Z",
+    policy: { mode: "rebalance", risk_level: 0.2 },
+    result: {
+      ranAt: "2026-04-06T19:55:04.000Z",
+      agentMode: "LIVE",
+      snapshotStatus: "node_enriched",
+      equity: 100000,
+      buyingPower: 200000,
+      cash: 99995,
+      portfolioValue: 100000,
+      cashUtilization: 0.00005,
+      grossExposure: 5,
+      netExposure: 5,
+      maxPositionWeight: 0.00005,
+      numPositions: 1,
+      positions: [
+        {
+          symbol: "SPY",
+          qty: 0.05,
+          side: "long",
+          marketValue: 5,
+          avgEntryPrice: 100,
+          unrealizedPl: 0.1,
+          unrealizedPlPc: 0.02,
+          assetClass: "us_equity",
+        },
+      ],
+    },
+  });
+
+  assert.equal(entry.exchange_date, "2026-04-06");
+  assert.equal(entry.cycle_id, "2026-04-06:pre_close:2026-04-06T19:00:00.000Z");
+  assert.equal(entry.positions.length, 1);
+  assert.equal(entry.positions[0].symbol, "SPY");
+  assert.equal(entry.positions[0].unrealizedPl, 0.1);
+  assert.equal(entry.mode, "rebalance");
+  assert.equal(entry.risk_level, 0.2);
+});
+
+test("artifact cycle helpers build and validate matching provenance", () => {
+  const cycleId = buildArtifactCycleId({
+    exchangeDate: "2026-04-29",
+    worldContextGeneratedAt: "2026-04-29T19:00:00.000Z",
+    worldContextSlot: "pre_close",
+  });
+
+  assert.equal(cycleId, "2026-04-29:pre_close:2026-04-29T19:00:00.000Z");
+  assert.equal(
+    getArtifactCycleId({ result: { cycle_id: cycleId } }),
+    cycleId
+  );
+  assert.equal(
+    assertMatchingCycleIds([
+      { label: "tick", payload: { cycle_id: cycleId } },
+      { label: "portfolio", payload: { cycle_id: cycleId } },
+      { label: "world", payload: { cycle_id: cycleId } },
+    ]),
+    cycleId
+  );
+});
+
+test("artifact cycle helper rejects mismatched provenance", () => {
+  assert.throws(
+    () =>
+      assertMatchingCycleIds([
+        { label: "tick", payload: { cycle_id: "a" } },
+        { label: "portfolio", payload: { cycle_id: "b" } },
+      ]),
+    /Artifact cycle mismatch/
+  );
+});
+
+test("artifact cycle helper rejects missing provenance", () => {
+  assert.throws(
+    () =>
+      assertMatchingCycleIds([
+        { label: "tick", payload: { cycle_id: "a" } },
+        { label: "portfolio", payload: {} },
+      ]),
+    /Artifact cycle provenance missing/
+  );
+});
+
+test("loadIntradayObservations filters to the requested exchange date", (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-intraday-artifacts-"));
+  process.chdir(tmpDir);
+
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  appendIntradayObservation({
+    exchange_date: "2026-04-13",
+    exchange_time: "10:00",
+    top_candidates: [{ symbol: "AAA" }],
+  });
+  appendIntradayObservation({
+    exchange_date: "2026-04-14",
+    exchange_time: "10:00",
+    top_candidates: [{ symbol: "BBB" }],
+  });
+
+  const rows = loadIntradayObservations("2026-04-13");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].exchange_time, "10:00");
+  assert.equal(rows[0].top_candidates[0].symbol, "AAA");
 });

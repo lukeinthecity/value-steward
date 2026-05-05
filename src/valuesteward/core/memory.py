@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -57,15 +58,20 @@ class MemoryEngine:
         """Append an intent to memory and persistence using Atomic pattern."""
         self._intents.append(intent)
         
-        # Ensure log directory exists
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # We append directly to JSONL, but we'll use a standard file handle
-        # Professional standard for logging is straight append.
+
         try:
             record = intent.to_json_dict()
-            with self.log_path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record) + "\n")
+            fd = os.open(
+                self.log_path,
+                os.O_APPEND | os.O_CREAT | os.O_WRONLY,
+                0o644,
+            )
+            try:
+                os.write(fd, f"{json.dumps(record)}\n".encode("utf-8"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
         except OSError as exc:
             logger.error(f"[MEMORY] Failed to append intent to log: {exc}")
 

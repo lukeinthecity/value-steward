@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import click
 import statistics
@@ -17,6 +18,7 @@ from valuesteward.core.memory import MemoryEngine
 from valuesteward.core.patterns import EpisodeExtractor, PatternLibrary, load_history_entries
 from valuesteward.core.reporting import build_report
 from valuesteward.core.risk_governor import RiskGovernor
+from valuesteward.core.sector_map import SectorMap
 from valuesteward.core.signal_engine import SignalEngine
 from valuesteward.core.world_recognition import infer_world_tags
 from valuesteward.models import IntentRecord
@@ -96,6 +98,29 @@ def _write_json_atomic(output_path: Path, payload: dict) -> None:
     tmp_path.replace(output_path)
 
 
+def _write_jsonl_atomic(output_path: Path, records: list[dict]) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_name(
+        f"{output_path.name}.{os.getpid()}.{int(datetime.now(timezone.utc).timestamp() * 1000)}.tmp"
+    )
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record) + "\n")
+    tmp_path.replace(output_path)
+
+
+def _market_timezone() -> ZoneInfo:
+    tz = os.getenv("VS_MARKET_TIMEZONE") or "America/New_York"
+    try:
+        return ZoneInfo(tz)
+    except Exception:
+        return ZoneInfo("America/New_York")
+
+
+def _exchange_date_iso_now() -> str:
+    return datetime.now(timezone.utc).astimezone(_market_timezone()).date().isoformat()
+
+
 def _format_account(account) -> dict:
     return {
         "status": getattr(account, "status", None),
@@ -172,6 +197,7 @@ def portfolio(out: str) -> None:
 
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "cycle_id": os.getenv("VS_ARTIFACT_CYCLE_ID") or None,
         "account": _format_account(account),
         "snapshot": {
             "timestamp": snapshot.timestamp.isoformat(),
@@ -185,6 +211,65 @@ def portfolio(out: str) -> None:
         "recent_orders": [_format_order(order) for order in recent_orders],
         "last_order": _format_order(recent_orders[0]) if recent_orders else None,
         "clock": _format_clock(clock) if clock else None,
+    }
+
+    output_path = Path(out)
+    _write_json_atomic(output_path, payload)
+    print(json.dumps(payload, indent=2))
+
+
+@main.command("signal-snapshot")
+@click.option(
+    "--out",
+    default="data/intraday-signal-snapshot.json",
+    show_default=True,
+    help="Path to write ranked signal snapshot JSON.",
+)
+@click.option(
+    "--limit",
+    default=5,
+    show_default=True,
+    type=int,
+    help="Number of top-ranked candidates to write.",
+)
+def signal_snapshot(out: str, limit: int) -> None:
+    """Build a fresh ranked signal snapshot for observation and analysis."""
+
+    settings = get_settings()
+    alpaca_client = AlpacaClient(settings=settings)
+    signal_engine = SignalEngine(
+        alpaca_client=alpaca_client,
+        data_client=MarketDataClient(),
+        settings=settings,
+    )
+    signal_result = signal_engine.build_signals()
+    sector_map = SectorMap()
+    top_signals = signal_result.signals[: max(0, limit)]
+    sector_map.resolve([signal.symbol for signal in top_signals])
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "exchange_date": _exchange_date_iso_now(),
+        "cycle_id": os.getenv("VS_ARTIFACT_CYCLE_ID") or None,
+        "universe_size": signal_result.universe_size,
+        "evaluated": signal_result.evaluated,
+        "skipped": signal_result.skipped,
+        "limit": max(0, limit),
+        "candidates": [
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "symbol": signal.symbol,
+                "signal_score": signal.score,
+                "signal_sector": sector_map.get(signal.symbol),
+                "trend_strength": signal.trend_strength,
+                "rel_strength_20d": signal.rel_strength_20d,
+                "rel_strength_60d": signal.rel_strength_60d,
+                "execution_quality_score": signal.execution_quality_score,
+                "realized_alpha_prior": signal.realized_alpha_prior,
+                "intraday_persistence_score": signal.intraday_persistence_score,
+            }
+            for signal in top_signals
+        ],
     }
 
     output_path = Path(out)
@@ -693,19 +778,23 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
 
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    existing_ids = set()
+    existing_records: dict[str, dict[str, Any]] = {}
+    unkeyed_records: list[dict[str, Any]] = []
     if out_path.exists():
         for line in out_path.read_text(encoding="utf-8").splitlines():
             try:
                 payload = json.loads(line)
-                existing_ids.add(payload.get("intent_id"))
+                intent_id = payload.get("intent_id")
+                if intent_id:
+                    existing_records[str(intent_id)] = payload
+                else:
+                    unkeyed_records.append(payload)
             except json.JSONDecodeError:
                 continue
 
-    new_records = []
+    added_records = 0
+    refreshed_records = 0
     for intent in filtered_intents:
-        if intent.id in existing_ids:
-            continue
         symbol = _resolve_symbol(intent)
         entry_date = intent.timestamp.date()
 
@@ -793,32 +882,63 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
             "signal_score": intent.signal_score,
             "signal_score_raw": intent.signal_score_raw,
             "signal_score_smoothed": intent.signal_score_smoothed,
+            "execution_quality_score": intent.execution_quality_score,
+            "signal_fill_rate": intent.signal_fill_rate,
+            "signal_expire_rate": intent.signal_expire_rate,
+            "signal_submission_rate": intent.signal_submission_rate,
+            "signal_repeat_attempt_penalty": intent.signal_repeat_attempt_penalty,
+            "signal_realized_alpha_prior": intent.signal_realized_alpha_prior,
+            "signal_alpha_prior_avg_excess_benchmark": (
+                intent.signal_alpha_prior_avg_excess_benchmark
+            ),
+            "signal_alpha_prior_sample_count": (
+                intent.signal_alpha_prior_sample_count
+            ),
+            "signal_intraday_persistence_score": (
+                intent.signal_intraday_persistence_score
+            ),
+            "signal_intraday_persistence_seen_count": (
+                intent.signal_intraday_persistence_seen_count
+            ),
+            "signal_intraday_persistence_day_count": (
+                intent.signal_intraday_persistence_day_count
+            ),
             "world_macro_label": intent.world_macro_label,
             "world_macro_score": intent.world_macro_score,
             "horizons": horizons_payload,
         }
-        new_records.append(record)
+        if intent.id in existing_records:
+            refreshed_records += 1
+        else:
+            added_records += 1
+        existing_records[intent.id] = record
 
-    if new_records:
-        with out_path.open("a", encoding="utf-8") as handle:
-            for record in new_records:
-                handle.write(json.dumps(record) + "\n")
-        print(f"Scorecard entries added: {len(new_records)}")
+    persisted_records = [
+        *unkeyed_records,
+        *sorted(
+            existing_records.values(),
+            key=lambda payload: payload.get("timestamp") or "",
+        ),
+    ]
+    if persisted_records:
+        _write_jsonl_atomic(out_path, persisted_records)
+
+    if added_records or refreshed_records:
+        print(
+            "Scorecard entries refreshed: "
+            f"added={added_records} updated={refreshed_records}"
+        )
     else:
-        print("No new intents to score.")
+        print("No scorecard entries refreshed.")
 
-    all_records = []
-    for line in out_path.read_text(encoding="utf-8").splitlines():
-        try:
-            payload = json.loads(line)
-            if not is_on_or_after_phase1_start(
-                payload.get("entry_date") or payload.get("timestamp"),
-                steward_state,
-            ):
-                continue
-            all_records.append(payload)
-        except json.JSONDecodeError:
-            continue
+    all_records = [
+        payload
+        for payload in persisted_records
+        if is_on_or_after_phase1_start(
+            payload.get("entry_date") or payload.get("timestamp"),
+            steward_state,
+        )
+    ]
 
     def fmt_pct(value: float | None) -> str:
         return f"{value:.2%}" if isinstance(value, (int, float)) else "n/a"
@@ -845,7 +965,14 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
         no_action_beats_bench = []
         no_action_missed = []
         for record in all_records:
-            data = record.get("horizons", {}).get(key, {})
+            horizons_raw = record.get("horizons")
+            horizons_map = (
+                cast(dict[str, Any], horizons_raw)
+                if isinstance(horizons_raw, dict)
+                else {}
+            )
+            data_raw = horizons_map.get(key, {})
+            data = cast(dict[str, Any], data_raw) if isinstance(data_raw, dict) else {}
             ret = data.get("return")
             ex_bench = data.get("excess_vs_benchmark")
             ex_cash = data.get("excess_vs_cash")

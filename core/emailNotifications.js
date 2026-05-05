@@ -19,7 +19,12 @@ async function generateAISummary({ type, data }) {
     Your Reporting Framework:
     1. Performance Attribution: Explain the "Why" behind the results (e.g., regime shifts, momentum quality).
     2. Capital Discipline: Highlight adherence to the 3% kill-switch and 2.0 SD Vol-Stops.
-    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the 'Guardian' and 'Scout' scores.
+    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the deterministic and probabilistic regime views.
+
+    Data semantics:
+    - exposure fields ending in "Pct" are fractions of equity
+    - grossExposure and netExposure are dollar notionals unless explicitly suffixed with "Pct"
+    - never describe grossExposure or netExposure as percentages unless the pct fields are provided
 
     Avoid flowery language. Use terms like 'alpha decay', 'volatility clustering', 'regime change', and 'convexity'.
   `;
@@ -108,7 +113,9 @@ export async function sendLessonEmail({
   worldContext,
   promotion = null,
   emailMode = "update",
-  lastOrder = null,
+  intradaySummary = null,
+  lastOrderToday = null,
+  lastBrokerOrder = null,
   tradingDays = 0,
 }) {
   const config = loadEmailConfig("lesson email");
@@ -167,11 +174,15 @@ export async function sendLessonEmail({
     `- Overconcentrated: ${metrics.isOverconcentrated ?? "n/a"}`,
     "",
     "Snapshot:",
-    `- Equity: ${result.equity}`,
-    `- Buying power: ${result.buyingPower}`,
+    `- Equity: ${formatCurrency(result.equity)}`,
+    `- Buying power: ${formatCurrency(result.buyingPower)}`,
     `- Positions held: ${result.numPositions}`,
-    `- Gross exposure: ${result.grossExposure}`,
-    `- Net exposure: ${result.netExposure}`,
+    `- Gross exposure: ${formatCurrency(result.grossExposure)} (${formatPercent(
+      result.grossExposurePct
+    )})`,
+    `- Net exposure: ${formatCurrency(result.netExposure)} (${formatPercent(
+      result.netExposurePct
+    )})`,
     `- Trade gate: mode=${result.tradeGate?.mode ?? "n/a"} canTrade=${
       result.tradeGate?.canTrade ?? "n/a"
     } tradingEnabled=${result.tradeGate?.tradingEnabled ?? "n/a"}`,
@@ -190,6 +201,7 @@ export async function sendLessonEmail({
     `- Pass: ${promotion?.cap_compliance?.pass ?? "n/a"}`,
     `- Max effective cap: ${promotion?.cap_compliance?.max_effective_capital_dollars ?? "n/a"}`,
     `- Max trade cap: ${promotion?.cap_compliance?.max_trade_notional_dollars ?? "n/a"}`,
+    `- Total deployed: ${promotion?.cap_compliance?.total_deployed_dollars ?? "n/a"}`,
     `- Largest position value: ${promotion?.cap_compliance?.max_position_value ?? "n/a"}`,
     `- Oversized positions: ${promotion?.cap_compliance?.oversized_count ?? "n/a"}`,
     "",
@@ -263,20 +275,58 @@ export async function sendLessonEmail({
     }
   }
 
-  if (lastOrder) {
-    const qtyText = lastOrder.qty ?? lastOrder.notional ?? "n/a";
-    const priceText = lastOrder.filled_avg_price ?? "n/a";
+  if (intradaySummary) {
     bodyLines.push(
       "",
-      "Last Order:",
-      `- Symbol: ${lastOrder.symbol ?? "n/a"}`,
-      `- Side: ${lastOrder.side ?? "n/a"} Status: ${lastOrder.status ?? "n/a"}`,
-      `- Qty/Notional: ${qtyText} Type: ${lastOrder.type ?? "n/a"}`,
-      `- Submitted: ${lastOrder.submitted_at ?? "n/a"}`,
-      `- Filled: ${lastOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+      "Intraday Observations:",
+      `- Snapshots recorded: ${intradaySummary.count}`,
+      `- Times: ${
+        Array.isArray(intradaySummary.times) && intradaySummary.times.length
+          ? intradaySummary.times.join(", ")
+          : "n/a"
+      }`,
+      `- Regime path: ${intradaySummary.first_regime ?? "n/a"} -> ${
+        intradaySummary.last_regime ?? "n/a"
+      }`,
+      `- Regime shifts observed: ${intradaySummary.regime_shift_count ?? "n/a"}`,
+      `- Max positions observed: ${intradaySummary.max_positions ?? "n/a"}`,
+      `- Persistent candidates: ${
+        Array.isArray(intradaySummary.persistent_candidates) &&
+        intradaySummary.persistent_candidates.length
+          ? intradaySummary.persistent_candidates.join(", ")
+          : "none"
+      }`
+    );
+  }
+
+  if (lastOrderToday) {
+    const qtyText = lastOrderToday.qty ?? lastOrderToday.notional ?? "n/a";
+    const priceText = lastOrderToday.filled_avg_price ?? "n/a";
+    bodyLines.push(
+      "",
+      "Last Order Today:",
+      `- Symbol: ${lastOrderToday.symbol ?? "n/a"}`,
+      `- Side: ${lastOrderToday.side ?? "n/a"} Status: ${lastOrderToday.status ?? "n/a"}`,
+      `- Qty/Notional: ${qtyText} Type: ${lastOrderToday.type ?? "n/a"}`,
+      `- Submitted: ${lastOrderToday.submitted_at ?? "n/a"}`,
+      `- Filled: ${lastOrderToday.filled_at ?? "n/a"} Avg price: ${priceText}`
     );
   } else {
-    bodyLines.push("", "Last Order:", "- Status: unavailable");
+    bodyLines.push("", "Last Order Today:", "- Status: none");
+  }
+
+  if (lastBrokerOrder) {
+    const qtyText = lastBrokerOrder.qty ?? lastBrokerOrder.notional ?? "n/a";
+    const priceText = lastBrokerOrder.filled_avg_price ?? "n/a";
+    bodyLines.push(
+      "",
+      "Most Recent Broker Order:",
+      `- Symbol: ${lastBrokerOrder.symbol ?? "n/a"}`,
+      `- Side: ${lastBrokerOrder.side ?? "n/a"} Status: ${lastBrokerOrder.status ?? "n/a"}`,
+      `- Qty/Notional: ${qtyText} Type: ${lastBrokerOrder.type ?? "n/a"}`,
+      `- Submitted: ${lastBrokerOrder.submitted_at ?? "n/a"}`,
+      `- Filled: ${lastBrokerOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+    );
   }
 
   bodyLines.push(
@@ -308,6 +358,11 @@ function formatNumber(value, digits = 2) {
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
   return `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+function formatCurrency(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  return `$${Number(value).toFixed(2)}`;
 }
 
 export async function sendHealthEmail({ health, reason = "scheduled" }) {
@@ -504,7 +559,7 @@ export async function sendWeeklyReportEmail({ report }) {
 
       if (report.intelligence && report.intelligence.samples > 0) {
       bodyLines.push(
-        "Intelligence Divergence (Guardian vs Scout):",
+        "System Logic Divergence (Deterministic vs Probabilistic):",
         `  - Avg Divergence:   ${report.intelligence.avgDivergence}`,
         `  - Significant (>0.3): ${report.intelligence.significantDisagreements} instances`,
         ""

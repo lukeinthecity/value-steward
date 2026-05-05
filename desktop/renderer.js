@@ -315,7 +315,7 @@ function renderMacro(world) {
   appendLine(elements.worldSummary, `System Regime: ${finalLabel}`, "text-ai world-summary-primary");
   appendLine(
     elements.worldSummary,
-    `Inputs: Guardian ${guardianLabel} / Scout ${scoutLabel}`,
+    `System Logic: Deterministic ${guardianLabel} / Probabilistic ${scoutLabel}`,
     "label-mini"
   );
   appendLine(
@@ -382,12 +382,22 @@ function renderIntents(intents) {
 
     const time = document.createElement("span");
     time.className = "text-muted";
-    time.textContent = `[${ts.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    })}]`;
+    const dateText = Number.isNaN(ts.getTime())
+      ? "unknown"
+      : ts.toLocaleDateString([], {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+    const timeText = Number.isNaN(ts.getTime())
+      ? "unknown"
+      : ts.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+    time.textContent = `[${dateText} ${timeText}]`;
     row.appendChild(time);
     row.appendChild(document.createTextNode(" "));
 

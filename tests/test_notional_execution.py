@@ -7,7 +7,7 @@ import pytest
 from valuesteward.config import ValueStewardSettings
 from valuesteward.core.execution_engine import ExecutionEngine
 from valuesteward.core.risk_governor import RiskGovernor
-from valuesteward.models import IntentRecord, PortfolioSnapshot, RiskMode
+from valuesteward.models import IntentRecord, PortfolioSnapshot, Position, RiskMode
 
 
 @pytest.fixture(autouse=True)
@@ -45,13 +45,20 @@ class FakeAlpacaClient:
         return {"SPY": Snap()}
 
 
-def build_snapshot(equity: float) -> PortfolioSnapshot:
+def build_snapshot(
+    equity: float,
+    *,
+    cash: float | None = None,
+    positions: list[Position] | None = None,
+) -> PortfolioSnapshot:
     return PortfolioSnapshot(
         timestamp=datetime.now(timezone.utc),
-        cash=equity,
+        cash=equity if cash is None else cash,
         equity=equity,
-        positions=[],
-        risk_exposure_pct=0.0,
+        positions=positions or [],
+        risk_exposure_pct=0.0
+        if not positions
+        else sum(position.market_value for position in positions) / equity,
     )
 
 
@@ -147,3 +154,61 @@ def test_skip_when_below_min_notional(monkeypatch) -> None:
     snapshot = build_snapshot(equity=100_000.0)
     engine.execute_intent(intent, snapshot)
     assert engine.alpaca_client.submitted is False
+
+
+def test_portfolio_sandbox_cap_blocks_buy_when_headroom_exhausted(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=5.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = ExecutionEngine(
+        alpaca_client=FakeAlpacaClient(),
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+
+    snapshot = build_snapshot(
+        equity=100_000.0,
+        cash=99_980.0,
+        positions=[
+            Position(symbol="A", quantity=1.0, market_value=10.0, asset_class="us_equity"),
+            Position(symbol="B", quantity=1.0, market_value=10.0, asset_class="us_equity"),
+        ],
+    )
+    engine.execute_intent(build_intent(size_pct=0.5), snapshot)
+    assert engine.alpaca_client.submitted is False
+
+
+def test_portfolio_sandbox_cap_clamps_buy_to_remaining_headroom(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=5.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = ExecutionEngine(
+        alpaca_client=FakeAlpacaClient(),
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+
+    snapshot = build_snapshot(
+        equity=100_000.0,
+        cash=99_983.0,
+        positions=[
+            Position(symbol="A", quantity=1.0, market_value=17.0, asset_class="us_equity"),
+        ],
+    )
+    engine.execute_intent(build_intent(size_pct=0.5), snapshot)
+    assert engine.alpaca_client.submitted is True
+    assert engine.alpaca_client.last_notional == 3.0

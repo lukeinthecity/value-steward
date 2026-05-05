@@ -4,6 +4,8 @@ import { startSpinner } from "../world/spinner.js";
 async function main() {
   const stopSpinner = startSpinner("train policy", { total: 1 });
   const force = process.argv.includes("--force");
+  const scorecardOnly = process.argv.includes("--scorecard-only");
+  const historyOnly = process.argv.includes("--history-only");
   const training = trainPolicyFromHistoryLocal({
     minHistory: 10,
     equityDeltaThreshold: Number(
@@ -14,6 +16,8 @@ async function main() {
     maxRisk: Number(process.env.VS_TRAIN_MAX_RISK ?? 0.33),
     minRiskDelta: Number(process.env.VS_TRAIN_MIN_RISK_DELTA ?? 0),
     force,
+    allowScorecard: !historyOnly,
+    allowHistory: !scorecardOnly,
   });
 
   stopSpinner.update(1);

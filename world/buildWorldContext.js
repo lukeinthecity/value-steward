@@ -12,6 +12,7 @@ import {
   toWorldDateString,
   getWorldTimeZone,
 } from "./contextUtils.js";
+import { buildArtifactCycleId } from "../core/runtimeArtifacts.js";
 import { scoreWorldTags } from "./ruleBasedTags.js";
 import { observeWorld } from "./shadowObserver.js";
 import { computeSmoothedTags, SMOOTHING_DEFAULTS } from "./tagSmoothing.js";
@@ -95,6 +96,7 @@ function buildBaseContext({ entries, date }) {
     date,
     slot: getWorldSlot(),
     generated_at: new Date().toISOString(),
+    cycle_id: null,
     summary: null,
     tags: {
       macro_risk: null,
@@ -254,6 +256,11 @@ async function main() {
       scoutLabel: contextToUse.scout_label,
       scoutScore: contextToUse.scout_score,
     });
+    contextToUse.cycle_id = buildArtifactCycleId({
+      exchangeDate: contextToUse.date ?? date,
+      worldContextGeneratedAt: contextToUse.generated_at,
+      worldContextSlot: slot,
+    });
 
     if (!validateContext(contextToUse)) {
       console.error(
@@ -272,6 +279,11 @@ async function main() {
         notes: `rule-based world context (validation fallback) | scout: ${contextToUse.scout_label}`,
       };
       fallback.slot = slot;
+      fallback.cycle_id = buildArtifactCycleId({
+        exchangeDate: fallback.date ?? date,
+        worldContextGeneratedAt: fallback.generated_at,
+        worldContextSlot: slot,
+      });
       if (!validateContext(fallback)) {
         console.error("[world] base context failed validation; aborting write");
         stopSpinner.update(1);
@@ -312,6 +324,11 @@ async function main() {
       notes: "rule-based world context (digest error)",
     };
     fallback.slot = slot;
+    fallback.cycle_id = buildArtifactCycleId({
+      exchangeDate: fallback.date ?? date,
+      worldContextGeneratedAt: fallback.generated_at,
+      worldContextSlot: slot,
+    });
     appendContext(fallback);
     const logDate = fallback.date ?? date;
     console.log(

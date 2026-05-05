@@ -7,6 +7,9 @@ import { computeCanTrade } from "./tradeGate.js";
 import { applyGpioStateToControl } from "./gpioBridge.js";
 import { getExchangeDateString } from "./timeUtils.js";
 import {
+  appendHistoryEntry,
+  buildArtifactCycleId,
+  buildHistoryEntryFromTickResult,
   loadPolicySnapshot,
   saveLatestTickSnapshot,
 } from "./runtimeArtifacts.js";
@@ -179,6 +182,13 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     throw new Error("Policy snapshot unavailable after Python tick.");
   }
   const worldContext = await loadLatestWorldContext().catch(() => null);
+  const cycleId =
+    worldContext?.cycle_id ??
+    buildArtifactCycleId({
+      exchangeDate: getExchangeDateString(new Date()),
+      worldContextGeneratedAt: worldContext?.generated_at ?? null,
+      worldContextSlot: worldContext?.slot ?? null,
+    });
   const tradeGate = computeCanTrade({
     mode: state.current_mode,
     internetOk: null,
@@ -197,13 +207,17 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   saveLatestTickSnapshot({
     generated_at: new Date().toISOString(),
     exchange_date: getExchangeDateString(new Date()),
+    cycle_id: cycleId,
     python_exit_code: exitCode,
     policy: {
       version: policy.version ?? null,
       mode: policy.mode ?? null,
       risk_level: policy.risk_level ?? null,
     },
-    result: finalResult,
+    result: {
+      ...finalResult,
+      cycle_id: cycleId,
+    },
   });
 
   // 5. Enrich the dashboard snapshot with fresh read-only broker data when available.
@@ -227,13 +241,17 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     saveLatestTickSnapshot({
       generated_at: new Date().toISOString(),
       exchange_date: getExchangeDateString(new Date()),
+      cycle_id: cycleId,
       python_exit_code: exitCode,
       policy: {
         version: policy.version ?? null,
         mode: policy.mode ?? null,
         risk_level: policy.risk_level ?? null,
       },
-      result: finalResult,
+      result: {
+        ...finalResult,
+        cycle_id: cycleId,
+      },
     });
   } catch (err) {
     finalResult = buildFallbackTickResult({
@@ -249,17 +267,35 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     saveLatestTickSnapshot({
       generated_at: new Date().toISOString(),
       exchange_date: getExchangeDateString(new Date()),
+      cycle_id: cycleId,
       python_exit_code: exitCode,
       policy: {
         version: policy.version ?? null,
         mode: policy.mode ?? null,
         risk_level: policy.risk_level ?? null,
       },
-      result: finalResult,
+      result: {
+        ...finalResult,
+        cycle_id: cycleId,
+      },
     });
     console.warn(
       `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`
     );
+  }
+
+  try {
+    appendHistoryEntry(
+      buildHistoryEntryFromTickResult({
+        exchangeDate: getExchangeDateString(new Date()),
+        generatedAt: new Date().toISOString(),
+        cycleId,
+        policy,
+        result: finalResult,
+      })
+    );
+  } catch (err) {
+    console.warn(`[VS] Failed to append history entry: ${err?.message ?? err}`);
   }
 
   console.log(`[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`);

@@ -150,10 +150,16 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
   assert.equal(portfolioText.includes("3/19/2026"), true);
   assert.equal(window.document.querySelector("#hud-equity").textContent.includes("$99,976.00"), true);
   assert.equal(worldSummaryText.includes("System Regime: STRESSED"), true);
-  assert.equal(worldSummaryText.includes("Guardian CALM / Scout STRESSED"), true);
+  assert.equal(
+    worldSummaryText.includes(
+      "System Logic: Deterministic CALM / Probabilistic STRESSED"
+    ),
+    true
+  );
   assert.equal(worldSummaryText.includes("Agreement: Divergent"), true);
   assert.equal(worldSummaryText.includes("A cautious macro thesis."), true);
   assert.equal(window.document.querySelector("#tick-meta").textContent.includes("03/20/2026"), true);
+  assert.equal(window.document.querySelector("#intent-feed").textContent.includes("[03/19/2026 03:40:12 PM]"), true);
   assert.equal(tickerText.includes("Headline one"), true);
   assert.equal(tickerText.includes(" // "), true);
   assert.equal(secretStatusText.includes("Stored securely"), true);
