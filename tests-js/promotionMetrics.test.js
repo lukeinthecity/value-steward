@@ -104,6 +104,56 @@ test("daily promotion snapshot flags cap breaches and reconciliation mismatches"
   assert.equal(snapshot.verdict, "not_eligible");
 });
 
+test("daily promotion snapshot fails cap compliance when total deployed exceeds sandbox cap", async () => {
+  const { buildDailyPromotionSnapshot } = await importPromotionMetrics();
+
+  const snapshot = await buildDailyPromotionSnapshot({
+    state: {
+      current_mode: "LIVE",
+      last_run_at: "2026-04-13T19:55:00.000Z",
+      trading_enabled: true,
+      force_no_trade: false,
+      executions_today: 1,
+    },
+    policy: {
+      version: 57,
+      mode: "rebalance",
+      risk_level: 0.2,
+      max_effective_capital_dollars: 20,
+      max_trade_notional_dollars: 5,
+    },
+    tickSnapshot: {
+      result: {
+        ranAt: "2026-04-13T20:15:00.000Z",
+        equity: 100000,
+        positions: [{ symbol: "A" }, { symbol: "B" }, { symbol: "C" }],
+      },
+    },
+    portfolio: {
+      updated_at: "2026-04-13T20:15:00.000Z",
+      account: { equity: 100000 },
+      positions: [
+        { symbol: "A", market_value: 10.0 },
+        { symbol: "B", market_value: 5.0 },
+        { symbol: "C", market_value: 6.0 },
+      ],
+    },
+    worldContext: {
+      generated_at: "2026-04-13T20:00:00.000Z",
+      date: "2026-04-13",
+      slot: "pre_close",
+      macro_view: { macro_label: "watchful", macro_score: 0.35 },
+      sources_used: ["a"],
+      raw_count: 10,
+    },
+  });
+
+  assert.equal(snapshot.cap_compliance.total_deployed_dollars, 21);
+  assert.equal(snapshot.cap_compliance.total_deployed_over_cap, true);
+  assert.equal(snapshot.cap_compliance.pass, false);
+  assert.match(snapshot.blockers.join(","), /cap_breach/);
+});
+
 test("daily promotion snapshot treats health warnings as readiness blockers", async (t) => {
   const prevCwd = process.cwd();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-promotion-health-"));

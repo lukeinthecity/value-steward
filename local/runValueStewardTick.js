@@ -4,7 +4,6 @@ import { runTick } from "../core/tick.js";
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import {
   sendHealthEmail,
-  sendLessonEmail,
   sendPhaseCheckpointEmail,
 } from "../core/emailNotifications.js";
 import {
@@ -44,10 +43,11 @@ async function main() {
   );
 
   // 2. Local Training (Post-Tick)
-  const training =
+  await (
     isFinalTick || trainOnNonFinalTick
-      ? await trainPolicyFromHistoryLocal({
+      ? trainPolicyFromHistoryLocal({
           worldContext: result.worldContext,
+          allowScorecard: false,
         })
       : {
           updated: false,
@@ -55,7 +55,8 @@ async function main() {
           oldRisk: tickPolicy?.risk_level ?? null,
           newRisk: tickPolicy?.risk_level ?? null,
           metrics: null,
-        };
+        }
+  );
   const policy = loadPolicySnapshot() ?? tickPolicy;
 
   // 3. Status & Notifications
@@ -72,18 +73,7 @@ async function main() {
     await markHealthEmailSent();
   }
 
-  // Phase 1 Progress
   const phase = buildPhase1Status();
-
-  if (training.updated && isFinalTick) {
-    await sendLessonEmail({
-      policy,
-      result,
-      training,
-      worldContext: result.worldContext,
-      tradingDays: phase.trading_days,
-    });
-  }
   const phaseCheck = shouldSendPhaseEmail({
     agentState: state,
     phase,

@@ -19,5 +19,15 @@
   "IEF": "BONDS",
   "SHY": "BONDS",
   "GLD": "GOLD",
-  "SLV": "SILVER"
+  "SLV": "SILVER",
+  "CBON": "BONDS",
+  "DAAQ": "FINANCIALS",
+  "EMLP": "ENERGY",
+  "KCHV": "FINANCIALS",
+  "NAPR": "UTILITIES",
+  "PPL": "UTILITIES",
+  "QBUF": "INDEX",
+  "SMAX": "INDEX",
+  "UAPR": "INDEX",
+  "CZWI": "FINANCIALS"
 }

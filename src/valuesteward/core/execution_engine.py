@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import os
 import logging
-from typing import Literal, cast
+from typing import Literal, cast, SupportsFloat, SupportsIndex
 
 from valuesteward.config import ValueStewardSettings, get_settings
 from valuesteward.core.risk_governor import RiskGovernor
@@ -13,6 +13,43 @@ from valuesteward.models import IntentRecord, PortfolioSnapshot
 from valuesteward.steward_state import load_steward_state, update_steward_state
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    try:
+        parsed = float(cast(str | bytes | SupportsFloat | SupportsIndex, value))
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed == parsed else default
+
+
+def _position_market_value(snapshot: PortfolioSnapshot) -> float:
+    return sum(max(0.0, _safe_float(position.market_value)) for position in snapshot.positions)
+
+
+def _open_order_notional(order: object) -> float:
+    notional = _safe_float(getattr(order, "notional", None))
+    if notional > 0:
+        return notional
+    qty = _safe_float(getattr(order, "qty", None))
+    limit_price = _safe_float(
+        getattr(order, "limit_price", None),
+        _safe_float(getattr(order, "filled_avg_price", None)),
+    )
+    if qty > 0 and limit_price > 0:
+        return qty * limit_price
+    return 0.0
+
+
+def _open_buy_reservations(open_orders: list[object], exclude_symbol: str | None = None) -> float:
+    reserved = 0.0
+    for order in open_orders:
+        if str(getattr(order, "side", "")).lower() != "buy":
+            continue
+        if exclude_symbol and getattr(order, "symbol", None) == exclude_symbol:
+            continue
+        reserved += max(0.0, _open_order_notional(order))
+    return reserved
 
 def _get_market_timezone() -> ZoneInfo:
     tz = (
@@ -239,38 +276,27 @@ class ExecutionEngine:
             return
 
         open_orders = self.alpaca_client.get_open_orders()
-        deployed_notional = self._current_deployed_notional(snapshot)
+        sandbox_cap = self.settings.max_effective_capital_dollars
 
         # --- MULTI ACTION BLOCK ---
         if intent.actions:
             executed = 0
+            in_flight_deployed = _position_market_value(snapshot)
+            in_flight_reserved = _open_buy_reservations(open_orders)
             for action in intent.actions:
                 symbol = action.symbol
-                
-                # --- Elite Quant: Capital Clamping ---
-                raw_notional = float(action.notional)
-                effective_notional = min(raw_notional, self.settings.max_effective_capital_dollars)
-                target_notional = min(effective_notional, self.settings.max_trade_notional_dollars)
-                # ------------------------------------
-
                 side = action.side.lower()
-                if side == "buy":
-                    target_notional = self._clamp_to_sandbox_headroom(
-                        target_notional,
-                        deployed_notional,
-                    )
-                    if target_notional < self.settings.min_trade_notional_dollars:
-                        logger.info(
-                            "[EXEC] MULTI buy blocked by sandbox cap. "
-                            f"deployed=${deployed_notional:.2f} "
-                            f"max=${self.settings.max_sandbox_deployed_dollars:.2f}"
-                        )
-                        continue
-                
+                raw_notional = max(0.0, _safe_float(action.notional))
+
                 # Check for partial fills
-                remaining_notional = target_notional
+                remaining_notional = raw_notional
                 for order in open_orders:
                     if order.symbol == symbol:
+                        if side == "buy" and str(getattr(order, "side", "")).lower() == "buy":
+                            in_flight_reserved = max(
+                                0.0,
+                                in_flight_reserved - _open_order_notional(order),
+                            )
                         filled_qty = float(order.filled_qty or 0)
                         if filled_qty > 0:
                             # Use position-based price for better fallback
@@ -288,6 +314,19 @@ class ExecutionEngine:
                         
                         self.alpaca_client.cancel_open_orders(symbol)
 
+                if side == "buy":
+                    headroom = max(0.0, sandbox_cap - in_flight_deployed - in_flight_reserved)
+                    remaining_notional = min(
+                        remaining_notional,
+                        self.settings.max_trade_notional_dollars,
+                        headroom,
+                    )
+                else:
+                    remaining_notional = min(
+                        remaining_notional,
+                        self.settings.max_trade_notional_dollars,
+                    )
+
                 if remaining_notional < self.settings.min_trade_notional_dollars:
                     continue
 
@@ -300,18 +339,15 @@ class ExecutionEngine:
                 price = self.alpaca_client.submit_steward_order(
                     symbol=symbol,
                     side=cast(Literal["buy", "sell"], side),
-                    notional=round(remaining_notional, 2),
+                    notional=round(remaining_notional, 2)
                 )
                 if price:
                     action.reason = f"{action.reason or ''} mid_price={price:.2f}".strip()
-                if side == "buy":
-                    deployed_notional += remaining_notional
-                elif side == "sell":
-                    deployed_notional = max(
-                        deployed_notional - remaining_notional,
-                        0.0,
-                    )
                 executed += 1
+                if side == "buy":
+                    in_flight_deployed += remaining_notional
+                elif side == "sell":
+                    in_flight_deployed = max(0.0, in_flight_deployed - remaining_notional)
             
             if executed:
                 self._record_execution("MULTI", None, executed)
@@ -324,15 +360,8 @@ class ExecutionEngine:
                 return
             target_symbol: str = intent_symbol
 
-            # --- Elite Quant: Capital Clamping ---
             raw_notional = (intent.size_pct or 0.0) * snapshot.equity
-            effective_notional = min(
-                raw_notional, self.settings.max_effective_capital_dollars
-            )
-            target_notional = min(
-                effective_notional, self.settings.max_trade_notional_dollars
-            )
-            # ------------------------------------
+            target_notional = min(raw_notional, self.settings.max_trade_notional_dollars)
 
             pos = next((p for p in snapshot.positions if p.symbol == target_symbol), None)
             
@@ -340,18 +369,6 @@ class ExecutionEngine:
                 if pos:
                     target_notional = min(target_notional, pos.market_value)
                 else:
-                    return
-            else:
-                target_notional = self._clamp_to_sandbox_headroom(
-                    target_notional,
-                    deployed_notional,
-                )
-                if target_notional < self.settings.min_trade_notional_dollars:
-                    logger.info(
-                        "[EXEC] Buy blocked by sandbox cap. "
-                        f"deployed=${deployed_notional:.2f} "
-                        f"max=${self.settings.max_sandbox_deployed_dollars:.2f}"
-                    )
                     return
 
             remaining_notional = target_notional
@@ -371,6 +388,15 @@ class ExecutionEngine:
                             )
                     
                     self.alpaca_client.cancel_open_orders(target_symbol)
+
+            if intent.action_type == "BUY":
+                deployed_notional = _position_market_value(snapshot)
+                reserved_notional = _open_buy_reservations(
+                    open_orders,
+                    exclude_symbol=target_symbol,
+                )
+                headroom = max(0.0, sandbox_cap - deployed_notional - reserved_notional)
+                remaining_notional = min(remaining_notional, headroom)
 
             if remaining_notional < self.settings.min_trade_notional_dollars:
                 logger.info(
@@ -392,20 +418,3 @@ class ExecutionEngine:
             )
             intent.expected_price = price
             self._record_execution(intent.action_type, target_symbol)
-
-    def _current_deployed_notional(self, snapshot: PortfolioSnapshot) -> float:
-        return sum(
-            max(float(position.market_value), 0.0)
-            for position in snapshot.positions
-        )
-
-    def _clamp_to_sandbox_headroom(
-        self,
-        target_notional: float,
-        deployed_notional: float,
-    ) -> float:
-        remaining_headroom = max(
-            self.settings.max_sandbox_deployed_dollars - deployed_notional,
-            0.0,
-        )
-        return min(target_notional, remaining_headroom)

@@ -7,7 +7,9 @@ import { computeCanTrade } from "./tradeGate.js";
 import { applyGpioStateToControl } from "./gpioBridge.js";
 import { getExchangeDateString } from "./timeUtils.js";
 import {
+  appendHistoryEntry,
   buildArtifactCycleId,
+  buildHistoryEntryFromTickResult,
   loadPolicySnapshot,
   saveLatestTickSnapshot,
 } from "./runtimeArtifacts.js";
@@ -184,8 +186,8 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     worldContext?.cycle_id ??
     buildArtifactCycleId({
       exchangeDate: getExchangeDateString(new Date()),
-      slot: worldContext?.slot ?? "tick",
-      sourceTimestamp: worldContext?.generated_at ?? now,
+      worldContextGeneratedAt: worldContext?.generated_at ?? null,
+      worldContextSlot: worldContext?.slot ?? null,
     });
   const tradeGate = computeCanTrade({
     mode: state.current_mode,
@@ -212,7 +214,10 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
       mode: policy.mode ?? null,
       risk_level: policy.risk_level ?? null,
     },
-    result: finalResult,
+    result: {
+      ...finalResult,
+      cycle_id: cycleId,
+    },
   });
 
   // 5. Enrich the dashboard snapshot with fresh read-only broker data when available.
@@ -243,7 +248,10 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
         mode: policy.mode ?? null,
         risk_level: policy.risk_level ?? null,
       },
-      result: finalResult,
+      result: {
+        ...finalResult,
+        cycle_id: cycleId,
+      },
     });
   } catch (err) {
     finalResult = buildFallbackTickResult({
@@ -266,11 +274,28 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
         mode: policy.mode ?? null,
         risk_level: policy.risk_level ?? null,
       },
-      result: finalResult,
+      result: {
+        ...finalResult,
+        cycle_id: cycleId,
+      },
     });
     console.warn(
       `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`
     );
+  }
+
+  try {
+    appendHistoryEntry(
+      buildHistoryEntryFromTickResult({
+        exchangeDate: getExchangeDateString(new Date()),
+        generatedAt: new Date().toISOString(),
+        cycleId,
+        policy,
+        result: finalResult,
+      })
+    );
+  } catch (err) {
+    console.warn(`[VS] Failed to append history entry: ${err?.message ?? err}`);
   }
 
   console.log(`[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`);

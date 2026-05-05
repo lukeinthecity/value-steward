@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 
 import {
   getExchangeDateString,
+  isTradingDay,
   isWithinPostCloseWindow,
 } from "../core/timeUtils.js";
 import { loadStateSync } from "../core/stewardState.js";
@@ -26,6 +27,9 @@ export function shouldRunScheduledEod({
   const today = getExchangeDateString(now);
   if (force) {
     return { run: true, reason: "forced", exchangeDate: today };
+  }
+  if (!isTradingDay(now)) {
+    return { run: false, reason: "non_trading_day", exchangeDate: today };
   }
   if (lastEodDate === today) {
     return { run: false, reason: "already_sent", exchangeDate: today };

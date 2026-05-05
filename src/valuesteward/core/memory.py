@@ -55,21 +55,20 @@ class MemoryEngine:
             logger.error(f"[MEMORY] Failed to read intent log: {exc}")
 
     def append(self, intent: IntentRecord) -> None:
-        """Append an intent to memory and persistence using O_APPEND writes."""
+        """Append an intent to memory and persistence using Atomic pattern."""
         self._intents.append(intent)
-
+        
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             record = intent.to_json_dict()
-            line = (json.dumps(record) + "\n").encode("utf-8")
             fd = os.open(
                 self.log_path,
                 os.O_APPEND | os.O_CREAT | os.O_WRONLY,
                 0o644,
             )
             try:
-                os.write(fd, line)
+                os.write(fd, f"{json.dumps(record)}\n".encode("utf-8"))
                 os.fsync(fd)
             finally:
                 os.close(fd)

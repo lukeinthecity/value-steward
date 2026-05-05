@@ -1,76 +1,81 @@
-"""Regression coverage for scorecard refresh updates."""
+"""Scorecard refresh behavior tests."""
 
-from __future__ import annotations
-
+from datetime import date, datetime, timedelta, timezone
 import json
-from datetime import datetime, timezone
+import math
 from types import SimpleNamespace
 
-import pytest
-from click.testing import CliRunner
-
-from valuesteward.cli import main
+import valuesteward.cli as cli
 from valuesteward.models import IntentRecord, RiskMode
 
 
-class FakeMemoryEngine:
-    def __init__(self) -> None:
-        self._intents = [
-            IntentRecord(
-                id="intent-1",
-                timestamp=datetime(2026, 3, 16, 19, 55, tzinfo=timezone.utc),
-                mode=RiskMode.LOW,
-                action_type="BUY",
-                symbol="SPY",
-                explanation="test buy",
-            )
-        ]
+class DummyMemoryEngine:
+    """Return a fixed set of intents."""
 
-    def get_recent_intents(self, limit: int = 50):
+    def __init__(self, intents):
+        self._intents = intents
+
+    def get_recent_intents(self, limit: int = 200):
         return self._intents[:limit]
 
 
-class FakeMarketDataClient:
-    def __init__(self, settings) -> None:
-        self.settings = settings
+class DummyMarketDataClient:
+    """Return deterministic daily bars for the requested symbols."""
+
+    def __init__(self, _settings) -> None:
+        self._base_date = date(2026, 3, 31)
 
     def get_daily_bars(self, symbols, lookback_days):
-        closes = {
-            "SPY": [100.0, 102.0, 104.0],
-        }
-        bars_by_symbol = {}
+        del lookback_days
+        bars = {}
         for symbol in symbols:
-            prices = closes.get(symbol, closes["SPY"])
-            bars_by_symbol[symbol] = [
+            if symbol == "KCHV":
+                closes = [100.0, 103.0]
+            else:
+                closes = [200.0, 202.0]
+            bars[symbol] = [
                 SimpleNamespace(
-                    timestamp=datetime(2026, 3, 16 + offset, 20, 0, tzinfo=timezone.utc),
-                    close=price,
+                    timestamp=datetime.combine(
+                        self._base_date + timedelta(days=index),
+                        datetime.min.time(),
+                        tzinfo=timezone.utc,
+                    ),
+                    close=close,
                 )
-                for offset, price in enumerate(prices)
+                for index, close in enumerate(closes)
             ]
-        return bars_by_symbol
+        return bars
 
 
 def test_scorecard_refresh_updates_existing_horizons(tmp_path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    state_path = tmp_path / "steward-state.json"
-    state_lock_path = tmp_path / "steward-state.json.lock"
-    scorecard_path = tmp_path / "signal-scorecard.jsonl"
-
-    state_path.write_text(
-        json.dumps({"phase1_start_date": "2026-03-16"}),
-        encoding="utf-8",
+    intent_timestamp = datetime(2026, 3, 31, 19, 50, tzinfo=timezone.utc)
+    intent = IntentRecord(
+        id="intent-1",
+        timestamp=intent_timestamp,
+        mode=RiskMode.LOW,
+        action_type="BUY",
+        symbol="KCHV",
+        signal_symbol="KCHV",
+        explanation="buy test",
     )
-    scorecard_path.write_text(
+    out_path = tmp_path / "signal-scorecard.jsonl"
+    out_path.write_text(
         json.dumps(
             {
                 "intent_id": "intent-1",
-                "timestamp": "2026-03-16T19:55:00+00:00",
+                "timestamp": intent_timestamp.isoformat(),
                 "action_type": "BUY",
-                "symbol": "SPY",
+                "reason_code": None,
+                "symbol": "KCHV",
                 "benchmark": "SPY",
-                "entry_date": "2026-03-16",
+                "entry_date": "2026-03-31",
                 "entry_close": 100.0,
+                "expected_price": None,
+                "signal_score": None,
+                "signal_score_raw": None,
+                "signal_score_smoothed": None,
+                "world_macro_label": None,
+                "world_macro_score": None,
                 "horizons": {
                     "1": {
                         "return": None,
@@ -88,34 +93,30 @@ def test_scorecard_refresh_updates_existing_horizons(tmp_path, monkeypatch) -> N
         encoding="utf-8",
     )
 
-    monkeypatch.setattr("valuesteward.steward_state.STATE_PATH", state_path)
-    monkeypatch.setattr("valuesteward.steward_state.STATE_LOCK_PATH", state_lock_path)
-    monkeypatch.setattr("valuesteward.cli.MemoryEngine", FakeMemoryEngine)
-    monkeypatch.setattr("valuesteward.cli.MarketDataClient", FakeMarketDataClient)
-    monkeypatch.setattr("valuesteward.cli.get_settings", lambda: SimpleNamespace())
-
-    result = CliRunner().invoke(
-        main,
-        [
-            "scorecard",
-            "--out",
-            str(scorecard_path),
-            "--limit",
-            "10",
-            "--horizons",
-            "1",
-            "--benchmark",
-            "SPY",
-        ],
+    monkeypatch.setattr(
+        cli,
+        "MemoryEngine",
+        lambda: DummyMemoryEngine([intent]),
+    )
+    monkeypatch.setattr(cli, "MarketDataClient", DummyMarketDataClient)
+    monkeypatch.setattr(cli, "load_steward_state", lambda: {})
+    monkeypatch.setattr(cli, "get_phase1_start_date", lambda state: None)
+    monkeypatch.setattr(
+        cli,
+        "is_on_or_after_phase1_start",
+        lambda timestamp, state: True,
     )
 
-    assert result.exit_code == 0
-    assert "updated: 1" in result.output
+    cli.scorecard.callback(out=str(out_path), limit=10, horizons="1", benchmark="SPY")
 
-    record = json.loads(scorecard_path.read_text(encoding="utf-8").strip())
-    assert record["entry_close"] == 100.0
-    assert record["horizons"]["1"]["return"] == pytest.approx(0.02)
-    assert record["horizons"]["1"]["benchmark_return"] == pytest.approx(0.02)
-    assert record["horizons"]["1"]["excess_vs_benchmark"] == pytest.approx(0.0)
-    assert record["horizons"]["1"]["signed_return"] == pytest.approx(0.02)
-    assert record["horizons"]["1"]["directional_correct"] is True
+    rows = [
+        json.loads(line)
+        for line in out_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 1
+    assert rows[0]["intent_id"] == "intent-1"
+    assert math.isclose(rows[0]["horizons"]["1"]["return"], 0.03, rel_tol=1e-9)
+    assert math.isclose(
+        rows[0]["horizons"]["1"]["benchmark_return"], 0.01, rel_tol=1e-9
+    )

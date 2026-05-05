@@ -59,10 +59,26 @@ function getAgeHours(value) {
   if (!value) return null;
   const ts = Date.parse(value);
   if (Number.isNaN(ts)) return null;
-  return (Date.now() - ts) / (1000 * 60 * 60);
+  return Math.max(0, (Date.now() - ts) / (1000 * 60 * 60));
 }
 
-function summarizeInbox(entries, sources) {
+export function getFreshnessTimestampForSource(source, data) {
+  const tags = Array.isArray(source?.tags) ? source.tags : [];
+  const isForwardLooking = tags.includes("forward");
+  if (isForwardLooking) {
+    return data?.last_ts ?? data?.last_published ?? null;
+  }
+  const publishedTs = data?.last_published ?? null;
+  if (publishedTs) {
+    const publishedMs = Date.parse(publishedTs);
+    if (!Number.isNaN(publishedMs) && publishedMs <= Date.now()) {
+      return publishedTs;
+    }
+  }
+  return data?.last_ts ?? publishedTs ?? null;
+}
+
+export function summarizeInbox(entries, sources) {
   const bySource = new Map();
   for (const entry of entries) {
     const sourceId = entry.source_id ?? "unknown";
@@ -93,7 +109,7 @@ function summarizeInbox(entries, sources) {
   const rows = [];
   for (const source of sources) {
     const data = bySource.get(source.id);
-    const lastActivity = data?.last_published ?? data?.last_ts ?? null;
+    const lastActivity = getFreshnessTimestampForSource(source, data);
     const ageHours = getAgeHours(lastActivity);
     const thresholdHours =
       typeof source.stale_hours === "number" ? source.stale_hours : STALE_HOURS;
@@ -117,6 +133,7 @@ function summarizeInbox(entries, sources) {
       label: source.label,
       enabled: source.enabled !== false,
       count: data?.count ?? 0,
+      last_activity: lastActivity,
       last_ts: data?.last_ts ?? null,
       last_published: data?.last_published ?? null,
       age_hours: ageHours,
@@ -266,7 +283,7 @@ function saveHealthState(state) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 }
 
-function updateHealthState(summary, health) {
+export function updateHealthState(summary, health) {
   const next = health ?? { last_checked: null, sources: {} };
   next.sources = next.sources ?? {};
   const now = new Date().toISOString();
@@ -283,11 +300,13 @@ function updateHealthState(summary, health) {
       stale_streak: 0,
       last_checked: null,
       last_seen: null,
+      last_published: null,
       last_age_hours: null,
     };
     entry.stale_streak = row.stale ? (entry.stale_streak ?? 0) + 1 : 0;
     entry.last_checked = now;
-    entry.last_seen = row.last_published ?? row.last_ts ?? null;
+    entry.last_seen = row.last_activity ?? null;
+    entry.last_published = row.last_published ?? null;
     entry.last_age_hours = row.age_hours ?? null;
     next.sources[row.id] = entry;
   }

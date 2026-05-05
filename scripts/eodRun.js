@@ -2,7 +2,8 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { loadLatestTickSnapshot } from "../core/runtimeArtifacts.js";
+import { buildArtifactCycleId } from "../core/runtimeArtifacts.js";
+import { getExchangeDateString } from "../core/timeUtils.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import { startSpinner } from "../world/spinner.js";
 
@@ -14,18 +15,11 @@ function resolvePythonCommand() {
   return "python3";
 }
 
-function buildEodCycleId() {
-  const tickSnapshot = loadLatestTickSnapshot();
-  const tickCycleId = tickSnapshot?.cycle_id ?? null;
-  if (tickCycleId) return tickCycleId;
-  return null;
-}
-
-function runCommand(label, cmd, args, envExtra = {}) {
+function runCommand(label, cmd, args, env = process.env) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
       cwd: process.cwd(),
-      env: { ...process.env, ...envExtra, PYTHONPATH: "./src" },
+      env: { ...env, PYTHONPATH: "./src" },
       stdio: "inherit",
     });
     child.on("close", (code) => {
@@ -42,18 +36,37 @@ async function main() {
   // Trust the scheduler/cron for timing.
   const pythonCmd = resolvePythonCommand();
   const worldContext = await loadLatestWorldContext().catch(() => null);
-  const cycleId = buildEodCycleId() ?? worldContext?.cycle_id ?? "";
+  const cycleId =
+    worldContext?.cycle_id ??
+    buildArtifactCycleId({
+      exchangeDate: getExchangeDateString(new Date()),
+      worldContextGeneratedAt: worldContext?.generated_at ?? null,
+      worldContextSlot: worldContext?.slot ?? null,
+    });
   const steps = [
     {
       label: "final:portfolio:sync",
       cmd: "npm",
       args: ["run", "portfolio:refresh"],
-      env: cycleId ? { VS_ARTIFACT_CYCLE_ID: cycleId } : {},
+      env: {
+        ...process.env,
+        VS_ARTIFACT_CYCLE_ID: cycleId ?? "",
+      },
     },
     {
       label: "scorecard:refresh",
       cmd: pythonCmd,
       args: ["-m", "valuesteward.cli", "scorecard"],
+    },
+    {
+      label: "train:policy:scorecard",
+      cmd: "node",
+      args: ["scripts/trainPolicy.js", "--scorecard-only"],
+    },
+    {
+      label: "patterns:refresh",
+      cmd: pythonCmd,
+      args: ["-m", "valuesteward.cli", "patterns"],
     },
     {
       label: "steward:insights:email",

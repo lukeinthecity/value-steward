@@ -48,6 +48,18 @@ test("eod scheduler respects post-close window and canonical dedupe", () => {
   assert.equal(third.reason, "already_sent");
 });
 
+test("eod scheduler skips non-trading days", () => {
+  const holidayPostClose = new Date("2026-04-03T20:15:00Z"); // Good Friday, 16:15 ET
+
+  const decision = shouldRunScheduledEod({
+    now: holidayPostClose,
+    lastEodDate: null,
+  });
+
+  assert.equal(decision.run, false);
+  assert.equal(decision.reason, "non_trading_day");
+});
+
 test("world scheduler force bypasses window and dedupe checks", () => {
   const now = new Date("2026-03-13T02:00:00Z");
 

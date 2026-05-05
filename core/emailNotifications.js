@@ -1,6 +1,5 @@
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
-import { buildSystemLogicExplanation } from "./systemLogicExplanation.js";
 
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
@@ -20,7 +19,12 @@ async function generateAISummary({ type, data }) {
     Your Reporting Framework:
     1. Performance Attribution: Explain the "Why" behind the results (e.g., regime shifts, momentum quality).
     2. Capital Discipline: Highlight adherence to the 3% kill-switch and 2.0 SD Vol-Stops.
-    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the deterministic and probabilistic views.
+    3. Strategic Posture: Define if the bot is currently defensive, opportunistic, or balanced based on the deterministic and probabilistic regime views.
+
+    Data semantics:
+    - exposure fields ending in "Pct" are fractions of equity
+    - grossExposure and netExposure are dollar notionals unless explicitly suffixed with "Pct"
+    - never describe grossExposure or netExposure as percentages unless the pct fields are provided
 
     Avoid flowery language. Use terms like 'alpha decay', 'volatility clustering', 'regime change', and 'convexity'.
   `;
@@ -109,8 +113,9 @@ export async function sendLessonEmail({
   worldContext,
   promotion = null,
   emailMode = "update",
-  lastOrder = null,
-  decisionReview = null,
+  intradaySummary = null,
+  lastOrderToday = null,
+  lastBrokerOrder = null,
   tradingDays = 0,
 }) {
   const config = loadEmailConfig("lesson email");
@@ -169,11 +174,15 @@ export async function sendLessonEmail({
     `- Overconcentrated: ${metrics.isOverconcentrated ?? "n/a"}`,
     "",
     "Snapshot:",
-    `- Equity: ${result.equity}`,
-    `- Buying power: ${result.buyingPower}`,
+    `- Equity: ${formatCurrency(result.equity)}`,
+    `- Buying power: ${formatCurrency(result.buyingPower)}`,
     `- Positions held: ${result.numPositions}`,
-    `- Gross exposure: ${result.grossExposure}`,
-    `- Net exposure: ${result.netExposure}`,
+    `- Gross exposure: ${formatCurrency(result.grossExposure)} (${formatPercent(
+      result.grossExposurePct
+    )})`,
+    `- Net exposure: ${formatCurrency(result.netExposure)} (${formatPercent(
+      result.netExposurePct
+    )})`,
     `- Trade gate: mode=${result.tradeGate?.mode ?? "n/a"} canTrade=${
       result.tradeGate?.canTrade ?? "n/a"
     } tradingEnabled=${result.tradeGate?.tradingEnabled ?? "n/a"}`,
@@ -192,6 +201,7 @@ export async function sendLessonEmail({
     `- Pass: ${promotion?.cap_compliance?.pass ?? "n/a"}`,
     `- Max effective cap: ${promotion?.cap_compliance?.max_effective_capital_dollars ?? "n/a"}`,
     `- Max trade cap: ${promotion?.cap_compliance?.max_trade_notional_dollars ?? "n/a"}`,
+    `- Total deployed: ${promotion?.cap_compliance?.total_deployed_dollars ?? "n/a"}`,
     `- Largest position value: ${promotion?.cap_compliance?.max_position_value ?? "n/a"}`,
     `- Oversized positions: ${promotion?.cap_compliance?.oversized_count ?? "n/a"}`,
     "",
@@ -210,53 +220,6 @@ export async function sendLessonEmail({
         : "none"
     }`,
     "",
-    "Decision Review:",
-    `- Decision intents: ${decisionReview?.total_intents ?? 0}`,
-    `- Intent counts: ${
-      decisionReview?.action_counts && Object.keys(decisionReview.action_counts).length
-        ? Object.entries(decisionReview.action_counts)
-            .map(([action, count]) => `${action}=${count}`)
-            .join(", ")
-        : "none"
-    }`,
-    `- Orders submitted: ${decisionReview?.orders_submitted ?? 0}`,
-    `- Orders filled: ${decisionReview?.orders_filled ?? 0}`,
-    `- Order statuses: ${
-      decisionReview?.order_status_counts &&
-      Object.keys(decisionReview.order_status_counts).length
-        ? Object.entries(decisionReview.order_status_counts)
-            .map(([status, count]) => `${status}=${count}`)
-            .join(", ")
-        : "none"
-    }`,
-    `- Dominant reasons: ${
-      Array.isArray(decisionReview?.top_reasons) && decisionReview.top_reasons.length
-        ? decisionReview.top_reasons
-            .map((entry) => `${entry.label} (${entry.count})`)
-            .join(", ")
-        : "none"
-    }`,
-    `- Symbols with submitted orders: ${
-      Array.isArray(decisionReview?.submitted_symbols) && decisionReview.submitted_symbols.length
-        ? decisionReview.submitted_symbols.join(", ")
-        : "none"
-    }`,
-    `- Symbols with filled orders: ${
-      Array.isArray(decisionReview?.filled_symbols) && decisionReview.filled_symbols.length
-        ? decisionReview.filled_symbols.join(", ")
-        : "none"
-    }`,
-    `- Decision summary: ${decisionReview?.summary ?? "No decision activity recorded."}`,
-    ...(Array.isArray(decisionReview?.action_ledger) && decisionReview.action_ledger.length
-      ? [
-          "- Action ledger:",
-          ...decisionReview.action_ledger.map(
-            (entry) =>
-              `  - ${entry.symbol}: ${entry.action_type} — ${entry.reason_code} (${entry.regime_label})`
-          ),
-        ]
-      : ["- Action ledger: none"]),
-    "",
     "World Context:",
   ];
 
@@ -269,8 +232,6 @@ export async function sendLessonEmail({
     const finalRegime = worldContext.final_regime ?? null;
     const macroScore = macroView?.macro_score;
     const macroLabel = macroView?.macro_label;
-    const scoutLabel = worldContext.scout_label ?? "n/a";
-    const logicExplanation = buildSystemLogicExplanation(worldContext);
     const macroLine =
       macroScore !== null && macroScore !== undefined
         ? `${Number(macroScore).toFixed(2)} (${macroLabel ?? "n/a"})`
@@ -281,7 +242,7 @@ export async function sendLessonEmail({
             typeof finalRegime.final_score === "number"
               ? Number(finalRegime.final_score).toFixed(2)
               : "n/a"
-          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${describeFusionReason(finalRegime.fusion_reason)}`
+          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${finalRegime.fusion_reason ?? "n/a"}`
         : "n/a";
 
     const tags = worldContext.tags ?? {};
@@ -293,13 +254,7 @@ export async function sendLessonEmail({
 
     bodyLines.push(
       `- Date: ${worldContext.date ?? "n/a"}`,
-      `- System Regime: ${regimeLine}`,
-      `- System Logic: Deterministic=${macroLabel ?? "n/a"} · Probabilistic=${scoutLabel}`,
-      `- ${logicExplanation.baseline_summary}`,
-      `- ${logicExplanation.overlay_summary}`,
-      `- ${logicExplanation.resolution_summary}`,
-      `- ${logicExplanation.decision_impact_summary}`,
-      `- Decision rationale: ${decisionReview?.summary ?? "No decision activity recorded."}`,
+      `- Regime: ${regimeLine}`,
       `- Macro: ${macroLine} · ${macroTags}`,
       `- Geopolitics: ${formatTag(tags.geopolitical_tension)}`,
       `- Energy shock risk: ${formatTag(tags.energy_shock_risk)}`,
@@ -320,20 +275,58 @@ export async function sendLessonEmail({
     }
   }
 
-  if (lastOrder) {
-    const qtyText = lastOrder.qty ?? lastOrder.notional ?? "n/a";
-    const priceText = lastOrder.filled_avg_price ?? "n/a";
+  if (intradaySummary) {
     bodyLines.push(
       "",
-      "Last Order:",
-      `- Symbol: ${lastOrder.symbol ?? "n/a"}`,
-      `- Side: ${lastOrder.side ?? "n/a"} Status: ${lastOrder.status ?? "n/a"}`,
-      `- Qty/Notional: ${qtyText} Type: ${lastOrder.type ?? "n/a"}`,
-      `- Submitted: ${lastOrder.submitted_at ?? "n/a"}`,
-      `- Filled: ${lastOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+      "Intraday Observations:",
+      `- Snapshots recorded: ${intradaySummary.count}`,
+      `- Times: ${
+        Array.isArray(intradaySummary.times) && intradaySummary.times.length
+          ? intradaySummary.times.join(", ")
+          : "n/a"
+      }`,
+      `- Regime path: ${intradaySummary.first_regime ?? "n/a"} -> ${
+        intradaySummary.last_regime ?? "n/a"
+      }`,
+      `- Regime shifts observed: ${intradaySummary.regime_shift_count ?? "n/a"}`,
+      `- Max positions observed: ${intradaySummary.max_positions ?? "n/a"}`,
+      `- Persistent candidates: ${
+        Array.isArray(intradaySummary.persistent_candidates) &&
+        intradaySummary.persistent_candidates.length
+          ? intradaySummary.persistent_candidates.join(", ")
+          : "none"
+      }`
+    );
+  }
+
+  if (lastOrderToday) {
+    const qtyText = lastOrderToday.qty ?? lastOrderToday.notional ?? "n/a";
+    const priceText = lastOrderToday.filled_avg_price ?? "n/a";
+    bodyLines.push(
+      "",
+      "Last Order Today:",
+      `- Symbol: ${lastOrderToday.symbol ?? "n/a"}`,
+      `- Side: ${lastOrderToday.side ?? "n/a"} Status: ${lastOrderToday.status ?? "n/a"}`,
+      `- Qty/Notional: ${qtyText} Type: ${lastOrderToday.type ?? "n/a"}`,
+      `- Submitted: ${lastOrderToday.submitted_at ?? "n/a"}`,
+      `- Filled: ${lastOrderToday.filled_at ?? "n/a"} Avg price: ${priceText}`
     );
   } else {
-    bodyLines.push("", "Last Order:", "- Status: unavailable");
+    bodyLines.push("", "Last Order Today:", "- Status: none");
+  }
+
+  if (lastBrokerOrder) {
+    const qtyText = lastBrokerOrder.qty ?? lastBrokerOrder.notional ?? "n/a";
+    const priceText = lastBrokerOrder.filled_avg_price ?? "n/a";
+    bodyLines.push(
+      "",
+      "Most Recent Broker Order:",
+      `- Symbol: ${lastBrokerOrder.symbol ?? "n/a"}`,
+      `- Side: ${lastBrokerOrder.side ?? "n/a"} Status: ${lastBrokerOrder.status ?? "n/a"}`,
+      `- Qty/Notional: ${qtyText} Type: ${lastBrokerOrder.type ?? "n/a"}`,
+      `- Submitted: ${lastBrokerOrder.submitted_at ?? "n/a"}`,
+      `- Filled: ${lastBrokerOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+    );
   }
 
   bodyLines.push(
@@ -367,29 +360,9 @@ function formatPercent(value) {
   return `${(Number(value) * 100).toFixed(2)}%`;
 }
 
-function describeFusionReason(value) {
-  switch (value) {
-    case "deterministic_only":
-    case "guardian_only":
-      return "Deterministic only";
-    case "probabilistic_only":
-    case "scout_only":
-      return "Probabilistic only";
-    case "probabilistic_more_cautious":
-    case "scout_more_cautious":
-      return "Probabilistic view more cautious";
-    case "deterministic_more_cautious":
-    case "guardian_more_cautious":
-      return "Deterministic view more cautious";
-    case "aligned":
-      return "Aligned";
-    case "no_valid_inputs":
-      return "Inputs unavailable";
-    default:
-      return String(value || "n/a")
-        .replaceAll("_", " ")
-        .replace(/\b\w/g, (match) => match.toUpperCase());
-  }
+function formatCurrency(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  return `$${Number(value).toFixed(2)}`;
 }
 
 export async function sendHealthEmail({ health, reason = "scheduled" }) {
@@ -584,41 +557,6 @@ export async function sendWeeklyReportEmail({ report }) {
       );
       }
 
-  if (report.decisionReview) {
-    bodyLines.push(
-      "",
-      "Decision Review:",
-      `  - Dominant reasons: ${
-        report.decisionReview.top_reasons?.length
-          ? report.decisionReview.top_reasons
-              .map((entry) => `${entry.label} (${entry.count})`)
-              .join(", ")
-          : "none"
-      }`,
-      `  - Most active symbols: ${
-        report.decisionReview.top_symbols?.length
-          ? report.decisionReview.top_symbols
-              .map((entry) => `${entry.label} (${entry.count})`)
-              .join(", ")
-          : "none"
-      }`,
-      `  - Dominant regimes: ${
-        report.decisionReview.dominant_regimes?.length
-          ? report.decisionReview.dominant_regimes
-              .map((entry) => `${entry.label} (${entry.count})`)
-              .join(", ")
-          : "none"
-      }`,
-      `  - Executed symbols: ${
-        report.decisionReview.executed_symbols?.length
-          ? report.decisionReview.executed_symbols.join(", ")
-          : "none"
-      }`,
-      `  - Summary: ${report.decisionReview.summary}`,
-      ""
-    );
-  }
-
       if (report.intelligence && report.intelligence.samples > 0) {
       bodyLines.push(
         "System Logic Divergence (Deterministic vs Probabilistic):",
@@ -660,18 +598,6 @@ export async function sendWeeklyReportEmail({ report }) {
           ? report.promotion.current_blockers.join(", ")
           : "none"
       }`
-    );
-  }
-
-  if (report.systemLogic) {
-    bodyLines.push(
-      "",
-      "Current System Logic:",
-      `  - Regime: ${report.systemLogic.final_label}`,
-      `  - ${report.systemLogic.baseline_summary}`,
-      `  - ${report.systemLogic.overlay_summary}`,
-      `  - ${report.systemLogic.resolution_summary}`,
-      `  - ${report.systemLogic.decision_impact_summary}`
     );
   }
 

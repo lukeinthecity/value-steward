@@ -8,6 +8,8 @@
     "email:test": "node scripts/testEmail.js",
     "local:tick": "node local/runValueStewardTick.js",
     "local:tick:scheduled": "node scripts/localTickScheduled.js",
+    "intraday:observe": "node scripts/intradayObservation.js",
+    "intraday:observe:scheduled": "node scripts/intradayObservationScheduled.js",
     "portfolio:refresh": "node scripts/portfolioRefresh.js",
     "scorecard:refresh": "node scripts/scorecardRefresh.js",
     "lint:py": "node scripts/lintPy.js",

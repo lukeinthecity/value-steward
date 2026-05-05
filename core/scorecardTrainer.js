@@ -29,6 +29,14 @@ function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
   return filterPhase1Records(records, { state: loadStateSync() });
 }
 
+function filterRecordsByActionTypes(records, actionTypes) {
+  const allowed = new Set((actionTypes ?? []).map((value) => String(value).toUpperCase()));
+  if (allowed.size === 0) return records.slice();
+  return records.filter((record) =>
+    allowed.has(String(record?.action_type ?? "").toUpperCase())
+  );
+}
+
 function parseNumber(value, fallback) {
   if (value === undefined || value === null) return fallback;
   const parsed = Number(value);
@@ -118,12 +126,14 @@ export function trainPolicyWithScorecard({
   window = 60,
   minSamples = 20,
   signedThreshold = 0,
+  benchmarkThreshold = signedThreshold,
   riskStep = 0.01,
   bufferStep = 0.005,
   minRisk = 0.1,
   maxRisk = 0.33,
   minBuffer = 0.01,
   maxBuffer = 0.05,
+  trainingActionTypes = ["BUY", "MULTI"],
   force = false,
 } = {}) {
   if (!policy) {
@@ -183,7 +193,23 @@ export function trainPolicyWithScorecard({
     }
   }
 
-  const summary = summarizeScorecard(records, horizons, window);
+  const summary = summarizeScorecard(
+    filterRecordsByActionTypes(records, trainingActionTypes),
+    horizons,
+    window
+  );
+  const scorecardSummary = {
+    training: summary,
+    all: summarizeScorecard(records, horizons, window),
+    noAction: summarizeScorecard(
+      filterRecordsByActionTypes(records, ["NO_ACTION"]),
+      horizons,
+      window
+    ),
+    trainingActionTypes: Array.from(
+      new Set((trainingActionTypes ?? []).map((value) => String(value).toUpperCase()))
+    ),
+  };
   const horizonStats = summary.horizons;
   const insufficient = horizons.some((horizon) => {
     const stats = horizonStats[String(horizon)];
@@ -192,21 +218,25 @@ export function trainPolicyWithScorecard({
   if (insufficient) {
     return {
       updated: false,
-      reason: "insufficient_samples",
+      reason: "insufficient_buy_samples",
       fallback: true,
       source: "scorecard",
-      scorecardSummary: summary,
+      scorecardSummary,
     };
   }
 
   const positive = horizons.every((horizon) => {
     const stats = horizonStats[String(horizon)];
-    return stats?.avgSignedReturn !== null && stats.avgSignedReturn > signedThreshold;
+    return (
+      stats?.avgExcessBenchmark !== null &&
+      stats.avgExcessBenchmark > benchmarkThreshold
+    );
   });
   const negative = horizons.every((horizon) => {
     const stats = horizonStats[String(horizon)];
     return (
-      stats?.avgSignedReturn !== null && stats.avgSignedReturn < -signedThreshold
+      stats?.avgExcessBenchmark !== null &&
+      stats.avgExcessBenchmark < -benchmarkThreshold
     );
   });
 
@@ -216,7 +246,7 @@ export function trainPolicyWithScorecard({
       reason: "mixed_signal",
       fallback: false,
       source: "scorecard",
-      scorecardSummary: summary,
+      scorecardSummary,
     };
   }
 
@@ -243,7 +273,7 @@ export function trainPolicyWithScorecard({
       newRisk,
       oldBuffer,
       newBuffer,
-      scorecardSummary: summary,
+      scorecardSummary,
     };
   }
 
@@ -262,7 +292,8 @@ export function trainPolicyWithScorecard({
       horizons,
       minSamples,
       signedThreshold,
-      summary,
+      benchmarkThreshold,
+      summary: scorecardSummary,
     },
   };
 
@@ -276,7 +307,7 @@ export function trainPolicyWithScorecard({
     oldBuffer,
     newBuffer,
     policyVersion: newPolicy.version,
-    scorecardSummary: summary,
+    scorecardSummary,
     newPolicy,
   };
 }

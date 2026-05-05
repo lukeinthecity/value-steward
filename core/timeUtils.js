@@ -182,6 +182,14 @@ function addDays(dateString, days) {
   return dt.toISOString().slice(0, 10);
 }
 
+export function getPreviousTradingDate(date = new Date()) {
+  let cursor = addDays(getExchangeDateString(date), -1);
+  while (isWeekendDate(cursor) || isMarketHolidayDate(cursor)) {
+    cursor = addDays(cursor, -1);
+  }
+  return cursor;
+}
+
 function isWeekendDate(dateString) {
   const [year, month, day] = dateString.split("-").map(Number);
   const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();

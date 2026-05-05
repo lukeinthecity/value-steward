@@ -11,6 +11,12 @@
 # portfolio:refresh - Morning sync at 9:00 AM ET (Ensures fresh data for Monday open)
 0 09 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run portfolio:refresh >> /home/lukes/value-steward/logs/cron.log 2>&1
 
+# intraday observation snapshots - lean observational memory only
+0 10 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+30 11 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+30 13 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+0 15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+
 # world:health scheduler - refresh feed health/context twice daily, including weekends/holidays.
 5 6,18 * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:health:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 

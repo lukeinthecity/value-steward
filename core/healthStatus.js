@@ -11,8 +11,9 @@ import { loadStateSync } from "./stewardState.js";
 import {
   getExchangeDateString,
   getExchangeParts,
-  getMarketOpenClose,
   getMarketTimeZone,
+  getMarketOpenClose,
+  getPreviousTradingDate,
   isMarketOpenNow,
   isTradingDay,
 } from "./timeUtils.js";
@@ -87,34 +88,40 @@ function artifactTimestamp(...values) {
   return candidate ?? null;
 }
 
-
-function getPreviousTradingDateString(date = new Date()) {
-  const cursor = new Date(date);
-  cursor.setUTCDate(cursor.getUTCDate() - 1);
-  while (!isTradingDay(cursor)) {
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  return getExchangeDateString(cursor);
+function parseExecutionSlots(
+  value = process.env.VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE
+) {
+  const fallback = [30, 20, 10, 5];
+  if (!value) return fallback;
+  const parsed = String(value)
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((part) => Number.isFinite(part) && part >= 0);
+  return parsed.length
+    ? Array.from(new Set(parsed)).sort((a, b) => b - a)
+    : fallback;
 }
 
 function getExpectedTickExchangeDate(now = new Date()) {
-  const exchangeDate = getExchangeDateString(now);
   if (!isTradingDay(now)) {
-    return exchangeDate;
+    return getPreviousTradingDate(now);
   }
 
+  const slots = parseExecutionSlots();
+  const firstExecutionMinutesBeforeClose = slots.length
+    ? Math.max(...slots)
+    : 30;
   const parts = getExchangeParts(now);
   const { close } = getMarketOpenClose(now);
   const nowMinutes = (parts.hour || 0) * 60 + (parts.minute || 0);
   const closeMinutes = close.hour * 60 + close.minute;
-  const executionStartMinutes =
-    closeMinutes -
-    Number(process.env.VS_EXECUTION_WINDOW_START_MINUTES_BEFORE_CLOSE ?? 30);
+  const minutesUntilClose = closeMinutes - nowMinutes;
 
-  if (nowMinutes < executionStartMinutes) {
-    return getPreviousTradingDateString(now);
+  if (minutesUntilClose > firstExecutionMinutesBeforeClose) {
+    return getPreviousTradingDate(now);
   }
-  return exchangeDate;
+
+  return getExchangeDateString(now);
 }
 
 function parseMilestones(value) {
@@ -149,11 +156,10 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolio = loadPortfolioLiveSnapshot();
 
   const tickAgeHours = hoursSince(state.last_run_at);
-  const tickRunExchangeDate = state.last_run_at
+  const tickExpectedExchangeDate = getExpectedTickExchangeDate(now);
+  const tickLastRunExchangeDate = state.last_run_at
     ? getExchangeDateString(new Date(state.last_run_at))
     : null;
-  const expectedTickExchangeDate = getExpectedTickExchangeDate(now);
-  const tickShouldBeCurrent = expectedTickExchangeDate === exchangeDate;
   const worldAgeHours = context?.generated_at
     ? hoursSince(context.generated_at)
     : null;
@@ -198,20 +204,18 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const worldMaxClosed = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_CLOSED ?? 36);
   const worldHealthMax = Number(process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24);
   const scorecardMaxDays = Number(process.env.VS_HEALTH_SCORECARD_MAX_DAYS ?? 7);
+  const tickMeetsDateExpectation =
+    tickLastRunExchangeDate !== null &&
+    tickLastRunExchangeDate === tickExpectedExchangeDate;
 
-  if (tickShouldBeCurrent) {
-    if (tickAgeHours === null || tickAgeHours > tickMaxHours) {
-      issues.push({
-        level: "warn",
-        code: "tick_stale",
-        message: `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
-      });
-    }
-  } else if (tickRunExchangeDate !== expectedTickExchangeDate) {
+  if (!tickMeetsDateExpectation && (tickAgeHours === null || tickAgeHours > tickMaxHours)) {
     issues.push({
       level: "warn",
       code: "tick_stale",
-      message: `Latest tick date ${tickRunExchangeDate ?? "n/a"} does not match expected pre-close baseline ${expectedTickExchangeDate}.`,
+      message:
+        tickLastRunExchangeDate !== null
+          ? `Last tick exchange date ${tickLastRunExchangeDate} does not match expected ${tickExpectedExchangeDate}.`
+          : `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
     });
   }
 
@@ -219,26 +223,14 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const portfolioLimit = marketOpen ? portfolioMaxOpen : portfolioMaxClosed;
   const worldLimit = marketOpen ? worldMaxOpen : worldMaxClosed;
 
-  if (tickShouldBeCurrent) {
-    if (
-      tickArtifactAgeHours === null ||
-      tickArtifactAgeHours > tickMaxHours ||
-      (tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate)
-    ) {
-      issues.push({
-        level: "warn",
-        code: "tick_artifact_stale",
-        message:
-          tickArtifactExchangeDate !== null && tickArtifactExchangeDate !== exchangeDate
-            ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match ${exchangeDate}.`
-            : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
-      });
-    }
-  } else if (tickArtifactExchangeDate !== expectedTickExchangeDate) {
+  if (tickArtifactExchangeDate !== tickExpectedExchangeDate) {
     issues.push({
       level: "warn",
       code: "tick_artifact_stale",
-      message: `Latest tick artifact exchange date ${tickArtifactExchangeDate ?? "n/a"} does not match expected pre-close baseline ${expectedTickExchangeDate}.`,
+      message:
+        tickArtifactExchangeDate !== null
+          ? `Latest tick artifact exchange date ${tickArtifactExchangeDate} does not match expected ${tickExpectedExchangeDate}.`
+          : `Latest tick artifact age ${tickArtifactAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
     });
   }
 
@@ -294,6 +286,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     tick: {
       last_run_at: state.last_run_at ?? null,
       age_hours: tickAgeHours,
+      expected_exchange_date: tickExpectedExchangeDate,
+      last_run_exchange_date: tickLastRunExchangeDate,
     },
     artifacts: {
       latest_tick: {

@@ -15,6 +15,7 @@ const elements = {
   hudBaseline: document.getElementById("hud-baseline"),
   intentFeed: document.getElementById("intent-feed"),
   portfolioPositions: document.getElementById("portfolio-positions"),
+  tickLog: document.getElementById("tick-log"),
   refreshBtn: document.getElementById("refresh-data"),
   actionGrid: document.getElementById("action-grid"),
   nextTick: document.getElementById("next-tick"),
@@ -49,98 +50,6 @@ function appendLine(node, text, className) {
   if (className) line.className = className;
   line.textContent = text;
   node.appendChild(line);
-}
-
-function describeFusionReason(value) {
-  switch (value) {
-    case "deterministic_only":
-    case "guardian_only":
-      return "Deterministic only";
-    case "probabilistic_only":
-    case "scout_only":
-      return "Probabilistic only";
-    case "probabilistic_more_cautious":
-    case "scout_more_cautious":
-      return "Probabilistic view more cautious";
-    case "deterministic_more_cautious":
-    case "guardian_more_cautious":
-      return "Deterministic view more cautious";
-    case "aligned":
-      return "Aligned";
-    case "no_valid_inputs":
-      return "Inputs unavailable";
-    default:
-      return String(value || "n/a")
-        .replaceAll("_", " ")
-        .replace(/\b\w/g, (match) => match.toUpperCase());
-  }
-}
-
-function formatLogicLabel(value) {
-  if (!value || value === "n/a") return "Unavailable";
-  return String(value)
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-function buildSystemLogicExplanation(world) {
-  const deterministic = world?.macro_view?.macro_label ?? null;
-  const probabilistic = world?.scout_label ?? null;
-  const finalRegime = world?.final_regime ?? null;
-  const finalLabel = finalRegime?.final_label ?? deterministic ?? probabilistic ?? "n/a";
-  const divergence = finalRegime?.divergence === true;
-  const fusionReason = describeFusionReason(finalRegime?.fusion_reason ?? "deterministic_only");
-
-  const baselineSummary =
-    deterministic && deterministic !== "n/a"
-      ? `Baseline: Deterministic signals classified conditions as ${formatLogicLabel(deterministic)}.`
-      : "Baseline: Deterministic signals were unavailable.";
-  const overlaySummary =
-    probabilistic && probabilistic !== "n/a"
-      ? `Overlay: Probabilistic signals classified conditions as ${formatLogicLabel(probabilistic)}.`
-      : "Overlay: Probabilistic signals were unavailable.";
-
-  let resolutionSummary = `Resolution: The system regime resolved to ${formatLogicLabel(finalLabel)}.`;
-  if (divergence) {
-    resolutionSummary = `Resolution: The two reasoning modes diverged, so the system resolved to ${formatLogicLabel(finalLabel)} because ${fusionReason.toLowerCase()}.`;
-  } else if (finalRegime?.fusion_reason === "aligned") {
-    resolutionSummary = `Resolution: Both reasoning modes aligned on ${formatLogicLabel(finalLabel)}.`;
-  }
-
-  let decisionImpactSummary =
-    "Decision Impact: By EOD, Value Steward may defer action until regime confidence improves.";
-  switch (finalLabel) {
-    case "calm":
-      decisionImpactSummary =
-        "Decision Impact: By EOD, Value Steward may allow normal sandbox buys if signal quality remains intact.";
-      break;
-    case "watchful":
-      decisionImpactSummary =
-        "Decision Impact: By EOD, Value Steward may filter new buys more aggressively and prefer holds over marginal adds.";
-      break;
-    case "stressed":
-      decisionImpactSummary =
-        "Decision Impact: By EOD, Value Steward may keep deployment constrained and reject lower-conviction buys.";
-      break;
-    case "crisis-prone":
-      decisionImpactSummary =
-        "Decision Impact: By EOD, Value Steward may avoid new buys entirely and prioritize capital preservation.";
-      break;
-    default:
-      break;
-  }
-
-  return {
-    finalLabel: formatLogicLabel(finalLabel),
-    deterministicLabel: formatLogicLabel(deterministic),
-    probabilisticLabel: formatLogicLabel(probabilistic),
-    fusionReason,
-    divergence,
-    baselineSummary,
-    overlaySummary,
-    resolutionSummary,
-    decisionImpactSummary,
-  };
 }
 
 function formatCurrency(val) {
@@ -393,43 +302,30 @@ function renderMacro(world) {
 
   const guardianLabel = world.macro_view?.macro_label?.toUpperCase() || "N/A";
   const scoutLabel = world.scout_label?.toUpperCase() || "N/A";
-  const logicExplanation = buildSystemLogicExplanation(world);
-  const finalLabel = logicExplanation.finalLabel.toUpperCase();
-  const logicStatus =
+  const finalLabel = finalRegime?.final_label?.toUpperCase() || guardianLabel;
+  const agreementLabel =
     finalRegime?.divergence === true
       ? "Divergent"
       : finalRegime?.source === "unavailable"
         ? "Partial"
         : "Aligned";
+  const fusionSource = finalRegime?.source ? String(finalRegime.source) : "guardian";
 
   clearElement(elements.worldSummary);
   appendLine(elements.worldSummary, `System Regime: ${finalLabel}`, "text-ai world-summary-primary");
   appendLine(
     elements.worldSummary,
-    "System Logic:",
+    `System Logic: Deterministic ${guardianLabel} / Probabilistic ${scoutLabel}`,
     "label-mini"
   );
   appendLine(
     elements.worldSummary,
-    `Deterministic: ${guardianLabel}`,
+    `Agreement: ${agreementLabel} · Fusion: ${fusionSource}`,
     "label-mini"
   );
   appendLine(
     elements.worldSummary,
-    `Probabilistic: ${scoutLabel}`,
-    "label-mini"
-  );
-  appendLine(
-    elements.worldSummary,
-    `Logic Status: ${logicStatus} · Fusion Reason: ${logicExplanation.fusionReason}`,
-    "label-mini"
-  );
-  appendLine(elements.worldSummary, logicExplanation.baselineSummary, "world-summary-thesis");
-  appendLine(elements.worldSummary, logicExplanation.overlaySummary, "world-summary-thesis");
-  appendLine(elements.worldSummary, logicExplanation.resolutionSummary, "world-summary-thesis");
-  appendLine(
-    elements.worldSummary,
-    logicExplanation.decisionImpactSummary,
+    world.scout_thesis || world.summary || "No macro thesis available.",
     "world-summary-thesis"
   );
 
@@ -486,12 +382,22 @@ function renderIntents(intents) {
 
     const time = document.createElement("span");
     time.className = "text-muted";
-    time.textContent = `[${ts.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    })}]`;
+    const dateText = Number.isNaN(ts.getTime())
+      ? "unknown"
+      : ts.toLocaleDateString([], {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+    const timeText = Number.isNaN(ts.getTime())
+      ? "unknown"
+      : ts.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+    time.textContent = `[${dateText} ${timeText}]`;
     row.appendChild(time);
     row.appendChild(document.createTextNode(" "));
 
@@ -684,15 +590,25 @@ async function saveSecrets() {
   const api = getApi();
   if (!api || !elements.saveSecretsBtn) return;
   const updates = collectSecretUpdates();
-  if (!Object.keys(updates).length) return;
+  if (!Object.keys(updates).length) {
+    if (elements.tickLog) {
+      elements.tickLog.textContent += "\n[UI] No secret changes submitted.\n";
+    }
+    return;
+  }
 
   elements.saveSecretsBtn.disabled = true;
   try {
     const status = await api.setSecrets(updates);
     clearSecretInputs();
     renderSecretStatus(status);
+    if (elements.tickLog) {
+      elements.tickLog.textContent += "\n[UI] Secure secret store updated.\n";
+    }
   } catch (err) {
-    console.error("[UI] Secret update failed:", err);
+    if (elements.tickLog) {
+      elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+    }
   } finally {
     elements.saveSecretsBtn.disabled = false;
   }
@@ -703,7 +619,7 @@ async function loadData() {
   if (!api) return;
 
   try {
-    const { world, intents, state, history, portfolio, latestTick, secretStatus } =
+    const { world, intents, state, history, portfolio, latestTick, tickLog, secretStatus } =
       (await api.loadDashboardData()) || {};
 
     if (state && elements.nextTick) {
@@ -732,6 +648,11 @@ async function loadData() {
     const holdingDates = buildHoldingDateMap(intents, positionSnapshot.positions);
     renderPositions(positionSnapshot, holdingDates);
     renderSecretStatus(secretStatus);
+
+    if (tickLog && elements.tickLog) {
+      elements.tickLog.textContent = tickLog;
+      elements.tickLog.scrollTop = elements.tickLog.scrollHeight;
+    }
   } catch (err) {
     console.error("[UI] Sync error:", err);
   }
@@ -757,8 +678,13 @@ if (elements.secretStatus) {
       if (!api) throw new Error("API Bridge not available");
       const status = await api.clearSecret(secretKey);
       renderSecretStatus(status);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[UI] Cleared ${secretKey} from secure storage.\n`;
+      }
     } catch (err) {
-      console.error("[UI] Secret clear failed:", err);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+      }
     } finally {
       target.disabled = false;
     }
@@ -772,13 +698,21 @@ if (elements.actionGrid) {
     if (!script) return;
 
     target.disabled = true;
+    if (elements.tickLog) {
+      elements.tickLog.textContent += `\n[UI] Spawning ${script}...\n`;
+    }
 
     try {
       const api = getApi();
       if (!api) throw new Error("API Bridge not available");
-      await api.runAction(script);
+      const res = await api.runAction(script);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += res?.output || "";
+      }
     } catch (err) {
-      console.error("[UI] Action failed:", err);
+      if (elements.tickLog) {
+        elements.tickLog.textContent += `\n[ERROR] ${err.message}\n`;
+      }
     } finally {
       target.disabled = false;
       loadData();

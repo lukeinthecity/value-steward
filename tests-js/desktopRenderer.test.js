@@ -21,6 +21,7 @@ function buildDom() {
       <div id="hud-baseline"></div>
       <div id="intent-feed"></div>
       <div id="portfolio-positions"></div>
+      <pre id="tick-log"></pre>
       <button id="refresh-data"></button>
       <div id="action-grid"></div>
       <div id="news-ticker"></div>
@@ -81,7 +82,6 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
           final_score: 0.7,
           divergence: true,
           source: "scout_more_cautious",
-          fusion_reason: "scout_more_cautious",
         },
         scout_score: 0.7,
         scout_label: "stressed",
@@ -108,6 +108,7 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
           symbol: "WMB",
         },
       ],
+      tickLog: "",
       secretStatus: {
         storageAvailable: true,
         secrets: {
@@ -149,28 +150,16 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
   assert.equal(portfolioText.includes("3/19/2026"), true);
   assert.equal(window.document.querySelector("#hud-equity").textContent.includes("$99,976.00"), true);
   assert.equal(worldSummaryText.includes("System Regime: STRESSED"), true);
-  assert.equal(worldSummaryText.includes("System Logic:"), true);
-  assert.equal(worldSummaryText.includes("Deterministic: CALM"), true);
-  assert.equal(worldSummaryText.includes("Probabilistic: STRESSED"), true);
-  assert.equal(worldSummaryText.includes("Logic Status: Divergent"), true);
-  assert.equal(worldSummaryText.includes("Fusion Reason: Probabilistic view more cautious"), true);
   assert.equal(
-    worldSummaryText.includes("Baseline: Deterministic signals classified conditions as Calm."),
+    worldSummaryText.includes(
+      "System Logic: Deterministic CALM / Probabilistic STRESSED"
+    ),
     true
   );
-  assert.equal(
-    worldSummaryText.includes("Overlay: Probabilistic signals classified conditions as Stressed."),
-    true
-  );
-  assert.equal(
-    worldSummaryText.includes("Resolution: The two reasoning modes diverged, so the system resolved to Stressed because probabilistic view more cautious."),
-    true
-  );
-  assert.equal(
-    worldSummaryText.includes("Decision Impact: By EOD, Value Steward may keep deployment constrained and reject lower-conviction buys."),
-    true
-  );
+  assert.equal(worldSummaryText.includes("Agreement: Divergent"), true);
+  assert.equal(worldSummaryText.includes("A cautious macro thesis."), true);
   assert.equal(window.document.querySelector("#tick-meta").textContent.includes("03/20/2026"), true);
+  assert.equal(window.document.querySelector("#intent-feed").textContent.includes("[03/19/2026 03:40:12 PM]"), true);
   assert.equal(tickerText.includes("Headline one"), true);
   assert.equal(tickerText.includes(" // "), true);
   assert.equal(secretStatusText.includes("Stored securely"), true);
