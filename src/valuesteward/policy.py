@@ -31,6 +31,7 @@ class PolicySnapshot(BaseModel):
     target_risk_exposure_pct_high: float | None = None
     rebalance_buffer_pct: float | None = None
     max_effective_capital_dollars: float | None = None
+    max_sandbox_deployed_dollars: float | None = None
     max_trade_notional_dollars: float | None = None
     min_trade_notional_dollars: float | None = None
     trade_gate_overrides: dict[str, Any] = Field(default_factory=dict)
@@ -96,6 +97,7 @@ def validate_policy(raw_policy: Any) -> tuple[dict[str, Any], list[str]]:
     _validate_percent(policy, "target_risk_exposure_pct_high", warnings)
     _validate_percent(policy, "rebalance_buffer_pct", warnings)
     _validate_positive_number(policy, "max_effective_capital_dollars", warnings)
+    _validate_positive_number(policy, "max_sandbox_deployed_dollars", warnings)
     _validate_positive_number(policy, "max_trade_notional_dollars", warnings)
     _validate_positive_number(policy, "min_trade_notional_dollars", warnings)
 
@@ -148,6 +150,10 @@ def apply_policy_to_settings(
     if isinstance(policy.get("max_effective_capital_dollars"), (int, float)):
         updates["max_effective_capital_dollars"] = float(
             policy["max_effective_capital_dollars"]
+        )
+    if isinstance(policy.get("max_sandbox_deployed_dollars"), (int, float)):
+        updates["max_sandbox_deployed_dollars"] = float(
+            policy["max_sandbox_deployed_dollars"]
         )
     if isinstance(policy.get("max_trade_notional_dollars"), (int, float)):
         updates["max_trade_notional_dollars"] = float(
