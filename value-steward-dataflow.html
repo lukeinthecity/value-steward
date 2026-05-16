@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Value Steward — Data Flow Map</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0a0e1a;
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+header {
+  background: #111827;
+  border-bottom: 1px solid #1e293b;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+h1 { font-size: 16px; font-weight: 700; color: #f1f5f9; letter-spacing: 0.02em; }
+.subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
+.legend {
+  display: flex; gap: 14px; margin-left: auto; align-items: center; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+.schedule-note {
+  font-size: 10px; color: #334155; background: #1e293b; border: 1px solid #334155;
+  padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+}
+main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+#diagram-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  background: #0a0e1a;
+}
+svg#diagram { display: block; cursor: default; }
+.node-group { cursor: pointer; }
+.node-group:hover rect.node-rect { filter: brightness(1.3); }
+.node-group rect.node-rect { transition: filter 0.15s; }
+
+#detail-panel {
+  width: 280px;
+  background: #111827;
+  border-left: 1px solid #1e293b;
+  padding: 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.dp-placeholder {
+  color: #334155;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 60px;
+  line-height: 1.6;
+}
+.dp-layer-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+.dp-title { font-size: 14px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; line-height: 1.3; }
+.dp-file {
+  font-size: 10px; color: #7c3aed; font-family: 'Consolas', 'Courier New', monospace;
+  margin-bottom: 12px; word-break: break-all;
+}
+.dp-desc { font-size: 12px; color: #94a3b8; line-height: 1.6; margin-bottom: 10px; }
+.dp-bullets { padding-left: 14px; }
+.dp-bullets li {
+  font-size: 11px; color: #64748b; line-height: 1.8; list-style: disc;
+  padding-left: 2px;
+}
+.dp-divider { border: none; border-top: 1px solid #1e293b; margin: 12px 0; }
+.dp-io-label { font-size: 10px; font-weight: 600; color: #334155; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.dp-io-val { font-size: 11px; color: #64748b; font-family: monospace; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Value Steward — Data Flow Map</h1>
+    <div class="subtitle">Node.js + Python · Alpaca Paper Trading · Click any node for details</div>
+  </div>
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#1d4ed8"></div>World Layer
+      <span class="schedule-note">~hourly</span>
+    </div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4338ca"></div>Orchestration</div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#047857"></div>Signal Engine
+      <span class="schedule-note">pre-close</span>
+    </div>
+    <div class="legend-item"><div class="legend-dot" style="background:#92400e"></div>Decision Engine</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#9a3412"></div>Execution Engine</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#334155"></div>State / Persistence</div>
+    <div class="legend-item">
+      <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4,2"/><polygon points="22,2 30,5 22,8" fill="#f43f5e"/></svg>
+      Feedback loop
+    </div>
+  </div>
+</header>
+<main>
+  <div id="diagram-container">
+    <svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div id="detail-panel">
+    <div class="dp-placeholder">← Click any node<br>to see its role,<br>file path, and<br>responsibilities</div>
+  </div>
+</main>
+
+<script>
+// ─── LAYOUT CONFIG ───────────────────────────────────────────────────────────
+
+const LANE_Y_START = 55;
+const CONTENT_HEIGHT = 650;
+const STATE_Y = 740;
+const STATE_H = 48;
+const SVG_H = 830;
+
+const lanes = [
+  { id: 'world',     label: 'World Layer',      sub: 'Node.js · runs hourly',         x: 0,    w: 255, hc: '#1d4ed8', bg: 'rgba(29,78,216,0.08)',  border: '#1e3a8a' },
+  { id: 'orch',      label: 'Orchestration',     sub: 'Node.js',                        x: 263,  w: 225, hc: '#4338ca', bg: 'rgba(67,56,202,0.08)',  border: '#312e81' },
+  { id: 'signal',    label: 'Signal Engine',     sub: 'Python · per tick',              x: 496,  w: 240, hc: '#047857', bg: 'rgba(4,120,87,0.08)',   border: '#065f46' },
+  { id: 'decision',  label: 'Decision Engine',   sub: 'Python · per tick',              x: 744,  w: 240, hc: '#92400e', bg: 'rgba(146,64,14,0.08)', border: '#78350f' },
+  { id: 'execution', label: 'Execution Engine',  sub: 'Python → Alpaca API',            x: 992,  w: 235, hc: '#9a3412', bg: 'rgba(154,52,18,0.08)', border: '#7c2d12' },
+];
+
+const SVG_W = 992 + 235 + 8; // 1235
+
+// ─── NODE DATA ───────────────────────────────────────────────────────────────
+
+const nodes = [
+  // WORLD LAYER
+  {
+    id: 'rss', lane: 'world', x: 8, y: 80, w: 238, h: 38, external: true,
+    label: 'Financial RSS Feeds', sub: 'External sources · world/feeds.json',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Configured financial news RSS feeds (Bloomberg, Reuters, FT, WSJ, etc.) ingested on the world-context schedule.',
+    bullets: ['Defined in world/feeds.json', 'Multiple source diversification reduces single-source bias', 'Fetched on hourly systemd schedule', 'Raw entries written to data/world-inbox.jsonl'],
+    input: 'External HTTP (RSS/Atom XML)', output: 'data/world-inbox.jsonl'
+  },
+  {
+    id: 'fetch', lane: 'world', x: 8, y: 140, w: 238, h: 38,
+    label: 'fetchRss.js', sub: 'world/fetchRss.js',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Fetches all configured RSS feeds, parses XML/Atom, deduplicates articles by ID, and writes raw entries.',
+    bullets: ['Parses RSS 2.0 and Atom feed formats', 'Deduplicates by article GUID/link', 'Respects ETag / Last-Modified headers', 'Writes to data/world-inbox.jsonl'],
+    input: 'world/feeds.json (URL list)', output: 'data/world-inbox.jsonl'
+  },
+  {
+    id: 'hydrate', lane: 'world', x: 8, y: 200, w: 238, h: 38,
+    label: 'hydrateLinks.js', sub: 'world/hydrateLinks.js',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Fetches full article text from the URLs in world-inbox.jsonl using readability extraction.',
+    bullets: ['HTTP fetch of article URLs', 'Extracts main body text (readability algo)', 'Skips paywalled / redirect-only articles gracefully', 'Writes to data/world-hydrated.jsonl'],
+    input: 'data/world-inbox.jsonl', output: 'data/world-hydrated.jsonl'
+  },
+  {
+    id: 'ruletags', lane: 'world', x: 8, y: 260, w: 238, h: 38,
+    label: 'ruleBasedTags.js', sub: 'world/ruleBasedTags.js',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Applies deterministic keyword-matching rules to tag each article with macro risk signals. No ML — fully auditable.',
+    bullets: ['Tags: MACRO_RISK, RECESSION_FEAR, GEO_HIGH, ENERGY_SHOCK, RATE_HAWK', 'Bullish / bearish / neutral per category', 'Threshold-based: keyword hit count → tag weight', 'Deterministic and reproducible'],
+    input: 'data/world-hydrated.jsonl', output: 'Tagged article objects (in-memory)'
+  },
+  {
+    id: 'smoothing', lane: 'world', x: 8, y: 320, w: 238, h: 38,
+    label: 'tagSmoothing.js', sub: 'world/tagSmoothing.js',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Smooths raw per-article tag scores over a configurable time window to prevent single-article overreaction.',
+    bullets: ['Exponential moving average over tag scores', 'Prevents single-article spikes from changing regime', 'Configurable smoothing window (hours)', 'Outputs smoothed score per tag category'],
+    input: 'Tagged article objects', output: 'Smoothed macro scores per tag'
+  },
+  {
+    id: 'gemini', lane: 'world', x: 8, y: 380, w: 238, h: 38,
+    label: 'massiveMacro.js', sub: 'world/massiveMacro.js · Google Gemini API',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Sends article summaries to Google Gemini for LLM-based macro sentiment scoring. Adds a second, independent signal to the rule-based tags.',
+    bullets: ['Gemini API: structured prompt with article summaries', 'Returns macro_score float (0.0 – 1.0)', 'Parses: treasury yields, inflation, unemployment signals', 'Provides "Scout" view independent of rule-based "Guardian"'],
+    input: 'Article summaries', output: 'macro_score (float), scout_thesis (string)'
+  },
+  {
+    id: 'digest', lane: 'world', x: 8, y: 440, w: 238, h: 38,
+    label: 'makeMacroDigest.js', sub: 'world/makeMacroDigest.js',
+    layerTag: 'World Layer', layerColor: '#1d4ed8',
+    desc: 'Fuses rule-based Guardian tags with Gemini Scout scores into a final macro regime label and writes the snapshot.',
+    bullets: ['Weighted score: macro_risk×0.40, recession×0.30, geo×0.15, energy×0.15', 'Regime labels: calm / watchful / stressed / crisis-prone', 'Fuses Guardian (rule-based) with Scout (Gemini)', 'Takes more conservative view when they diverge', 'Writes timestamped snapshot to data/world-context.jsonl'],
+    input: 'Smoothed tags + Gemini score', output: 'data/world-context.jsonl (JSONL append)'
+  },
+
+  // ORCHESTRATION
+  {
+    id: 'timers', lane: 'orch', x: 271, y: 80, w: 208, h: 38, external: true,
+    label: 'systemd Timers', sub: 'docs/systemd/*.timer',
+    layerTag: 'Orchestration', layerColor: '#4338ca',
+    desc: 'Four systemd timer units control the execution schedule for each subsystem. Configured for an always-on Linux host (Raspberry Pi or server).',
+    bullets: ['value-steward-world.timer: world context, hourly during market hours', 'value-steward-tick.timer: every 15 min, fires 30–5 min before close', 'value-steward-eod.timer: daily after 4:00 PM ET', 'value-steward-weekly.timer: Sundays for QuantStats report', 'Fallback: crontab file also provided'],
+    input: 'System clock', output: 'Service start events'
+  },
+  {
+    id: 'tickjs', lane: 'orch', x: 271, y: 155, w: 208, h: 38,
+    label: 'tick.js', sub: 'core/tick.js',
+    layerTag: 'Orchestration', layerColor: '#4338ca',
+    desc: 'Node.js main loop orchestrator. Manages the full tick lifecycle: spawns Python, captures output, updates shared state, and triggers notifications.',
+    bullets: ['Spawns Python valuesteward CLI as child process', 'Captures stdout JSON artifact from Python', 'Writes data/latest-tick.json snapshot', 'Calls stewardState.js to update steward-state.json', 'Sends trade notifications (email/SMS)', 'Records to data/history.jsonl'],
+    input: 'systemd timer trigger', output: 'Python subprocess spawn, state updates, notifications'
+  },
+  {
+    id: 'runvs', lane: 'orch', x: 271, y: 230, w: 208, h: 38,
+    label: 'runValueSteward.js', sub: 'core/runValueSteward.js',
+    layerTag: 'Orchestration', layerColor: '#4338ca',
+    desc: 'Spawns the Python valuesteward tick CLI as a child process and streams its structured JSON output back to tick.js.',
+    bullets: ['Executes: python -m valuesteward tick', 'Captures stdout line-by-line', 'Parses JSON artifact emitted by Python CLI', 'Propagates errors and exit codes back to tick.js', 'Applies timeout guard for hung Python processes'],
+    input: 'Invocation from tick.js', output: 'Python IntentRecord JSON artifact'
+  },
+  {
+    id: 'statejs', lane: 'orch', x: 271, y: 490, w: 208, h: 38,
+    label: 'stewardState.js', sub: 'core/stewardState.js',
+    layerTag: 'Orchestration', layerColor: '#4338ca',
+    desc: 'Node.js manager for the shared steward-state.json file. Uses file-based locking to prevent concurrent corruption between Node.js and Python.',
+    bullets: ['File lock: 5s timeout, 25ms retry, 15s stale threshold', 'Reads / writes data/steward-state.json', 'Manages: trading_enabled, force_no_trade, daily_equity_baseline', 'Tracks execution_count_today', 'Cross-process safe (both Node.js and Python use it)'],
+    input: 'tick.js calls', output: 'data/steward-state.json (atomic write)'
+  },
+  {
+    id: 'gpio', lane: 'orch', x: 271, y: 565, w: 208, h: 38,
+    label: 'gpioBridge.js', sub: 'core/gpioBridge.js',
+    layerTag: 'Orchestration', layerColor: '#4338ca',
+    desc: 'GPIO physical switch integration for hardware-level trading enable/disable overrides. Designed for Raspberry Pi deployment.',
+    bullets: ['Reads physical GPIO pin state (HIGH/LOW)', 'Maps switch position to trading_enabled flag', 'Daemon process: scripts/gpioDaemon.js', 'Simulator available: scripts/gpioSim.js', 'Kill switch for human-in-the-loop overrides'],
+    input: 'Physical GPIO pins', output: 'force_no_trade flag in steward-state.json'
+  },
+
+  // SIGNAL ENGINE
+  {
+    id: 'config', lane: 'signal', x: 504, y: 230, w: 224, h: 38,
+    label: 'config.py + policy.json', sub: 'src/valuesteward/config.py',
+    layerTag: 'Signal Engine', layerColor: '#047857',
+    desc: 'Pydantic settings model that loads from environment variables and merges with config/policy.json. Single source of truth for all tuning parameters.',
+    bullets: ['Signal weights: VS_SIGNAL_W_RANK_MOM/VOL/DD', 'Risk mode: LOW / MEDIUM / HIGH', 'Max symbols, lookback days, execution window', 'API credentials: ALPACA_API_KEY_ID, ALPACA_SECRET_KEY', 'Flags: VS_SHADOW_MODE, VS_WORLD_CONTEXT_REQUIRED'],
+    input: 'Environment variables + config/policy.json', output: 'Settings object (injected everywhere)'
+  },
+  {
+    id: 'alpdata', lane: 'signal', x: 504, y: 300, w: 224, h: 38,
+    label: 'alpaca_client.py', sub: 'src/valuesteward/data/alpaca_client.py',
+    layerTag: 'Signal Engine', layerColor: '#047857',
+    desc: 'Alpaca SDK wrapper with exponential backoff retry decorator. Handles both market data and order operations.',
+    bullets: ['TradingClient: paper-api.alpaca.markets', 'StockHistoricalDataClient: 15-min SIP delay buffer', '@retry_alpaca(): handles 429, 500/502 with backoff', 'get_all_assets(): tradable, active, fractionable US equities', 'Excludes: SPACs, warrants, defined-outcome ETFs', 'get_snapshots(): latest bid/ask quotes'],
+    input: 'Settings (API keys, base URL)', output: 'Asset universe list, account state, quotes'
+  },
+  {
+    id: 'mktdata', lane: 'signal', x: 504, y: 375, w: 224, h: 38,
+    label: 'market_data.py', sub: 'src/valuesteward/data/market_data.py',
+    layerTag: 'Signal Engine', layerColor: '#047857',
+    desc: 'Fetches historical daily OHLCV bars for the full symbol universe. Enforces freshness and minimum bar count guards.',
+    bullets: ['120-day lookback default (VS_SIGNAL_LOOKBACK_DAYS)', 'Staleness guard: rejects data older than 4 days', 'Monday/holiday extension: 5-day tolerance', 'Minimum 60 bars required per symbol', 'SPY benchmark fetched and validated separately'],
+    input: 'Symbol universe list', output: 'Dict[symbol → DataFrame of daily OHLCV bars]'
+  },
+  {
+    id: 'sigleng', lane: 'signal', x: 504, y: 455, w: 224, h: 85,
+    label: 'signal_engine.py', sub: 'src/valuesteward/core/signal_engine.py',
+    layerTag: 'Signal Engine', layerColor: '#047857',
+    desc: 'Core quant engine. Computes momentum, volatility, and drawdown metrics; percentile-ranks the entire universe; blends into a composite score.',
+    bullets: [
+      'mom_5d / mom_20d / mom_60d (Sharpe-lite: ret / vol·√T)',
+      'Relative strength vs SPY (20d, 60d)',
+      'Percentile rank: momentum ↑, volatility ↓ (inverted), drawdown ↓ (inverted)',
+      'Composite = w_mom·mom_rank + w_vol·vol_rank + w_dd·dd_rank',
+      '+10% execution quality (fill rate, expire rate, penalties)',
+      '+realized alpha prior (historical excess return vs SPY)',
+      '+intraday persistence score (mean-reversion dampener)',
+      'Returns sorted list of SymbolSignal objects'
+    ],
+    input: 'OHLCV bars, SPY benchmark bars', output: 'Sorted SymbolSignal list (best → worst)'
+  },
+
+  // DECISION ENGINE
+  {
+    id: 'worldrec', lane: 'decision', x: 752, y: 230, w: 224, h: 38,
+    label: 'world_recognition.py', sub: 'src/valuesteward/core/world_recognition.py',
+    layerTag: 'Decision Engine', layerColor: '#92400e',
+    desc: 'Loads the latest world-context.jsonl snapshot and translates macro regime into decision-layer signals (WorldTags).',
+    bullets: ['Reads data/world-context.jsonl (latest entry)', 'Staleness gate: max age 180 min (VS_WORLD_CONTEXT_MAX_AGE_MINUTES)', 'Outputs WorldTags: macro_label, macro_score, scout_label, scout_thesis', 'Regime fusion: takes more conservative when Guardian ≠ Scout', 'Required gate: if VS_WORLD_CONTEXT_REQUIRED=true, fails without fresh context'],
+    input: 'data/world-context.jsonl', output: 'WorldTags object'
+  },
+  {
+    id: 'deceng', lane: 'decision', x: 752, y: 405, w: 224, h: 110,
+    label: 'decision_engine.py', sub: 'src/valuesteward/core/decision_engine.py',
+    layerTag: 'Decision Engine', layerColor: '#92400e',
+    desc: 'The strategic brain. Applies macro multipliers, pattern library bias, and all safety gates to produce a fully-traced IntentRecord.',
+    bullets: [
+      'Risk target: LOW=20% / MEDIUM=40% / HIGH=60% exposure',
+      'Macro multiplier: watchful×0.85, stressed×0.50, crisis×0.25',
+      'Pattern bias: nudges target ± based on patterns.jsonl episodes',
+      'Gate: world context fresh? (< 180 min)',
+      'Gate: vol-stop panic sell? (day_return < −2σ)',
+      'Gate: macro buy/sell allowed for current regime?',
+      'Gate: signal quality threshold met? (≥1.55 default)',
+      'Rebalance: current_exposure vs target ± 2% buffer deadzone',
+      'Hold logic: protect winners when macro_score ≤ 0.3 (calm)',
+      'Returns IntentRecord with 40+ gate / score / reason fields'
+    ],
+    input: 'SymbolSignals, WorldTags, portfolio snapshot, patterns.jsonl', output: 'IntentRecord (BUY / SELL / NO_ACTION + full trace)'
+  },
+  {
+    id: 'riskgov', lane: 'decision', x: 752, y: 560, w: 224, h: 38,
+    label: 'risk_governor.py', sub: 'src/valuesteward/core/risk_governor.py',
+    layerTag: 'Decision Engine', layerColor: '#92400e',
+    desc: 'Hard enforcement layer. Blocks any trade that would breach position concentration or total exposure limits.',
+    bullets: ['max_position_pct: cap per single symbol', 'max_risk_exposure_pct: total portfolio deployed', 'Returns allowed=True/False with reason', 'Gate result logged in IntentRecord', 'Deterministic — no market conditions considered here'],
+    input: 'IntentRecord + current portfolio', output: 'gate_risk_governor_allowed (bool)'
+  },
+
+  // EXECUTION ENGINE
+  {
+    id: 'execeng', lane: 'execution', x: 1000, y: 405, w: 220, h: 78,
+    label: 'execution_engine.py', sub: 'src/valuesteward/core/execution_engine.py',
+    layerTag: 'Execution Engine', layerColor: '#9a3412',
+    desc: 'Submits orders using the "Fishing" strategy: mid-point limit orders to minimize spread capture. Multiple circuit breakers enforced here.',
+    bullets: [
+      'Circuit breaker: 3% daily equity loss kills trading',
+      'Execution window guard: only 30–5 min before market close',
+      'Notional bounds: $1–$5 (VS_MIN/MAX_TRADE_NOTIONAL)',
+      'Sandbox cap: $20 effective capital (VS_MAX_EFFECTIVE_CAPITAL)',
+      'Mid-point limit: price = (bid + ask) / 2',
+      'DAY time-in-force (auto-cancel at close)',
+      'Fallback to market order if quote unavailable',
+      'Shadow mode: simulates without submitting (VS_SHADOW_MODE)'
+    ],
+    input: 'IntentRecord + alpaca quotes', output: 'Submitted order (or dry-run log entry)'
+  },
+  {
+    id: 'alpord', lane: 'execution', x: 1000, y: 525, w: 220, h: 38,
+    label: 'alpaca_client.py', sub: 'src/valuesteward/data/alpaca_client.py',
+    layerTag: 'Execution Engine', layerColor: '#9a3412',
+    desc: 'Order submission path of the Alpaca client. Handles fractionable share orders with DAY TIF on paper trading.',
+    bullets: ['submit_steward_order(): limit or market', 'Fractionable shares allow micro-notional positions', 'cancel_open_orders(): pre-tick cleanup', 'get_open_orders(): in-flight capital reservation', 'Base URL: paper-api.alpaca.markets (no live cash risk)'],
+    input: 'Order parameters from execution_engine.py', output: 'Order UUID, fill confirmation'
+  },
+  {
+    id: 'intlog', lane: 'execution', x: 1000, y: 608, w: 220, h: 38,
+    label: 'intent_logger.py', sub: 'src/valuesteward/logging_utils/intent_logger.py',
+    layerTag: 'Execution Engine', layerColor: '#9a3412',
+    desc: 'Atomically appends every IntentRecord to intent_log.jsonl. The complete audit trail with 70+ enrichment fields per entry.',
+    bullets: ['O_APPEND atomic writes with fsync (crash-safe)', 'Fields: action, symbol, scores, all gate results, macro labels, world tags', 'Also logs human-readable summary to stdout', 'Loaded by memory.py on next startup for context', 'Source for scorecard enrollment and pattern extraction'],
+    input: 'IntentRecord + enrichment fields', output: 'logs/intent_log.jsonl (append), stdout'
+  },
+  {
+    id: 'notif', lane: 'execution', x: 1000, y: 693, w: 220, h: 38,
+    label: 'notifications.py', sub: 'src/valuesteward/logging_utils/notifications.py',
+    layerTag: 'Execution Engine', layerColor: '#9a3412',
+    desc: 'Sends email and SMS alerts for significant events: trade fills, circuit breaker trips, daily health checks, and equity milestones.',
+    bullets: ['Trade fill notifications (symbol, side, notional, fill price)', 'Circuit breaker alerts (3% daily loss triggered)', 'Daily health email if system inactive', 'Weekly QuantStats tear sheet email', 'Phase 1 milestone alerts (10% / 25% equity gain)'],
+    input: 'IntentRecord, system events', output: 'Email / SMS (external delivery)'
+  },
+
+  // STATE BAND
+  {
+    id: 'wctx', lane: 'state', x: 8, y: STATE_Y, w: 190, h: STATE_H,
+    label: 'world-context.jsonl', sub: 'data/world-context.jsonl',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'Append-only JSONL log of macro context snapshots. Written by the World Layer; read each tick by world_recognition.py.',
+    bullets: ['Written hourly by makeMacroDigest.js', 'Read by world_recognition.py each tick', 'Staleness gate: max 180 minutes', 'Contains: macro_score, macro_label, regime_label, scout_thesis, divergence flag', 'Retain history for regime attribution'],
+    input: 'makeMacroDigest.js', output: 'world_recognition.py reads latest entry'
+  },
+  {
+    id: 'sstate', lane: 'state', x: 208, y: STATE_Y, w: 190, h: STATE_H,
+    label: 'steward-state.json', sub: 'data/steward-state.json',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'Cross-process unified runtime state. Both Node.js (stewardState.js) and Python (steward_state.py) read/write this with file-based locking.',
+    bullets: ['trading_enabled / force_no_trade flags', 'daily_equity_baseline (circuit breaker reset point)', 'execution_count_today (throttle gate)', 'last_run_timestamp, version field', 'Atomic writes with .lock file coordination'],
+    input: 'Both Node.js and Python processes', output: 'Shared runtime state'
+  },
+  {
+    id: 'ilog', lane: 'state', x: 408, y: STATE_Y, w: 190, h: STATE_H,
+    label: 'intent_log.jsonl', sub: 'logs/intent_log.jsonl',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'The definitive audit trail. One JSON line per decision, every tick, forever. Source for all downstream analysis and learning.',
+    bullets: ['Append-only (never rewritten)', '70+ fields: action, symbol, risk, gates, signals, macro labels, world tags', 'Loaded by memory.py on startup (last 50 entries)', 'Source for scorecard enrollment (1d/5d/20d returns)', 'Source for pattern extraction (regime fingerprints)'],
+    input: 'intent_logger.py (each tick)', output: 'scorecard, patterns, steward.db sync'
+  },
+  {
+    id: 'sdb', lane: 'state', x: 608, y: STATE_Y, w: 165, h: STATE_H,
+    label: 'steward.db', sub: 'data/steward.db',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'SQLite database synced from JSONL files for structured analytics. WAL mode for concurrent access.',
+    bullets: ['Tables: intents, world_context, signals, executions', 'WAL (write-ahead logging) for concurrent reads', 'PRAGMA synchronous=NORMAL (speed/durability balance)', 'Synced via db_manager.py after each tick', 'Used for reporting, QuantStats weekly tear sheet'],
+    input: 'db_manager.py syncs from JSONL files', output: 'Analytics queries, reporting'
+  },
+  {
+    id: 'patterns', lane: 'state', x: 783, y: STATE_Y, w: 195, h: STATE_H,
+    label: 'patterns.jsonl', sub: 'data/patterns.jsonl',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'Pattern library of historical regime episodes. Built offline via "valuesteward patterns" CLI. Fed back into decision_engine.py each tick to bias targets.',
+    bullets: ['Keyed by regime fingerprint (12-char hex)', 'Built by: python -m valuesteward patterns', 'Minimum 3 episodes before pattern goes "active"', 'Fields: avg_return, max_drawdown, sample_size, last_updated', 'Read by decision_engine.py → nudges target exposure ± 1–2%'],
+    input: 'intent_log.jsonl + history.jsonl (offline)', output: 'decision_engine.py reads each tick (feedback)'
+  },
+  {
+    id: 'scorecard', lane: 'state', x: 988, y: STATE_Y, w: 215, h: STATE_H,
+    label: 'signal-scorecard.jsonl', sub: 'data/signal-scorecard.jsonl',
+    layerTag: 'State & Persistence', layerColor: '#334155',
+    desc: 'Post-trade performance tracker. Each trade decision enrolled immediately; resolved at 1d, 5d, and 20d horizons vs. benchmark.',
+    bullets: ['Enrolled at trade submission', 'Resolved at 1d / 5d / 20d forward return horizons', 'Excess return vs. SPY benchmark', 'Aggregated in data/scorecard-summary.json', 'Future: feeds realized alpha prior back into signal_engine.py'],
+    input: 'intent_log.jsonl (each trade)', output: 'scorecard-summary.json, signal quality attribution'
+  },
+];
+
+// ─── ARROW DATA ───────────────────────────────────────────────────────────────
+
+const arrows = [
+  // World chain
+  { from: 'rss',      to: 'fetch',    color: '#3b82f6' },
+  { from: 'fetch',    to: 'hydrate',  color: '#3b82f6' },
+  { from: 'hydrate',  to: 'ruletags', color: '#3b82f6' },
+  { from: 'ruletags', to: 'smoothing',color: '#3b82f6' },
+  { from: 'smoothing',to: 'gemini',   color: '#3b82f6' },
+  { from: 'gemini',   to: 'digest',   color: '#3b82f6' },
+  { from: 'digest',   to: 'wctx',     color: '#3b82f6' },   // world → state
+
+  // Orch chain
+  { from: 'timers',   to: 'tickjs',   color: '#818cf8' },
+  { from: 'tickjs',   to: 'runvs',    color: '#818cf8' },
+
+  // Orch → Signal (spawn Python)
+  { from: 'runvs',    to: 'config',   color: '#94a3b8', label: 'spawns' },
+
+  // Signal chain
+  { from: 'config',   to: 'alpdata',  color: '#34d399' },
+  { from: 'alpdata',  to: 'mktdata',  color: '#34d399' },
+  { from: 'mktdata',  to: 'sigleng',  color: '#34d399' },
+
+  // Orch → World Recognition (Python also gets world context)
+  { from: 'runvs',    to: 'worldrec', color: '#94a3b8' },
+
+  // world-context.jsonl → world_recognition (dashed read)
+  { from: 'wctx',     to: 'worldrec', color: '#3b82f6', dashed: true, label: 'reads each tick' },
+
+  // Signal → Decision
+  { from: 'sigleng',  to: 'deceng',   color: '#94a3b8', label: 'signals' },
+  { from: 'worldrec', to: 'deceng',   color: '#fbbf24', label: 'WorldTags' },
+
+  // Patterns feedback (dashed, feedback loop)
+  { from: 'patterns', to: 'deceng',   color: '#f43f5e', dashed: true, label: 'bias' },
+
+  // Decision chain
+  { from: 'deceng',   to: 'riskgov',  color: '#fbbf24' },
+  { from: 'riskgov',  to: 'execeng',  color: '#94a3b8', label: 'allowed' },
+
+  // Execution chain
+  { from: 'execeng',  to: 'alpord',   color: '#fb923c', label: 'order' },
+  { from: 'execeng',  to: 'intlog',   color: '#fb923c', label: 'log' },
+  { from: 'intlog',   to: 'notif',    color: '#fb923c' },
+
+  // Execution → State
+  { from: 'intlog',   to: 'ilog',     color: '#64748b', label: 'append' },
+  { from: 'statejs',  to: 'sstate',   color: '#818cf8' },
+
+  // State connections
+  { from: 'ilog',     to: 'sdb',      color: '#334155' },
+  { from: 'ilog',     to: 'patterns', color: '#334155' },
+  { from: 'ilog',     to: 'scorecard',color: '#334155' },
+];
+
+// ─── RENDER ENGINE ───────────────────────────────────────────────────────────
+
+const svg = document.getElementById('diagram');
+const ns = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs = {}, parent = null) {
+  const e = document.createElementNS(ns, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function txt(content, attrs = {}, parent = null) {
+  const t = el('text', attrs, parent);
+  t.textContent = content;
+  return t;
+}
+
+svg.setAttribute('width', SVG_W);
+svg.setAttribute('height', SVG_H);
+
+// Defs: arrow markers
+const defs = el('defs', {}, svg);
+const markerColors = { blue: '#3b82f6', green: '#34d399', amber: '#fbbf24', orange: '#fb923c', indigo: '#818cf8', slate: '#94a3b8', grey: '#64748b', dark: '#334155', pink: '#f43f5e' };
+
+function mkColor(hex) {
+  // map arrow color to nearest marker id
+  const map = {
+    '#3b82f6': 'blue', '#34d399': 'green', '#fbbf24': 'amber', '#fb923c': 'orange',
+    '#818cf8': 'indigo', '#94a3b8': 'slate', '#64748b': 'grey', '#334155': 'dark', '#f43f5e': 'pink'
+  };
+  return map[hex] || 'slate';
+}
+
+for (const [name, color] of Object.entries(markerColors)) {
+  const m = el('marker', { id: `ah-${name}`, markerWidth: '7', markerHeight: '7', refX: '5', refY: '3.5', orient: 'auto' }, defs);
+  el('polygon', { points: '0,0 7,3.5 0,7', fill: color }, m);
+}
+
+// Lane backgrounds
+const stateBandBg = el('g', {}, svg);
+el('rect', { x: 0, y: STATE_Y - 18, width: SVG_W, height: STATE_H + 30, rx: 4, fill: 'rgba(15,23,42,0.9)', stroke: '#1e293b', 'stroke-width': 1 }, stateBandBg);
+txt('State & Persistence', { x: SVG_W / 2, y: STATE_Y - 4, fill: '#475569', 'font-size': 10, 'font-weight': 700, 'text-anchor': 'middle', 'letter-spacing': '0.08em', 'font-family': 'Segoe UI, system-ui, sans-serif' }, stateBandBg);
+
+for (const lane of lanes) {
+  const g = el('g', {}, svg);
+  el('rect', { x: lane.x, y: LANE_Y_START, width: lane.w, height: CONTENT_HEIGHT, rx: 4, fill: lane.bg, stroke: lane.border, 'stroke-width': 1 }, g);
+  // lane header
+  el('rect', { x: lane.x, y: LANE_Y_START, width: lane.w, height: 44, rx: 4, fill: `${lane.hc}22`, stroke: 'none' }, g);
+  txt(lane.label, { x: lane.x + lane.w / 2, y: LANE_Y_START + 17, fill: '#e2e8f0', 'font-size': 11, 'font-weight': 700, 'text-anchor': 'middle', 'font-family': 'Segoe UI, system-ui, sans-serif' }, g);
+  txt(lane.sub, { x: lane.x + lane.w / 2, y: LANE_Y_START + 32, fill: '#64748b', 'font-size': 9, 'text-anchor': 'middle', 'font-family': 'Segoe UI, system-ui, sans-serif' }, g);
+}
+
+// Node map for arrow lookup
+const nodeMap = {};
+for (const n of nodes) nodeMap[n.id] = n;
+
+// Lane color map
+const laneColor = { world: '#1d4ed8', orch: '#4338ca', signal: '#047857', decision: '#92400e', execution: '#9a3412', state: '#334155' };
+const laneFill   = { world: 'rgba(29,78,216,0.18)', orch: 'rgba(67,56,202,0.18)', signal: 'rgba(4,120,87,0.18)', decision: 'rgba(146,64,14,0.18)', execution: 'rgba(154,52,18,0.18)', state: 'rgba(51,65,85,0.25)' };
+
+// Render arrows (behind nodes)
+const arrowLayer = el('g', { id: 'arrow-layer' }, svg);
+
+function cx(n) { return n.x + n.w / 2; }
+function cy(n) { return n.y + n.h / 2; }
+function right(n) { return { x: n.x + n.w, y: cy(n) }; }
+function left(n)  { return { x: n.x,       y: cy(n) }; }
+function top(n)   { return { x: cx(n),     y: n.y };    }
+function bot(n)   { return { x: cx(n),     y: n.y + n.h }; }
+
+function bestPoints(src, dst) {
+  const sx = cx(src), sy = cy(src);
+  const dx = cx(dst), dy = cy(dst);
+  const diffX = dx - sx, diffY = dy - sy;
+
+  // Primarily vertical?
+  if (Math.abs(diffY) > Math.abs(diffX) * 0.8) {
+    if (diffY > 0) return { s: bot(src), d: top(dst) };
+    else           return { s: top(src), d: bot(dst) };
+  }
+  // Primarily horizontal
+  if (diffX > 0) return { s: right(src), d: left(dst) };
+  else           return { s: left(src),  d: right(dst) };
+}
+
+function drawArrow(a) {
+  const src = nodeMap[a.from];
+  const dst = nodeMap[a.to];
+  if (!src || !dst) return;
+
+  const { s, d } = bestPoints(src, dst);
+  const mId = mkColor(a.color);
+
+  // Compute bezier CPs
+  const dx = d.x - s.x, dy = d.y - s.y;
+  let cp1x, cp1y, cp2x, cp2y;
+
+  if (Math.abs(dy) > Math.abs(dx) * 0.8) {
+    // Vertical bezier: curve gently
+    cp1x = s.x; cp1y = s.y + dy * 0.45;
+    cp2x = d.x; cp2y = d.y - dy * 0.45;
+  } else {
+    // Horizontal bezier: curve gently
+    cp1x = s.x + dx * 0.45; cp1y = s.y;
+    cp2x = d.x - dx * 0.45; cp2y = d.y;
+  }
+
+  const path = el('path', {
+    d: `M${s.x},${s.y} C${cp1x},${cp1y} ${cp2x},${cp2y} ${d.x},${d.y}`,
+    fill: 'none',
+    stroke: a.color,
+    'stroke-width': a.dashed ? 1.2 : 1.5,
+    'stroke-dasharray': a.dashed ? '5,3' : 'none',
+    'marker-end': `url(#ah-${mId})`,
+    opacity: 0.75
+  }, arrowLayer);
+
+  // Optional edge label
+  if (a.label) {
+    const lx = (s.x + d.x) / 2;
+    const ly = (s.y + d.y) / 2;
+    const bg = el('rect', { x: lx - 18, y: ly - 7, width: 36, height: 13, rx: 3, fill: '#0a0e1a', opacity: 0.85 }, arrowLayer);
+    txt(a.label, {
+      x: lx, y: ly + 4,
+      fill: a.color, 'font-size': 8, 'text-anchor': 'middle', opacity: 0.9,
+      'font-family': 'Consolas, Courier New, monospace'
+    }, arrowLayer);
+  }
+}
+
+for (const a of arrows) drawArrow(a);
+
+// Render nodes (on top of arrows)
+const nodeLayer = el('g', { id: 'node-layer' }, svg);
+const panel = document.getElementById('detail-panel');
+
+function showDetail(n) {
+  const lc = n.layerColor || '#334155';
+  panel.innerHTML = `
+    <span class="dp-layer-tag" style="background:${lc}22;color:${lc};border:1px solid ${lc}44">${n.layerTag}</span>
+    <div class="dp-title">${n.label}</div>
+    <div class="dp-file">${n.sub}</div>
+    <div class="dp-desc">${n.desc}</div>
+    ${n.bullets ? `<ul class="dp-bullets">${n.bullets.map(b => `<li>${b}</li>`).join('')}</ul>` : ''}
+    ${(n.input || n.output) ? `
+      <hr class="dp-divider">
+      ${n.input ? `<div class="dp-io-label">Input</div><div class="dp-io-val">${n.input}</div>` : ''}
+      ${n.output ? `<div class="dp-io-label" style="margin-top:8px">Output</div><div class="dp-io-val">${n.output}</div>` : ''}
+    ` : ''}
+  `;
+}
+
+for (const n of nodes) {
+  const g = el('g', { class: 'node-group', role: 'button', tabindex: '0' }, nodeLayer);
+  g.addEventListener('click', () => showDetail(n));
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') showDetail(n); });
+
+  const lc = laneColor[n.lane] || '#334155';
+  const lf = laneFill[n.lane]  || 'rgba(51,65,85,0.25)';
+
+  // Shadow
+  el('rect', {
+    x: n.x + 2, y: n.y + 2, width: n.w, height: n.h, rx: 5,
+    fill: 'rgba(0,0,0,0.35)', stroke: 'none'
+  }, g);
+
+  // Main rect
+  el('rect', {
+    class: 'node-rect',
+    x: n.x, y: n.y, width: n.w, height: n.h, rx: 5,
+    fill: lf,
+    stroke: lc,
+    'stroke-width': n.external ? 1 : 1.5,
+    'stroke-dasharray': n.external ? '4,2' : 'none'
+  }, g);
+
+  // Accent bar (left edge)
+  if (!n.external) {
+    el('rect', { x: n.x, y: n.y + 4, width: 3, height: n.h - 8, rx: 1.5, fill: lc, opacity: 0.8 }, g);
+  }
+
+  // Label text (main)
+  const labelLines = n.label.length > 28 ? [n.label.substring(0, 28), n.label.substring(28)] : [n.label];
+  const labelY = n.h > 50
+    ? n.y + 16
+    : (labelLines.length > 1 ? n.y + 13 : n.y + n.h / 2 - 4);
+
+  for (let i = 0; i < labelLines.length; i++) {
+    txt(labelLines[i], {
+      x: n.x + 12, y: labelY + i * 13,
+      fill: '#f1f5f9', 'font-size': 11, 'font-weight': 600,
+      'font-family': 'Segoe UI, system-ui, sans-serif'
+    }, g);
+  }
+
+  // Sub text (file path / description)
+  if (n.sub) {
+    const subY = n.h > 50
+      ? n.y + n.h - (n.bullets && n.bullets.length > 4 ? 38 : 28)
+      : n.y + n.h - 9;
+
+    // Truncate sub if too long
+    const maxSubLen = Math.floor((n.w - 18) / 5.8);
+    const subText = n.sub.length > maxSubLen ? n.sub.substring(0, maxSubLen - 1) + '…' : n.sub;
+
+    txt(subText, {
+      x: n.x + 12, y: subY,
+      fill: '#475569', 'font-size': 9,
+      'font-family': 'Consolas, Courier New, monospace'
+    }, g);
+  }
+
+  // Tall node: show key bullet points as mini-text
+  if (n.h > 60 && n.bullets) {
+    const maxBullets = Math.floor((n.h - 40) / 13);
+    const bulletsToShow = n.bullets.slice(0, Math.min(maxBullets, 5));
+    bulletsToShow.forEach((b, i) => {
+      const bText = b.length > 36 ? b.substring(0, 35) + '…' : b;
+      const bY = n.y + 30 + i * 13;
+      txt('· ' + bText, {
+        x: n.x + 12, y: bY,
+        fill: '#64748b', 'font-size': 9,
+        'font-family': 'Segoe UI, system-ui, sans-serif'
+      }, g);
+    });
+  }
+}
+
+// ─── SCHEDULE TIMELINE LABELS ─────────────────────────────────────────────────
+
+const timeLayer = el('g', { id: 'time-labels', opacity: '0.5' }, svg);
+
+function schedLabel(text, x, y, color) {
+  el('rect', { x: x - 2, y: y - 10, width: text.length * 6 + 4, height: 13, rx: 2, fill: `${color}22` }, timeLayer);
+  txt(text, { x, y, fill: color, 'font-size': 9, 'font-weight': 600, 'font-family': 'Segoe UI, sans-serif', 'letter-spacing': '0.04em' }, timeLayer);
+}
+
+schedLabel('~1hr', 120, 505, '#3b82f6');
+schedLabel('30–5min before close', 380, 275, '#818cf8');
+
+// ─── SMALL ANNOTATION: "Circuit Breakers" ────────────────────────────────────
+
+el('rect', { x: 1000, y: 378, width: 220, height: 22, rx: 3, fill: 'rgba(239,68,68,0.10)', stroke: '#7f1d1d', 'stroke-width': 0.5 }, nodeLayer);
+txt('⚡ 3% equity loss kill-switch · execution window · notional caps', {
+  x: 1110, y: 393,
+  fill: '#ef4444', 'font-size': 8.5, 'text-anchor': 'middle', 'font-weight': 600,
+  'font-family': 'Segoe UI, system-ui, sans-serif'
+}, nodeLayer);
+
+</script>
+</body>
+</html>
