@@ -35,8 +35,14 @@ class PolicySnapshot(BaseModel):
     max_trade_notional_dollars: float | None = None
     min_trade_notional_dollars: float | None = None
     trade_gate_overrides: dict[str, Any] = Field(default_factory=dict)
+    signal_weights: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
+
+
+SIGNAL_WEIGHT_MIN = 0.1
+SIGNAL_WEIGHT_MAX = 2.0
+SIGNAL_WEIGHT_KEYS = ("momentum", "vol", "drawdown")
 
 
 def risk_level_to_mode(risk_level: float | None) -> str | None:
@@ -113,6 +119,33 @@ def validate_policy(raw_policy: Any) -> tuple[dict[str, Any], list[str]]:
             warnings.append("trade_gate_overrides.force_no_trade must be boolean.")
             trade_gate.pop("force_no_trade", None)
 
+    signal_weights = policy.get("signal_weights")
+    if signal_weights is None:
+        policy["signal_weights"] = {}
+    elif not isinstance(signal_weights, dict):
+        warnings.append("signal_weights must be an object.")
+        policy["signal_weights"] = {}
+    else:
+        for key in SIGNAL_WEIGHT_KEYS:
+            value = signal_weights.get(key)
+            if value is None:
+                continue
+            if not isinstance(value, (int, float)):
+                warnings.append(
+                    f"signal_weights.{key}={value} must be numeric; ignored."
+                )
+                signal_weights.pop(key, None)
+                continue
+            weight = float(value)
+            if weight < SIGNAL_WEIGHT_MIN or weight > SIGNAL_WEIGHT_MAX:
+                warnings.append(
+                    f"signal_weights.{key}={weight} outside "
+                    f"[{SIGNAL_WEIGHT_MIN}, {SIGNAL_WEIGHT_MAX}]; clamped."
+                )
+                signal_weights[key] = max(
+                    SIGNAL_WEIGHT_MIN, min(SIGNAL_WEIGHT_MAX, weight)
+                )
+
     return policy, warnings
 
 
@@ -167,6 +200,21 @@ def apply_policy_to_settings(
     mapped_mode = risk_level_to_mode(policy.get("risk_level"))
     if mapped_mode:
         updates["mode"] = mapped_mode
+
+    signal_weights = policy.get("signal_weights") or {}
+    if isinstance(signal_weights, dict):
+        weight_map = {
+            "momentum": "w_rank_mom",
+            "vol": "w_rank_vol",
+            "drawdown": "w_rank_dd",
+        }
+        for policy_key, setting_attr in weight_map.items():
+            value = signal_weights.get(policy_key)
+            if isinstance(value, (int, float)):
+                updates[setting_attr] = max(
+                    SIGNAL_WEIGHT_MIN,
+                    min(SIGNAL_WEIGHT_MAX, float(value)),
+                )
 
     if not updates:
         return settings

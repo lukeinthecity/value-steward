@@ -482,6 +482,9 @@ test("local trainer avoids duplicate fallback history logs when history is empty
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
-  assert.equal(trainingLines.length, 1);
-  assert.equal(trainingLines[0].source, "scorecard");
+  // Expect exactly one scorecard log (no history-fallback duplicate).
+  const scorecardLogs = trainingLines.filter((l) => l.source === "scorecard");
+  const historyLogs = trainingLines.filter((l) => l.source === "history");
+  assert.equal(scorecardLogs.length, 1);
+  assert.equal(historyLogs.length, 0);
 });
