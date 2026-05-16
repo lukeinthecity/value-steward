@@ -120,3 +120,102 @@ def test_scorecard_refresh_updates_existing_horizons(tmp_path, monkeypatch) -> N
     assert math.isclose(
         rows[0]["horizons"]["1"]["benchmark_return"], 0.01, rel_tol=1e-9
     )
+
+
+def test_scorecard_treats_buy_blocked_no_action_as_buy_counterfactual(
+    tmp_path, monkeypatch
+) -> None:
+    """NO_ACTION rows with reason_code=BUY_BLOCKED should populate signed_return
+    and excess_vs_benchmark as if a BUY had been taken — these are the
+    counterfactuals the trainer learns from."""
+
+    intent_timestamp = datetime(2026, 3, 31, 19, 50, tzinfo=timezone.utc)
+    intent = IntentRecord(
+        id="blocked-1",
+        timestamp=intent_timestamp,
+        mode=RiskMode.LOW,
+        action_type="NO_ACTION",
+        symbol="KCHV",
+        signal_symbol="KCHV",
+        reason_code="BUY_BLOCKED",
+        explanation="entry quality gate blocked buy",
+        signal_momentum_rank=0.92,
+        signal_vol_rank=0.85,
+        signal_drawdown_rank=0.95,
+        signal_rel_strength_20d=-0.02,
+        signal_rel_strength_60d=0.10,
+        signal_trend_strength=0.05,
+    )
+    out_path = tmp_path / "signal-scorecard.jsonl"
+    monkeypatch.setattr(cli, "MemoryEngine", lambda: DummyMemoryEngine([intent]))
+    monkeypatch.setattr(cli, "MarketDataClient", DummyMarketDataClient)
+    monkeypatch.setattr(cli, "load_steward_state", lambda: {})
+    monkeypatch.setattr(cli, "get_phase1_start_date", lambda state: None)
+    monkeypatch.setattr(
+        cli, "is_on_or_after_phase1_start", lambda timestamp, state: True
+    )
+
+    cli.scorecard.callback(
+        out=str(out_path), limit=10, horizons="1", benchmark="SPY"
+    )
+
+    row = json.loads(out_path.read_text(encoding="utf-8").splitlines()[0])
+    h1 = row["horizons"]["1"]
+
+    # KCHV: 100 → 103 = +3% return. Benchmark (SPY): 200 → 202 = +1%.
+    assert math.isclose(h1["return"], 0.03, rel_tol=1e-9)
+    # signed_return should equal return (direction=+1 for BUY_BLOCKED), NOT 0.
+    assert h1["signed_return"] is not None
+    assert math.isclose(h1["signed_return"], 0.03, rel_tol=1e-9)
+    # excess_vs_benchmark = signed - benchmark = 0.03 - 0.01 = 0.02
+    assert math.isclose(h1["excess_vs_benchmark"], 0.02, rel_tol=1e-9)
+    # directional_correct: we'd have been right (symbol rose, BUY would win)
+    assert h1["directional_correct"] is True
+
+    # Component fields must be present so the trainer can do feature-level analysis.
+    assert math.isclose(row["signal_momentum_rank"], 0.92, rel_tol=1e-9)
+    assert math.isclose(row["signal_rel_strength_20d"], -0.02, rel_tol=1e-9)
+    assert math.isclose(row["signal_trend_strength"], 0.05, rel_tol=1e-9)
+
+
+def test_scorecard_treats_unrelated_no_action_as_neutral(
+    tmp_path, monkeypatch
+) -> None:
+    """NO_ACTION rows without a BUY_/SELL_ reason_code should keep signed_return
+    at 0 — these aren't tradeable counterfactuals (e.g. NO_SIGNAL, MACRO_CRISIS)."""
+
+    intent_timestamp = datetime(2026, 3, 31, 19, 50, tzinfo=timezone.utc)
+    intent = IntentRecord(
+        id="no-signal-1",
+        timestamp=intent_timestamp,
+        mode=RiskMode.LOW,
+        action_type="NO_ACTION",
+        symbol="KCHV",
+        signal_symbol="KCHV",
+        reason_code="NO_SIGNAL",
+        explanation="no signal available",
+    )
+    out_path = tmp_path / "signal-scorecard.jsonl"
+    monkeypatch.setattr(cli, "MemoryEngine", lambda: DummyMemoryEngine([intent]))
+    monkeypatch.setattr(cli, "MarketDataClient", DummyMarketDataClient)
+    monkeypatch.setattr(cli, "load_steward_state", lambda: {})
+    monkeypatch.setattr(cli, "get_phase1_start_date", lambda state: None)
+    monkeypatch.setattr(
+        cli, "is_on_or_after_phase1_start", lambda timestamp, state: True
+    )
+
+    cli.scorecard.callback(
+        out=str(out_path), limit=10, horizons="1", benchmark="SPY"
+    )
+
+    row = json.loads(out_path.read_text(encoding="utf-8").splitlines()[0])
+    h1 = row["horizons"]["1"]
+
+    # Return is still computed (just market data lookup)
+    assert math.isclose(h1["return"], 0.03, rel_tol=1e-9)
+    # But signed_return stays 0 — no counterfactual interpretation for NO_SIGNAL.
+    assert h1["signed_return"] == 0
+    # excess_vs_benchmark = 0 - 0.01 = -0.01
+    assert math.isclose(h1["excess_vs_benchmark"], -0.01, rel_tol=1e-9)
+    # directional_correct stays None — no decision direction to evaluate.
+    assert h1["directional_correct"] is None

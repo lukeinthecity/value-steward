@@ -37,6 +37,27 @@ function filterRecordsByActionTypes(records, actionTypes) {
   );
 }
 
+function filterRecordsForTraining(records, actionTypes, reasonPrefixes) {
+  const allowedActions = new Set(
+    (actionTypes ?? []).map((value) => String(value).toUpperCase())
+  );
+  const allowedPrefixes = (reasonPrefixes ?? []).map((value) =>
+    String(value).toUpperCase()
+  );
+  if (allowedActions.size === 0 && allowedPrefixes.length === 0) {
+    return records.slice();
+  }
+  return records.filter((record) => {
+    const action = String(record?.action_type ?? "").toUpperCase();
+    if (allowedActions.has(action)) return true;
+    if (action === "NO_ACTION" && allowedPrefixes.length) {
+      const reason = String(record?.reason_code ?? "").toUpperCase();
+      return allowedPrefixes.some((prefix) => reason.startsWith(prefix));
+    }
+    return false;
+  });
+}
+
 function parseNumber(value, fallback) {
   if (value === undefined || value === null) return fallback;
   const parsed = Number(value);
@@ -124,7 +145,7 @@ export function trainPolicyWithScorecard({
   scorecardPath = DEFAULT_SCORECARD_PATH,
   horizons = [5, 20],
   window = 60,
-  minSamples = 20,
+  minSamples = 5,
   signedThreshold = 0,
   benchmarkThreshold = signedThreshold,
   riskStep = 0.01,
@@ -134,6 +155,7 @@ export function trainPolicyWithScorecard({
   minBuffer = 0.01,
   maxBuffer = 0.05,
   trainingActionTypes = ["BUY", "MULTI"],
+  trainingReasonPrefixes = ["BUY_", "SELL_"],
   force = false,
 } = {}) {
   if (!policy) {
@@ -194,7 +216,7 @@ export function trainPolicyWithScorecard({
   }
 
   const summary = summarizeScorecard(
-    filterRecordsByActionTypes(records, trainingActionTypes),
+    filterRecordsForTraining(records, trainingActionTypes, trainingReasonPrefixes),
     horizons,
     window
   );
@@ -206,8 +228,16 @@ export function trainPolicyWithScorecard({
       horizons,
       window
     ),
+    buyBlockedCounterfactual: summarizeScorecard(
+      filterRecordsForTraining(records, [], ["BUY_"]),
+      horizons,
+      window
+    ),
     trainingActionTypes: Array.from(
       new Set((trainingActionTypes ?? []).map((value) => String(value).toUpperCase()))
+    ),
+    trainingReasonPrefixes: Array.from(
+      new Set((trainingReasonPrefixes ?? []).map((value) => String(value).toUpperCase()))
     ),
   };
   const horizonStats = summary.horizons;
