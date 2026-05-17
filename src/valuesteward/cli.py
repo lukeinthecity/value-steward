@@ -847,7 +847,17 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
             elif intent.action_type == "SELL":
                 direction = -1
             elif intent.action_type == "NO_ACTION":
-                direction = 0
+                # Counterfactual: BUY_BLOCKED is "would have bought but a gate
+                # stopped us"; sign as +1 so signed_return / excess_vs_benchmark
+                # capture the missed opportunity. SELL_* symmetric.
+                # Other NO_ACTION reasons stay at 0 (genuinely no signal taken).
+                reason = (intent.reason_code or "").upper()
+                if reason.startswith("BUY_"):
+                    direction = 1
+                elif reason.startswith("SELL_"):
+                    direction = -1
+                else:
+                    direction = 0
             signed = sym_ret * direction if sym_ret is not None and direction is not None else None
             excess_vs_benchmark = None
             if signed is not None and bench_ret is not None:
@@ -859,6 +869,12 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
                     correct = sym_ret > 0
                 elif intent.action_type == "SELL":
                     correct = sym_ret < 0
+                elif intent.action_type == "NO_ACTION":
+                    reason = (intent.reason_code or "").upper()
+                    if reason.startswith("BUY_"):
+                        correct = sym_ret > 0
+                    elif reason.startswith("SELL_"):
+                        correct = sym_ret < 0
             horizons_payload[key] = {
                 "return": sym_ret,
                 "benchmark_return": bench_ret,
@@ -903,6 +919,17 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
             "signal_intraday_persistence_day_count": (
                 intent.signal_intraday_persistence_day_count
             ),
+            "signal_momentum_rank": intent.signal_momentum_rank,
+            "signal_vol_rank": intent.signal_vol_rank,
+            "signal_drawdown_rank": intent.signal_drawdown_rank,
+            "signal_rel_strength_20d": intent.signal_rel_strength_20d,
+            "signal_rel_strength_60d": intent.signal_rel_strength_60d,
+            "signal_trend_strength": intent.signal_trend_strength,
+            "signal_mom_5d": intent.signal_mom_5d,
+            "signal_mom_20d": intent.signal_mom_20d,
+            "signal_mom_60d": intent.signal_mom_60d,
+            "signal_volatility": intent.signal_volatility,
+            "signal_drawdown": intent.signal_drawdown,
             "world_macro_label": intent.world_macro_label,
             "world_macro_score": intent.world_macro_score,
             "horizons": horizons_payload,

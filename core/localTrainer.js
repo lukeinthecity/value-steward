@@ -82,6 +82,16 @@ function parseHorizonList(value, fallback = [5, 20]) {
   return list.length ? Array.from(new Set(list)) : fallback;
 }
 
+function parseReasonPrefixList(value, fallback = ["BUY_", "SELL_"]) {
+  if (value === undefined || value === null) return fallback;
+  const list = String(value)
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => part.toUpperCase());
+  return list.length ? Array.from(new Set(list)) : fallback;
+}
+
 function buildWorldSnapshot(worldContext) {
   if (!worldContext) return null;
   return {
@@ -159,7 +169,11 @@ export function trainPolicyFromHistoryLocal({
       scorecardPath: SCORECARD_PATH,
       horizons: parseHorizonList(process.env.VS_SCORECARD_HORIZONS, [5, 20]),
       window: parseNumber(process.env.VS_SCORECARD_WINDOW, 60),
-      minSamples: parseNumber(process.env.VS_SCORECARD_MIN_SAMPLES, 20),
+      minSamples: parseNumber(process.env.VS_SCORECARD_MIN_SAMPLES, 5),
+      trainingReasonPrefixes: parseReasonPrefixList(
+        process.env.VS_SCORECARD_TRAINING_REASON_PREFIXES,
+        ["BUY_", "SELL_"]
+      ),
       signedThreshold: parseNumber(
         process.env.VS_SCORECARD_SIGNED_THRESHOLD,
         0
