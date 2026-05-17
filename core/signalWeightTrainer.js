@@ -2,8 +2,16 @@
  * Signal weight trainer.
  *
  * Uses Pearson correlation between each component signal feature
- * (momentum_rank, vol_rank, drawdown_rank) and the forward signed_return
- * at a configurable horizon to compute weight update deltas.
+ * (momentum_rank, vol_rank, drawdown_rank) and the forward alpha
+ * (excess_vs_benchmark by default) at a configurable horizon to compute
+ * weight update deltas.
+ *
+ * Target choice matters: excess_vs_benchmark isolates alpha (did we beat
+ * SPY?) from market beta (did the market go up?). Using raw signed_return
+ * would mostly correlate with whether the market rose, not with our
+ * feature edge. The scorecard trainer (which adjusts risk_level) uses the
+ * same target — this keeps the learning signal consistent across both
+ * trainers. Override with VS_SIGNAL_WEIGHT_TARGET if you need raw return.
  *
  * Why correlation rather than full OLS: with N=10-50 samples and three
  * highly-correlated rank features, full OLS produces unstable coefficients.
@@ -14,6 +22,8 @@
  * The |r| factor gives quadratic shrinkage so weak correlations barely move
  * the weights and strong correlations move them more.
  */
+
+const VALID_TARGETS = new Set(["excess_vs_benchmark", "signed_return"]);
 
 const FEATURES = [
   { policyKey: "momentum", scorecardKey: "signal_momentum_rank" },
@@ -64,7 +74,7 @@ function clamp(value, lo, hi) {
   return Math.max(lo, Math.min(hi, value));
 }
 
-function extractSamples(records, horizon) {
+function extractSamples(records, horizon, targetKey) {
   const key = String(horizon);
   const featureColumns = FEATURES.map(() => []);
   const targets = [];
@@ -73,8 +83,8 @@ function extractSamples(records, horizon) {
 
   for (const record of records) {
     const horizonData = record?.horizons?.[key];
-    const signed = horizonData?.signed_return;
-    if (!isFiniteNumber(signed)) {
+    const targetValue = horizonData?.[targetKey];
+    if (!isFiniteNumber(targetValue)) {
       skippedMissingReturn += 1;
       continue;
     }
@@ -84,7 +94,7 @@ function extractSamples(records, horizon) {
       continue;
     }
     featureValues.forEach((v, i) => featureColumns[i].push(v));
-    targets.push(signed);
+    targets.push(targetValue);
   }
 
   return {
@@ -121,6 +131,9 @@ function resolveCurrentWeights(currentSignalWeights) {
  * @param {number} args.stepSize - Max magnitude of any single weight update (default 0.05).
  * @param {number} args.minSamples - Minimum samples required (default 8).
  * @param {number} args.minCorrelation - Skip updates below this |r| (default 0.05).
+ * @param {string} args.target - Which scorecard horizon field to regress against:
+ *   "excess_vs_benchmark" (alpha; default, matches scorecardTrainer) or
+ *   "signed_return" (raw direction-adjusted return).
  * @returns {object} { updated, reason, oldWeights, newWeights, correlations,
  *   sampleCount, diagnostics }
  */
@@ -131,8 +144,10 @@ export function trainSignalWeights({
   stepSize = 0.05,
   minSamples = 8,
   minCorrelation = 0.05,
+  target = "excess_vs_benchmark",
 } = {}) {
   const oldWeights = resolveCurrentWeights(currentSignalWeights);
+  const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
 
   if (!Array.isArray(records) || records.length === 0) {
     return {
@@ -142,12 +157,12 @@ export function trainSignalWeights({
       newWeights: oldWeights,
       correlations: null,
       sampleCount: 0,
-      diagnostics: null,
+      diagnostics: { target: resolvedTarget },
     };
   }
 
   const { featureColumns, targets, sampleCount, skippedMissingFeature, skippedMissingReturn } =
-    extractSamples(records, horizon);
+    extractSamples(records, horizon, resolvedTarget);
 
   if (sampleCount < minSamples) {
     return {
@@ -160,6 +175,7 @@ export function trainSignalWeights({
       diagnostics: {
         horizon,
         minSamples,
+        target: resolvedTarget,
         skippedMissingFeature,
         skippedMissingReturn,
       },
@@ -194,6 +210,7 @@ export function trainSignalWeights({
       diagnostics: {
         horizon,
         minSamples,
+        target: resolvedTarget,
         skippedMissingFeature,
         skippedMissingReturn,
       },
@@ -210,6 +227,7 @@ export function trainSignalWeights({
     diagnostics: {
       horizon,
       minSamples,
+      target: resolvedTarget,
       skippedMissingFeature,
       skippedMissingReturn,
     },

@@ -15,8 +15,14 @@ function buildRecord({
   drawdown,
   signed5,
   signed20 = null,
+  excess5 = null,
+  excess20 = null,
   intentId = "x",
 }) {
+  // When excess is not provided, mirror signed (back-compat for older tests
+  // that only cared about the *_return field).
+  const e5 = excess5 === null ? signed5 : excess5;
+  const e20 = excess20 === null ? signed20 : excess20;
   return {
     intent_id: intentId,
     timestamp: "2026-05-01T20:00:00.000Z",
@@ -27,9 +33,11 @@ function buildRecord({
     horizons: {
       "5": {
         signed_return: signed5,
+        excess_vs_benchmark: e5,
       },
       "20": {
         signed_return: signed20,
+        excess_vs_benchmark: e20,
       },
     },
   };
@@ -178,6 +186,63 @@ test("trainSignalWeights clamps weights at boundaries", () => {
   });
   // Either no update (clamped) or stays at max
   assert.ok(atMax.newWeights.momentum <= WEIGHT_MAX);
+});
+
+test("trainSignalWeights default target is excess_vs_benchmark (alpha)", () => {
+  // Build records where the two targets disagree: signed_return correlates
+  // with momentum positively, but excess_vs_benchmark correlates negatively.
+  // Default behavior should follow excess_vs_benchmark.
+  const records = Array.from({ length: 10 }, (_, i) => {
+    const m = 0.1 + i * 0.1;
+    return buildRecord({
+      momentum: m,
+      vol: 0.5,
+      drawdown: 0.5,
+      signed5: m * 0.02, // positive correlation with momentum
+      excess5: -m * 0.02, // NEGATIVE correlation with momentum
+      intentId: `r${i}`,
+    });
+  });
+  const result = trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    minSamples: 8,
+    stepSize: 0.1,
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.diagnostics.target, "excess_vs_benchmark");
+  // Excess correlation was negative → momentum weight should DECREASE.
+  assert.ok(
+    result.newWeights.momentum < result.oldWeights.momentum,
+    `momentum should decrease when excess correlation is negative (got ${result.newWeights.momentum} vs ${result.oldWeights.momentum})`
+  );
+});
+
+test("trainSignalWeights honors target=signed_return override", () => {
+  const records = Array.from({ length: 10 }, (_, i) => {
+    const m = 0.1 + i * 0.1;
+    return buildRecord({
+      momentum: m,
+      vol: 0.5,
+      drawdown: 0.5,
+      signed5: m * 0.02,
+      excess5: -m * 0.02,
+      intentId: `r${i}`,
+    });
+  });
+  const result = trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    minSamples: 8,
+    stepSize: 0.1,
+    target: "signed_return",
+  });
+  assert.equal(result.diagnostics.target, "signed_return");
+  // With signed_return as target, momentum correlation is positive → weight UP.
+  assert.ok(
+    result.newWeights.momentum > result.oldWeights.momentum,
+    "momentum should increase when signed_return target shows positive correlation"
+  );
 });
 
 test("trainSignalWeights respects minCorrelation threshold", () => {

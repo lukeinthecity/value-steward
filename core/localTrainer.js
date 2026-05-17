@@ -123,6 +123,7 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
     minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_SAMPLES, 8),
     minCorrelation: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_CORR, 0.05),
+    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
   });
 
   const nowIso = new Date().toISOString();
