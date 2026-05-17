@@ -17,6 +17,8 @@ import {
   trainSignalWeightsByRegime,
 } from "./signalWeightTrainer.js";
 import { buildScoreGatePosteriors } from "./scoreGatePosteriors.js";
+import { evaluateOos } from "./oosEvaluator.js";
+import { evaluateChampionChallenger } from "./championChallenger.js";
 import { getExchangeDateString } from "./timeUtils.js";
 
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
@@ -31,6 +33,7 @@ const TRAINING_LOG_PATH = path.join(
   "data",
   "training-log.jsonl"
 );
+const OOS_EVAL_PATH = path.join(process.cwd(), "data", "oos-eval.jsonl");
 
 function loadPolicy() {
   if (!fs.existsSync(POLICY_PATH)) return null;
@@ -113,6 +116,104 @@ function buildWorldSnapshot(worldContext) {
   };
 }
 
+function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
+  const enabled = !["0", "false", "no", "off"].includes(
+    String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase()
+  );
+  if (!enabled) return baselinePolicy;
+
+  const records = loadScorecardRecords(SCORECARD_PATH);
+  const oos = evaluateOos({
+    records,
+    currentPolicyVersion: baselinePolicy.version ?? null,
+    horizon: parseNumber(process.env.VS_OOS_HORIZON, 5),
+    rollingWindow: parseNumber(process.env.VS_OOS_ROLLING_WINDOW, 20),
+    minSamples: parseNumber(process.env.VS_OOS_MIN_SAMPLES, 5),
+  });
+
+  // Append a row to the OOS audit trail every cycle, even when insufficient.
+  appendJsonlLineSync(OOS_EVAL_PATH, {
+    ...oos,
+    worldMacroSnapshot: buildWorldSnapshot(worldContext),
+  });
+
+  // Champion-challenger only acts if explicitly enabled (default off until
+  // we have meaningful OOS samples — the OOS log itself runs in shadow).
+  const ccEnabled = ["1", "true", "yes", "on"].includes(
+    String(process.env.VS_CHAMPION_CHALLENGER_ENABLED ?? "false").toLowerCase()
+  );
+  if (!ccEnabled) {
+    return baselinePolicy;
+  }
+
+  const signalWeights = baselinePolicy.signal_weights || {};
+  const ccResult = evaluateChampionChallenger({
+    currentSignalWeights: signalWeights,
+    currentWeights: {
+      momentum: signalWeights.momentum,
+      vol: signalWeights.vol,
+      drawdown: signalWeights.drawdown,
+    },
+    oosMetrics: oos,
+    promoteMargin: parseNumber(process.env.VS_CHAMPION_PROMOTE_MARGIN, 0.10),
+    revertMargin: parseNumber(process.env.VS_CHAMPION_REVERT_MARGIN, 0.10),
+    revertCycles: parseNumber(process.env.VS_CHAMPION_REVERT_CYCLES, 3),
+    minSamples: parseNumber(process.env.VS_CHAMPION_MIN_SAMPLES, 5),
+  });
+
+  const nowIso = new Date().toISOString();
+  appendTrainingLog({
+    ranAt: nowIso,
+    source: "champion_challenger",
+    decision: ccResult.action === "revert" ? "update" : "no_update",
+    reason: `${ccResult.action}: ${ccResult.reason}`,
+    oos,
+    newChampion: ccResult.newChampion,
+    revertWeights: ccResult.revertWeights,
+    policyVersionBefore: baselinePolicy.version ?? 1,
+    policyVersionAfter:
+      ccResult.action === "revert"
+        ? (baselinePolicy.version ?? 1) + 1
+        : baselinePolicy.version ?? 1,
+    worldMacroSnapshot: buildWorldSnapshot(worldContext),
+  });
+
+  if (ccResult.action === "skip_insufficient_data") {
+    return baselinePolicy;
+  }
+
+  // For init / promote / hold: update the champion block but do not change
+  // the live weights. For revert: ALSO restore the champion weights.
+  const updatedSignalWeights = {
+    ...signalWeights,
+    champion: ccResult.newChampion,
+  };
+  if (ccResult.action === "revert" && ccResult.revertWeights) {
+    updatedSignalWeights.momentum = ccResult.revertWeights.momentum;
+    updatedSignalWeights.vol = ccResult.revertWeights.vol;
+    updatedSignalWeights.drawdown = ccResult.revertWeights.drawdown;
+    updatedSignalWeights.last_revert_at = nowIso;
+  }
+
+  const mergedPolicy = {
+    ...baselinePolicy,
+    schema_version: baselinePolicy.schema_version ?? 1,
+    version:
+      ccResult.action === "revert"
+        ? (baselinePolicy.version ?? 1) + 1
+        : baselinePolicy.version ?? 1,
+    signal_weights: updatedSignalWeights,
+    lastTrainedAt:
+      ccResult.action === "revert" ? nowIso : baselinePolicy.lastTrainedAt,
+    lastTrainingReason:
+      ccResult.action === "revert"
+        ? "champion_challenger_revert"
+        : baselinePolicy.lastTrainingReason,
+  };
+  savePolicy(mergedPolicy);
+  return mergedPolicy;
+}
+
 function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
   const weightLearningDisabled = ["0", "false", "no", "off"].includes(
     String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase()
@@ -126,7 +227,8 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     horizon: parseNumber(process.env.VS_SIGNAL_WEIGHT_HORIZON, 5),
     stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
     minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_SAMPLES, 8),
-    minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 0.05),
+    minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
+    minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
     target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
   });
@@ -190,6 +292,7 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
     stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
     minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_REGIME_MIN_SAMPLES, 8),
     minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
+    minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
     target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
   };
@@ -455,6 +558,10 @@ export function trainPolicyFromHistoryLocal({
           worldContext,
         });
         baselinePolicy = maybeBuildScoreGatePosteriors({
+          baselinePolicy,
+          worldContext,
+        });
+        baselinePolicy = maybeRunOosAndChampionChallenger({
           baselinePolicy,
           worldContext,
         });

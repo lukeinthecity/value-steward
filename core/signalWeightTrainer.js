@@ -109,12 +109,23 @@ function matVecMul3(m, v) {
 }
 
 /**
- * Ridge OLS for 3-feature regression. Returns coefficients [c0,c1,c2] or
- * null if the (X^T X + lambda*I) matrix could not be inverted.
+ * Ridge OLS for 3-feature regression with significance diagnostics.
+ *
+ * Returns ``{ coef, tStats, residualVariance, inv, sampleCount }`` or null
+ * if the (X^T X + lambda*I) matrix could not be inverted.
+ *
+ * Standard errors and t-statistics use the classical OLS formula:
+ *   sigma² = RSS / (n - p)
+ *   Var(coef) = sigma² * (X^T X + lambda*I)^-1
+ *   t[i] = coef[i] / sqrt(Var(coef)[i][i])
+ *
+ * t-stats let the caller decide which coefficients are statistically
+ * distinguishable from zero before nudging weights — important defense
+ * against overfitting at small N (rule of thumb: |t| > 2 ~ p < 0.05).
  */
 function ridgeOls3(featureColumns, targets, lambda) {
   const n = targets.length;
-  if (n < 3) return null;
+  if (n < 4) return null; // need at least n > p=3 for residual variance
   // Compute X^T X (symmetric 3x3) and X^T y (3-vector)
   const xtx = [
     [0, 0, 0],
@@ -148,7 +159,40 @@ function ridgeOls3(featureColumns, targets, lambda) {
 
   const inv = invert3x3(xtx);
   if (!inv) return null;
-  return matVecMul3(inv, xty);
+  const coef = matVecMul3(inv, xty);
+
+  // Residual sum of squares for standard error / t-stat estimation.
+  let rss = 0;
+  for (let row = 0; row < n; row += 1) {
+    const pred =
+      coef[0] * featureColumns[0][row] +
+      coef[1] * featureColumns[1][row] +
+      coef[2] * featureColumns[2][row];
+    const r = targets[row] - pred;
+    rss += r * r;
+  }
+  const degreesOfFreedom = Math.max(1, n - 3);
+  const residualVariance = rss / degreesOfFreedom;
+
+  // se(coef_i) = sqrt(sigma² * inv[i][i]) — diagonal of variance matrix.
+  const tStats = [];
+  for (let i = 0; i < 3; i += 1) {
+    const variance = residualVariance * inv[i][i];
+    if (!Number.isFinite(variance) || variance <= 0) {
+      tStats.push(null);
+      continue;
+    }
+    const se = Math.sqrt(variance);
+    tStats.push(coef[i] / se);
+  }
+
+  return {
+    coef,
+    tStats,
+    residualVariance,
+    inv,
+    sampleCount: n,
+  };
 }
 
 function extractSamples(records, horizon, targetKey) {
@@ -218,7 +262,8 @@ function buildDiagnostics({
 }
 
 /**
- * Train signal weights from a scorecard slice using Ridge OLS.
+ * Train signal weights from a scorecard slice using Ridge OLS with
+ * per-feature t-statistic gating.
  *
  * @param {object} args
  * @param {Array} args.records - Scorecard records (may include null horizons).
@@ -230,12 +275,14 @@ function buildDiagnostics({
  *   so the largest move on any single weight is exactly stepSize.
  * @param {number} args.minSamples - Minimum samples required (default 8).
  * @param {number} args.minMagnitude - Skip updates when the largest normalized
- *   coefficient is below this absolute value (default 0.05). Avoids drifting
- *   on near-zero signal.
+ *   coefficient is below this absolute value (default 1e-6).
+ * @param {number} args.minTStat - Per-feature t-stat magnitude required to
+ *   apply an update on that feature (default 2.0, ~p < 0.05). Set to 0 to
+ *   disable significance gating.
  * @param {number} args.ridgeLambda - Ridge regularization strength (default 0.01).
  * @param {string} args.target - "excess_vs_benchmark" (default) or "signed_return".
  * @returns {object} { updated, reason, oldWeights, newWeights, coefficients,
- *   normalizedCoefficients, correlations, sampleCount, diagnostics }
+ *   normalizedCoefficients, tStats, correlations, sampleCount, diagnostics }
  */
 export function trainSignalWeights({
   records,
@@ -244,6 +291,7 @@ export function trainSignalWeights({
   stepSize = 0.05,
   minSamples = 8,
   minMagnitude = 1e-6,
+  minTStat = 2.0,
   ridgeLambda = DEFAULT_RIDGE_LAMBDA,
   target = "excess_vs_benchmark",
 } = {}) {
@@ -261,6 +309,7 @@ export function trainSignalWeights({
       newWeights: oldWeights,
       coefficients: null,
       normalizedCoefficients: null,
+      tStats: null,
       correlations: null,
       sampleCount: 0,
       diagnostics: buildDiagnostics({
@@ -290,6 +339,7 @@ export function trainSignalWeights({
       newWeights: oldWeights,
       coefficients: null,
       normalizedCoefficients: null,
+      tStats: null,
       correlations: null,
       sampleCount,
       diagnostics: buildDiagnostics({
@@ -310,8 +360,8 @@ export function trainSignalWeights({
     correlations[policyKey] = pearsonCorrelation(featureColumns[idx], targets);
   });
 
-  const coefArray = ridgeOls3(featureColumns, targets, lambda);
-  if (!coefArray) {
+  const olsResult = ridgeOls3(featureColumns, targets, lambda);
+  if (!olsResult) {
     return {
       updated: false,
       reason: "singular_matrix",
@@ -319,6 +369,7 @@ export function trainSignalWeights({
       newWeights: oldWeights,
       coefficients: null,
       normalizedCoefficients: null,
+      tStats: null,
       correlations,
       sampleCount,
       diagnostics: buildDiagnostics({
@@ -331,10 +382,14 @@ export function trainSignalWeights({
       }),
     };
   }
+  const coefArray = olsResult.coef;
+  const tStatArray = olsResult.tStats;
 
   const coefficients = {};
+  const tStats = {};
   FEATURES.forEach(({ policyKey }, idx) => {
     coefficients[policyKey] = coefArray[idx];
+    tStats[policyKey] = tStatArray[idx];
   });
 
   const maxAbs = Math.max(...coefArray.map((c) => Math.abs(c)));
@@ -346,6 +401,7 @@ export function trainSignalWeights({
       newWeights: oldWeights,
       coefficients,
       normalizedCoefficients: null,
+      tStats,
       correlations,
       sampleCount,
       diagnostics: buildDiagnostics({
@@ -366,9 +422,20 @@ export function trainSignalWeights({
     normalizedCoefficients[policyKey] = normalized[idx];
   });
 
+  // Per-feature significance gating: skip a feature's update when its
+  // OLS t-statistic is below `minTStat`. Prevents drifting on noise.
+  const skippedTStat = {};
   const newWeights = { ...oldWeights };
   let anyUpdate = false;
   FEATURES.forEach(({ policyKey }, idx) => {
+    const t = tStatArray[idx];
+    const significant =
+      minTStat <= 0 ||
+      (typeof t === "number" && Number.isFinite(t) && Math.abs(t) >= minTStat);
+    if (!significant) {
+      skippedTStat[policyKey] = t;
+      return;
+    }
     const delta = stepSize * normalized[idx];
     const updated = clamp(oldWeights[policyKey] + delta, WEIGHT_MIN, WEIGHT_MAX);
     if (updated !== oldWeights[policyKey]) {
@@ -378,13 +445,18 @@ export function trainSignalWeights({
   });
 
   if (!anyUpdate) {
+    const reason =
+      Object.keys(skippedTStat).length === FEATURES.length
+        ? "no_significant_t_stat"
+        : "clamped_no_change";
     return {
       updated: false,
-      reason: "clamped_no_change",
+      reason,
       oldWeights,
       newWeights: oldWeights,
       coefficients,
       normalizedCoefficients,
+      tStats,
       correlations,
       sampleCount,
       diagnostics: buildDiagnostics({
@@ -394,6 +466,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        extras: { minTStat, skippedTStat },
       }),
     };
   }
@@ -405,6 +478,7 @@ export function trainSignalWeights({
     newWeights,
     coefficients,
     normalizedCoefficients,
+    tStats,
     correlations,
     sampleCount,
     diagnostics: buildDiagnostics({

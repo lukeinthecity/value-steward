@@ -947,6 +947,8 @@ def scorecard(out: str, limit: int, horizons: str, benchmark: str) -> None:
             "signal_mom_60d": intent.signal_mom_60d,
             "signal_volatility": intent.signal_volatility,
             "signal_drawdown": intent.signal_drawdown,
+            "policy_schema_version": intent.policy_schema_version,
+            "policy_version": intent.policy_version,
             "world_macro_label": intent.world_macro_label,
             "world_macro_score": intent.world_macro_score,
             "horizons": horizons_payload,
