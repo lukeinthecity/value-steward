@@ -1,26 +1,33 @@
 /**
  * Signal weight trainer.
  *
- * Uses Pearson correlation between each component signal feature
- * (momentum_rank, vol_rank, drawdown_rank) and the forward alpha
- * (excess_vs_benchmark by default) at a configurable horizon to compute
- * weight update deltas.
+ * Implements Ridge-regularized OLS regression of forward alpha against the
+ * three component signal features (momentum_rank, vol_rank, drawdown_rank).
  *
- * Target choice matters: excess_vs_benchmark isolates alpha (did we beat
- * SPY?) from market beta (did the market go up?). Using raw signed_return
- * would mostly correlate with whether the market rose, not with our
- * feature edge. The scorecard trainer (which adjusts risk_level) uses the
- * same target — this keeps the learning signal consistent across both
- * trainers. Override with VS_SIGNAL_WEIGHT_TARGET if you need raw return.
+ *   excess_vs_benchmark_5d  ~  c_mom * momentum_rank
+ *                            + c_vol * vol_rank
+ *                            + c_dd  * drawdown_rank
  *
- * Why correlation rather than full OLS: with N=10-50 samples and three
- * highly-correlated rank features, full OLS produces unstable coefficients.
- * Per-feature correlation gives independent, interpretable updates that
- * degrade gracefully when data is sparse.
+ *   coef = (X^T X + lambda * I)^-1 X^T y
  *
- * Update rule: w_new[i] = clamp(w_old[i] + stepSize * r[i] * |r[i]|, min, max)
- * The |r| factor gives quadratic shrinkage so weak correlations barely move
- * the weights and strong correlations move them more.
+ * The OLS coefficients are normalized by their largest absolute value to
+ * produce a bounded direction vector. Each weight is then nudged by
+ * `stepSize * normalized_coef[i]` per cycle, clamped to [0.1, 2.0].
+ *
+ * Why Ridge: with N=10-50 samples and three correlated rank features,
+ * unregularized OLS produces wildly oscillating coefficients. A small
+ * ridge term (lambda=0.01 by default) stabilizes the inversion without
+ * meaningfully biasing the direction.
+ *
+ * Target choice: excess_vs_benchmark isolates alpha (did we beat SPY?)
+ * from market beta. Using raw signed_return would mostly correlate with
+ * whether the market went up. The scorecard trainer (which adjusts
+ * risk_level) uses the same target — this keeps the learning signal
+ * consistent across both trainers. Override with VS_SIGNAL_WEIGHT_TARGET
+ * if you need raw return.
+ *
+ * Diagnostics also include per-feature Pearson correlations so operators
+ * can sanity-check what the regression is responding to.
  */
 
 const VALID_TARGETS = new Set(["excess_vs_benchmark", "signed_return"]);
@@ -39,9 +46,14 @@ const DEFAULT_BASE_WEIGHTS = {
 
 const WEIGHT_MIN = 0.1;
 const WEIGHT_MAX = 2.0;
+const DEFAULT_RIDGE_LAMBDA = 0.01;
 
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function clamp(value, lo, hi) {
+  return Math.max(lo, Math.min(hi, value));
 }
 
 function pearsonCorrelation(xs, ys) {
@@ -70,8 +82,73 @@ function pearsonCorrelation(xs, ys) {
   return num / denom;
 }
 
-function clamp(value, lo, hi) {
-  return Math.max(lo, Math.min(hi, value));
+/**
+ * Invert a 3x3 matrix via the cofactor formula. Returns null if the
+ * determinant is below `epsilon` (singular or nearly singular).
+ */
+function invert3x3(m, epsilon = 1e-12) {
+  const [a, b, c] = m[0];
+  const [d, e, f] = m[1];
+  const [g, h, i] = m[2];
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (!Number.isFinite(det) || Math.abs(det) < epsilon) return null;
+  const invDet = 1 / det;
+  return [
+    [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
+    [(f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet],
+    [(d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet],
+  ];
+}
+
+function matVecMul3(m, v) {
+  return [
+    m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+    m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+    m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
+  ];
+}
+
+/**
+ * Ridge OLS for 3-feature regression. Returns coefficients [c0,c1,c2] or
+ * null if the (X^T X + lambda*I) matrix could not be inverted.
+ */
+function ridgeOls3(featureColumns, targets, lambda) {
+  const n = targets.length;
+  if (n < 3) return null;
+  // Compute X^T X (symmetric 3x3) and X^T y (3-vector)
+  const xtx = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const xty = [0, 0, 0];
+  for (let row = 0; row < n; row += 1) {
+    const x0 = featureColumns[0][row];
+    const x1 = featureColumns[1][row];
+    const x2 = featureColumns[2][row];
+    const y = targets[row];
+    xtx[0][0] += x0 * x0;
+    xtx[0][1] += x0 * x1;
+    xtx[0][2] += x0 * x2;
+    xtx[1][1] += x1 * x1;
+    xtx[1][2] += x1 * x2;
+    xtx[2][2] += x2 * x2;
+    xty[0] += x0 * y;
+    xty[1] += x1 * y;
+    xty[2] += x2 * y;
+  }
+  xtx[1][0] = xtx[0][1];
+  xtx[2][0] = xtx[0][2];
+  xtx[2][1] = xtx[1][2];
+
+  // Add ridge term: (X^T X + lambda * I)
+  xtx[0][0] += lambda;
+  xtx[1][1] += lambda;
+  xtx[2][2] += lambda;
+
+  const inv = invert3x3(xtx);
+  if (!inv) return null;
+  return matVecMul3(inv, xty);
 }
 
 function extractSamples(records, horizon, targetKey) {
@@ -120,22 +197,45 @@ function resolveCurrentWeights(currentSignalWeights) {
   return result;
 }
 
+function buildDiagnostics({
+  horizon,
+  minSamples,
+  resolvedTarget,
+  lambda,
+  skippedMissingFeature,
+  skippedMissingReturn,
+  extras = {},
+}) {
+  return {
+    horizon,
+    minSamples,
+    target: resolvedTarget,
+    ridgeLambda: lambda,
+    skippedMissingFeature,
+    skippedMissingReturn,
+    ...extras,
+  };
+}
+
 /**
- * Train signal weights from a scorecard slice.
+ * Train signal weights from a scorecard slice using Ridge OLS.
  *
  * @param {object} args
  * @param {Array} args.records - Scorecard records (may include null horizons).
  * @param {object|null} args.currentSignalWeights - Current weights map
  *   ({ momentum, vol, drawdown }). Defaults applied if missing.
  * @param {number} args.horizon - Forward-return horizon in trading days (default 5).
- * @param {number} args.stepSize - Max magnitude of any single weight update (default 0.05).
+ * @param {number} args.stepSize - Cap on per-cycle weight delta in either
+ *   direction (default 0.05). Coefficients are normalized to [-1,1] first,
+ *   so the largest move on any single weight is exactly stepSize.
  * @param {number} args.minSamples - Minimum samples required (default 8).
- * @param {number} args.minCorrelation - Skip updates below this |r| (default 0.05).
- * @param {string} args.target - Which scorecard horizon field to regress against:
- *   "excess_vs_benchmark" (alpha; default, matches scorecardTrainer) or
- *   "signed_return" (raw direction-adjusted return).
- * @returns {object} { updated, reason, oldWeights, newWeights, correlations,
- *   sampleCount, diagnostics }
+ * @param {number} args.minMagnitude - Skip updates when the largest normalized
+ *   coefficient is below this absolute value (default 0.05). Avoids drifting
+ *   on near-zero signal.
+ * @param {number} args.ridgeLambda - Ridge regularization strength (default 0.01).
+ * @param {string} args.target - "excess_vs_benchmark" (default) or "signed_return".
+ * @returns {object} { updated, reason, oldWeights, newWeights, coefficients,
+ *   normalizedCoefficients, correlations, sampleCount, diagnostics }
  */
 export function trainSignalWeights({
   records,
@@ -143,11 +243,15 @@ export function trainSignalWeights({
   horizon = 5,
   stepSize = 0.05,
   minSamples = 8,
-  minCorrelation = 0.05,
+  minMagnitude = 1e-6,
+  ridgeLambda = DEFAULT_RIDGE_LAMBDA,
   target = "excess_vs_benchmark",
 } = {}) {
   const oldWeights = resolveCurrentWeights(currentSignalWeights);
   const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
+  const lambda = isFiniteNumber(ridgeLambda) && ridgeLambda >= 0
+    ? ridgeLambda
+    : DEFAULT_RIDGE_LAMBDA;
 
   if (!Array.isArray(records) || records.length === 0) {
     return {
@@ -155,14 +259,28 @@ export function trainSignalWeights({
       reason: "no_records",
       oldWeights,
       newWeights: oldWeights,
+      coefficients: null,
+      normalizedCoefficients: null,
       correlations: null,
       sampleCount: 0,
-      diagnostics: { target: resolvedTarget },
+      diagnostics: buildDiagnostics({
+        horizon,
+        minSamples,
+        resolvedTarget,
+        lambda,
+        skippedMissingFeature: 0,
+        skippedMissingReturn: 0,
+      }),
     };
   }
 
-  const { featureColumns, targets, sampleCount, skippedMissingFeature, skippedMissingReturn } =
-    extractSamples(records, horizon, resolvedTarget);
+  const {
+    featureColumns,
+    targets,
+    sampleCount,
+    skippedMissingFeature,
+    skippedMissingReturn,
+  } = extractSamples(records, horizon, resolvedTarget);
 
   if (sampleCount < minSamples) {
     return {
@@ -170,28 +288,88 @@ export function trainSignalWeights({
       reason: "insufficient_samples",
       oldWeights,
       newWeights: oldWeights,
+      coefficients: null,
+      normalizedCoefficients: null,
       correlations: null,
       sampleCount,
-      diagnostics: {
+      diagnostics: buildDiagnostics({
         horizon,
         minSamples,
-        target: resolvedTarget,
+        resolvedTarget,
+        lambda,
         skippedMissingFeature,
         skippedMissingReturn,
-      },
+      }),
     };
   }
 
+  // Per-feature Pearson correlations for diagnostics only — the actual
+  // update direction comes from joint Ridge OLS below.
   const correlations = {};
+  FEATURES.forEach(({ policyKey }, idx) => {
+    correlations[policyKey] = pearsonCorrelation(featureColumns[idx], targets);
+  });
+
+  const coefArray = ridgeOls3(featureColumns, targets, lambda);
+  if (!coefArray) {
+    return {
+      updated: false,
+      reason: "singular_matrix",
+      oldWeights,
+      newWeights: oldWeights,
+      coefficients: null,
+      normalizedCoefficients: null,
+      correlations,
+      sampleCount,
+      diagnostics: buildDiagnostics({
+        horizon,
+        minSamples,
+        resolvedTarget,
+        lambda,
+        skippedMissingFeature,
+        skippedMissingReturn,
+      }),
+    };
+  }
+
+  const coefficients = {};
+  FEATURES.forEach(({ policyKey }, idx) => {
+    coefficients[policyKey] = coefArray[idx];
+  });
+
+  const maxAbs = Math.max(...coefArray.map((c) => Math.abs(c)));
+  if (!Number.isFinite(maxAbs) || maxAbs < minMagnitude) {
+    return {
+      updated: false,
+      reason: "no_significant_signal",
+      oldWeights,
+      newWeights: oldWeights,
+      coefficients,
+      normalizedCoefficients: null,
+      correlations,
+      sampleCount,
+      diagnostics: buildDiagnostics({
+        horizon,
+        minSamples,
+        resolvedTarget,
+        lambda,
+        skippedMissingFeature,
+        skippedMissingReturn,
+        extras: { maxAbsCoefficient: maxAbs },
+      }),
+    };
+  }
+
+  const normalized = coefArray.map((c) => c / maxAbs);
+  const normalizedCoefficients = {};
+  FEATURES.forEach(({ policyKey }, idx) => {
+    normalizedCoefficients[policyKey] = normalized[idx];
+  });
+
   const newWeights = { ...oldWeights };
   let anyUpdate = false;
-
   FEATURES.forEach(({ policyKey }, idx) => {
-    const r = pearsonCorrelation(featureColumns[idx], targets);
-    correlations[policyKey] = r;
-    if (r === null) return;
-    if (Math.abs(r) < minCorrelation) return;
-    const delta = stepSize * r * Math.abs(r);
+    const delta = stepSize * normalized[idx];
     const updated = clamp(oldWeights[policyKey] + delta, WEIGHT_MIN, WEIGHT_MAX);
     if (updated !== oldWeights[policyKey]) {
       newWeights[policyKey] = updated;
@@ -202,18 +380,21 @@ export function trainSignalWeights({
   if (!anyUpdate) {
     return {
       updated: false,
-      reason: "no_significant_correlation",
+      reason: "clamped_no_change",
       oldWeights,
       newWeights: oldWeights,
+      coefficients,
+      normalizedCoefficients,
       correlations,
       sampleCount,
-      diagnostics: {
+      diagnostics: buildDiagnostics({
         horizon,
         minSamples,
-        target: resolvedTarget,
+        resolvedTarget,
+        lambda,
         skippedMissingFeature,
         skippedMissingReturn,
-      },
+      }),
     };
   }
 
@@ -222,23 +403,102 @@ export function trainSignalWeights({
     reason: "weights_updated",
     oldWeights,
     newWeights,
+    coefficients,
+    normalizedCoefficients,
     correlations,
     sampleCount,
-    diagnostics: {
+    diagnostics: buildDiagnostics({
       horizon,
       minSamples,
-      target: resolvedTarget,
+      resolvedTarget,
+      lambda,
       skippedMissingFeature,
       skippedMissingReturn,
-    },
+    }),
   };
+}
+
+function groupRecordsByRegime(records) {
+  const groups = {};
+  for (const record of records) {
+    const label = record?.world_macro_label;
+    if (typeof label !== "string" || label.trim() === "") continue;
+    const key = label.trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(record);
+  }
+  return groups;
+}
+
+/**
+ * Run Ridge OLS weight training independently for each macro regime.
+ *
+ * For each regime present in ``records`` with at least ``minSamples`` rows,
+ * call ``trainSignalWeights`` using that regime's current weights as the
+ * starting point (falling back to the base weights when the regime has no
+ * entry yet). Regimes without enough data are skipped silently.
+ *
+ * @param {object} args
+ * @param {Array} args.records - Scorecard records.
+ * @param {object|null} args.currentSignalWeights - Full signal_weights block
+ *   from policy.json: { momentum, vol, drawdown, by_regime: {...} }.
+ * @param {Array<string>} args.regimes - Whitelist of regime labels to train
+ *   (default: every regime present in records).
+ * @param {object} args.trainerOptions - Forwarded to trainSignalWeights
+ *   (horizon, stepSize, minSamples, ridgeLambda, target).
+ * @returns {object} { byRegime, regimeSampleCounts, regimeOrder, anyUpdated }
+ */
+export function trainSignalWeightsByRegime({
+  records,
+  currentSignalWeights = null,
+  regimes = null,
+  trainerOptions = {},
+} = {}) {
+  const groups = groupRecordsByRegime(records || []);
+  const baseWeights = resolveCurrentWeights(currentSignalWeights);
+  const byRegimeMap =
+    currentSignalWeights && typeof currentSignalWeights.by_regime === "object"
+      ? currentSignalWeights.by_regime
+      : {};
+  const allowedRegimes = Array.isArray(regimes) && regimes.length
+    ? new Set(regimes.map((r) => r.trim()).filter(Boolean))
+    : null;
+
+  const byRegime = {};
+  const regimeSampleCounts = {};
+  let anyUpdated = false;
+  const regimeOrder = Object.keys(groups).sort();
+
+  for (const regime of regimeOrder) {
+    if (allowedRegimes && !allowedRegimes.has(regime)) continue;
+    const regimeRecords = groups[regime];
+    const regimeCurrent =
+      byRegimeMap && typeof byRegimeMap[regime] === "object"
+        ? { ...baseWeights, ...byRegimeMap[regime] }
+        : baseWeights;
+    const result = trainSignalWeights({
+      ...trainerOptions,
+      records: regimeRecords,
+      currentSignalWeights: regimeCurrent,
+    });
+    byRegime[regime] = result;
+    regimeSampleCounts[regime] = result.sampleCount;
+    if (result.updated) anyUpdated = true;
+  }
+
+  return { byRegime, regimeSampleCounts, regimeOrder, anyUpdated };
 }
 
 export const _internals = {
   pearsonCorrelation,
+  invert3x3,
+  matVecMul3,
+  ridgeOls3,
   resolveCurrentWeights,
   extractSamples,
+  groupRecordsByRegime,
   FEATURES,
   WEIGHT_MIN,
   WEIGHT_MAX,
+  DEFAULT_RIDGE_LAMBDA,
 };

@@ -12,7 +12,11 @@ import {
   loadScorecardRecords,
   trainPolicyWithScorecard,
 } from "./scorecardTrainer.js";
-import { trainSignalWeights } from "./signalWeightTrainer.js";
+import {
+  trainSignalWeights,
+  trainSignalWeightsByRegime,
+} from "./signalWeightTrainer.js";
+import { buildScoreGatePosteriors } from "./scoreGatePosteriors.js";
 import { getExchangeDateString } from "./timeUtils.js";
 
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
@@ -122,7 +126,8 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     horizon: parseNumber(process.env.VS_SIGNAL_WEIGHT_HORIZON, 5),
     stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
     minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_SAMPLES, 8),
-    minCorrelation: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_CORR, 0.05),
+    minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 0.05),
+    ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
     target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
   });
 
@@ -133,6 +138,8 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     decision: weightTraining.updated ? "update" : "no_update",
     reason: weightTraining.reason,
     sampleCount: weightTraining.sampleCount,
+    coefficients: weightTraining.coefficients,
+    normalizedCoefficients: weightTraining.normalizedCoefficients,
     correlations: weightTraining.correlations,
     oldWeights: weightTraining.oldWeights,
     newWeights: weightTraining.newWeights,
@@ -158,11 +165,158 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
       ...weightTraining.newWeights,
       last_trained_at: nowIso,
       last_sample_count: weightTraining.sampleCount,
+      last_coefficients: weightTraining.coefficients,
+      last_normalized_coefficients: weightTraining.normalizedCoefficients,
       last_correlations: weightTraining.correlations,
       last_horizon: weightTraining.diagnostics?.horizon ?? null,
+      last_method: "ridge_ols",
     },
     lastTrainedAt: nowIso,
     lastTrainingReason: "signal_weights_update",
+  };
+  savePolicy(mergedPolicy);
+  return mergedPolicy;
+}
+
+function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
+  const regimeDisabled = ["0", "false", "no", "off"].includes(
+    String(process.env.VS_SIGNAL_WEIGHT_REGIME_LEARN ?? "true").toLowerCase()
+  );
+  if (regimeDisabled) return baselinePolicy;
+
+  const records = loadScorecardRecords(SCORECARD_PATH);
+  const trainerOptions = {
+    horizon: parseNumber(process.env.VS_SIGNAL_WEIGHT_HORIZON, 5),
+    stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
+    minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_REGIME_MIN_SAMPLES, 8),
+    minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
+    ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
+    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+  };
+
+  const regimeResult = trainSignalWeightsByRegime({
+    records,
+    currentSignalWeights: baselinePolicy.signal_weights || null,
+    trainerOptions,
+  });
+
+  const nowIso = new Date().toISOString();
+  const logEntry = {
+    ranAt: nowIso,
+    source: "signal_weights_by_regime",
+    decision: regimeResult.anyUpdated ? "update" : "no_update",
+    reason: regimeResult.anyUpdated
+      ? "regime_weights_updated"
+      : "no_regime_with_signal",
+    regimeSampleCounts: regimeResult.regimeSampleCounts,
+    perRegimeResults: Object.fromEntries(
+      Object.entries(regimeResult.byRegime).map(([regime, result]) => [
+        regime,
+        {
+          updated: result.updated,
+          reason: result.reason,
+          sampleCount: result.sampleCount,
+          oldWeights: result.oldWeights,
+          newWeights: result.newWeights,
+          coefficients: result.coefficients,
+        },
+      ])
+    ),
+    policyVersionBefore: baselinePolicy.version ?? 1,
+    policyVersionAfter: regimeResult.anyUpdated
+      ? (baselinePolicy.version ?? 1) + 1
+      : baselinePolicy.version ?? 1,
+    worldMacroSnapshot: buildWorldSnapshot(worldContext),
+  };
+  appendTrainingLog(logEntry);
+
+  if (!regimeResult.anyUpdated) return baselinePolicy;
+
+  // Merge each updated regime's new weights into signal_weights.by_regime,
+  // preserving any pre-existing regimes that weren't trained this cycle.
+  const existingByRegime =
+    baselinePolicy.signal_weights?.by_regime &&
+    typeof baselinePolicy.signal_weights.by_regime === "object"
+      ? baselinePolicy.signal_weights.by_regime
+      : {};
+  const updatedByRegime = { ...existingByRegime };
+  for (const [regime, result] of Object.entries(regimeResult.byRegime)) {
+    if (!result.updated) continue;
+    updatedByRegime[regime] = {
+      ...(existingByRegime[regime] || {}),
+      ...result.newWeights,
+      last_trained_at: nowIso,
+      last_sample_count: result.sampleCount,
+    };
+  }
+
+  const mergedPolicy = {
+    ...baselinePolicy,
+    schema_version: baselinePolicy.schema_version ?? 1,
+    version: (baselinePolicy.version ?? 1) + 1,
+    signal_weights: {
+      ...(baselinePolicy.signal_weights || {}),
+      by_regime: updatedByRegime,
+      regime_last_trained_at: nowIso,
+    },
+    lastTrainedAt: nowIso,
+    lastTrainingReason: "signal_weights_by_regime_update",
+  };
+  savePolicy(mergedPolicy);
+  return mergedPolicy;
+}
+
+function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
+  const posteriorsDisabled = ["0", "false", "no", "off"].includes(
+    String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase()
+  );
+  if (posteriorsDisabled) return baselinePolicy;
+
+  const records = loadScorecardRecords(SCORECARD_PATH);
+  const horizon = parseNumber(process.env.VS_SCORE_GATE_POSTERIORS_HORIZON, 5);
+  const target =
+    (process.env.VS_SCORE_GATE_POSTERIORS_TARGET || "excess_vs_benchmark").trim();
+
+  const result = buildScoreGatePosteriors({ records, horizon, target });
+
+  const nowIso = new Date().toISOString();
+  const logEntry = {
+    ranAt: nowIso,
+    source: "score_gate_posteriors",
+    decision: result.sampleCount > 0 ? "rebuild" : "no_update",
+    reason: result.sampleCount > 0 ? "posteriors_rebuilt" : "no_samples",
+    sampleCount: result.sampleCount,
+    symbolCount: Object.keys(result.posteriors).length,
+    skippedNoTarget: result.skippedNoTarget,
+    skippedNoSymbol: result.skippedNoSymbol,
+    diagnostics: result.diagnostics,
+    policyVersionBefore: baselinePolicy.version ?? 1,
+    policyVersionAfter:
+      result.sampleCount > 0
+        ? (baselinePolicy.version ?? 1) + 1
+        : baselinePolicy.version ?? 1,
+    worldMacroSnapshot: buildWorldSnapshot(worldContext),
+  };
+  appendTrainingLog(logEntry);
+
+  if (result.sampleCount === 0) {
+    return baselinePolicy;
+  }
+
+  const mergedPolicy = {
+    ...baselinePolicy,
+    schema_version: baselinePolicy.schema_version ?? 1,
+    version: (baselinePolicy.version ?? 1) + 1,
+    score_gate_posteriors: result.posteriors,
+    score_gate_posteriors_meta: {
+      last_rebuilt_at: nowIso,
+      sample_count: result.sampleCount,
+      symbol_count: Object.keys(result.posteriors).length,
+      horizon: result.diagnostics.horizon,
+      target: result.diagnostics.target,
+    },
+    lastTrainedAt: nowIso,
+    lastTrainingReason: "score_gate_posteriors_rebuild",
   };
   savePolicy(mergedPolicy);
   return mergedPolicy;
@@ -287,11 +441,20 @@ export function trainPolicyFromHistoryLocal({
         "cooldown",
         "non_trainable_mode",
       ]);
-      // Signal weight training runs whenever scorecard training was attempted
-      // and the scorecard wasn't blocked by a cooldown reason. It uses the
-      // same records and inherits cooldown via the scorecard guard above.
+      // Signal weight training and score-gate posterior rebuild both run
+      // whenever scorecard training was attempted and not blocked by a
+      // cooldown reason. They use the same records and inherit cooldown via
+      // the scorecard guard above.
       if (!blockFallbackReasons.has(scorecardTraining.reason)) {
         baselinePolicy = maybeTrainSignalWeights({
+          baselinePolicy,
+          worldContext,
+        });
+        baselinePolicy = maybeTrainSignalWeightsByRegime({
+          baselinePolicy,
+          worldContext,
+        });
+        baselinePolicy = maybeBuildScoreGatePosteriors({
           baselinePolicy,
           worldContext,
         });
