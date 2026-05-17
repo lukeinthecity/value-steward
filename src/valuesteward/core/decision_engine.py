@@ -2,6 +2,7 @@
 
 import os
 import logging
+import random as _random
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -14,6 +15,8 @@ from valuesteward.data.portfolio_repository import PortfolioRepository
 from valuesteward.models import IntentRecord, PortfolioSnapshot, RiskMode
 
 logger = logging.getLogger(__name__)
+
+EXPLORATION_TAG = "exploration_buy"
 
 
 class DecisionEngine:
@@ -54,6 +57,24 @@ class DecisionEngine:
         self.portfolio_repository = portfolio_repository
         self.signal_engine = signal_engine
         self.sector_map = SectorMap()
+        self._exploration_rng: _random.Random | None = None
+
+    def _get_exploration_rng(self) -> _random.Random:
+        """Lazy RNG for epsilon-greedy exploration.
+
+        Honors VS_NEW_ENTRY_EXPLORATION_SEED for deterministic tests; otherwise
+        seeds from system entropy.
+        """
+        if self._exploration_rng is None:
+            seed_raw = os.getenv("VS_NEW_ENTRY_EXPLORATION_SEED", "").strip()
+            if seed_raw:
+                try:
+                    self._exploration_rng = _random.Random(int(seed_raw))
+                except ValueError:
+                    self._exploration_rng = _random.Random()
+            else:
+                self._exploration_rng = _random.Random()
+        return self._exploration_rng
 
     def _calculate_vol_adjusted_size(
         self, base_size: float, signal: SymbolSignal, signals: List[SymbolSignal]
@@ -247,8 +268,34 @@ class DecisionEngine:
             min_rel_20 = self._get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", 0.0)
             min_rel_60 = self._get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_60D", 0.0)
             min_trend = self._get_env_float("VS_NEW_ENTRY_MIN_TREND_STRENGTH", 0.0)
+            exploration_eps = self._get_env_float(
+                "VS_NEW_ENTRY_EXPLORATION_EPSILON", 0.0
+            )
+            exploration_zone = self._get_env_float(
+                "VS_NEW_ENTRY_EXPLORATION_ZONE_PCT", 0.05
+            )
+            exploration_size_mult = self._get_env_float(
+                "VS_NEW_ENTRY_EXPLORATION_SIZE_MULT", 0.5
+            )
 
             if signal.score < min_score:
+                # Epsilon-greedy exploration: when score is just below threshold
+                # (within zone), occasionally allow the BUY through to gather
+                # training signal on what the gate is rejecting.
+                in_zone = (
+                    exploration_eps > 0
+                    and exploration_zone > 0
+                    and signal.score >= min_score * (1.0 - exploration_zone)
+                )
+                if in_zone and self._get_exploration_rng().random() < exploration_eps:
+                    return (
+                        True,
+                        (
+                            f"{EXPLORATION_TAG} score={signal.score:.4f}"
+                            f"<{min_score:.2f} eps={exploration_eps:.2f}"
+                        ),
+                        max(0.0, min(1.0, exploration_size_mult)),
+                    )
                 return (
                     False,
                     f"entry_quality score={signal.score:.4f}<{min_score:.2f}",
@@ -600,6 +647,18 @@ class DecisionEngine:
                 ), signal_result
             # --------------------------------------------
 
+            is_exploration = bool(
+                buy_note and str(buy_note).startswith(EXPLORATION_TAG)
+            )
+            buy_reason_code = (
+                "BUY_EXPLORATION" if is_exploration else "UNDER_TARGET_BUY"
+            )
+            buy_explanation = (
+                f"Exploration buy {selected_signal.symbol} "
+                f"(vol_adj_size={adjusted_size:.2%}; {buy_note})"
+                if is_exploration
+                else f"Buying {selected_signal.symbol} (vol_adj_size={adjusted_size:.2%})"
+            )
             return IntentRecord(
                 **{
                     **gate_meta,
@@ -610,8 +669,8 @@ class DecisionEngine:
                 action_type="BUY",
                 symbol=selected_signal.symbol,
                 size_pct=adjusted_size,
-                reason_code="UNDER_TARGET_BUY",
-                explanation=f"Buying {selected_signal.symbol} (vol_adj_size={adjusted_size:.2%})",
+                reason_code=buy_reason_code,
+                explanation=buy_explanation,
             ), signal_result
 
         if current > target + buffer:

@@ -12,7 +12,7 @@ const DEFAULT_SCORECARD_PATH = path.join(
   "signal-scorecard.jsonl"
 );
 
-function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
+export function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
   if (!fs.existsSync(scorecardPath)) return [];
   const raw = fs.readFileSync(scorecardPath, "utf8");
   const records = raw

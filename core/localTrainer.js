@@ -8,7 +8,11 @@ import {
   appendJsonlLineSync,
   writeJsonAtomic,
 } from "./runtimeArtifacts.js";
-import { trainPolicyWithScorecard } from "./scorecardTrainer.js";
+import {
+  loadScorecardRecords,
+  trainPolicyWithScorecard,
+} from "./scorecardTrainer.js";
+import { trainSignalWeights } from "./signalWeightTrainer.js";
 import { getExchangeDateString } from "./timeUtils.js";
 
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
@@ -103,6 +107,65 @@ function buildWorldSnapshot(worldContext) {
     sources_used: worldContext.sources_used ?? null,
     raw_count: worldContext.raw_count ?? null,
   };
+}
+
+function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
+  const weightLearningDisabled = ["0", "false", "no", "off"].includes(
+    String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase()
+  );
+  if (weightLearningDisabled) return baselinePolicy;
+
+  const records = loadScorecardRecords(SCORECARD_PATH);
+  const weightTraining = trainSignalWeights({
+    records,
+    currentSignalWeights: baselinePolicy.signal_weights || null,
+    horizon: parseNumber(process.env.VS_SIGNAL_WEIGHT_HORIZON, 5),
+    stepSize: parseNumber(process.env.VS_SIGNAL_WEIGHT_STEP, 0.05),
+    minSamples: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_SAMPLES, 8),
+    minCorrelation: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_CORR, 0.05),
+    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+  });
+
+  const nowIso = new Date().toISOString();
+  const logEntry = {
+    ranAt: nowIso,
+    source: "signal_weights",
+    decision: weightTraining.updated ? "update" : "no_update",
+    reason: weightTraining.reason,
+    sampleCount: weightTraining.sampleCount,
+    correlations: weightTraining.correlations,
+    oldWeights: weightTraining.oldWeights,
+    newWeights: weightTraining.newWeights,
+    diagnostics: weightTraining.diagnostics,
+    policyVersionBefore: baselinePolicy.version ?? 1,
+    policyVersionAfter: weightTraining.updated
+      ? (baselinePolicy.version ?? 1) + 1
+      : baselinePolicy.version ?? 1,
+    worldMacroSnapshot: buildWorldSnapshot(worldContext),
+  };
+  appendTrainingLog(logEntry);
+
+  if (!weightTraining.updated) {
+    return baselinePolicy;
+  }
+
+  const mergedPolicy = {
+    ...baselinePolicy,
+    schema_version: baselinePolicy.schema_version ?? 1,
+    version: (baselinePolicy.version ?? 1) + 1,
+    signal_weights: {
+      ...(baselinePolicy.signal_weights || {}),
+      ...weightTraining.newWeights,
+      last_trained_at: nowIso,
+      last_sample_count: weightTraining.sampleCount,
+      last_correlations: weightTraining.correlations,
+      last_horizon: weightTraining.diagnostics?.horizon ?? null,
+    },
+    lastTrainedAt: nowIso,
+    lastTrainingReason: "signal_weights_update",
+  };
+  savePolicy(mergedPolicy);
+  return mergedPolicy;
 }
 
 export function trainPolicyFromHistoryLocal({
@@ -212,9 +275,10 @@ export function trainPolicyFromHistoryLocal({
 
       appendTrainingLog(entry);
 
+      let baselinePolicy = policy;
       if (scorecardTraining.updated && scorecardTraining.newPolicy) {
-        savePolicy(scorecardTraining.newPolicy);
-        return scorecardTraining;
+        baselinePolicy = scorecardTraining.newPolicy;
+        savePolicy(baselinePolicy);
       }
 
       const blockFallbackReasons = new Set([
@@ -223,6 +287,20 @@ export function trainPolicyFromHistoryLocal({
         "cooldown",
         "non_trainable_mode",
       ]);
+      // Signal weight training runs whenever scorecard training was attempted
+      // and the scorecard wasn't blocked by a cooldown reason. It uses the
+      // same records and inherits cooldown via the scorecard guard above.
+      if (!blockFallbackReasons.has(scorecardTraining.reason)) {
+        baselinePolicy = maybeTrainSignalWeights({
+          baselinePolicy,
+          worldContext,
+        });
+      }
+
+      if (scorecardTraining.updated) {
+        return scorecardTraining;
+      }
+
       if (
         blockFallbackReasons.has(scorecardTraining.reason) ||
         history.length === 0
