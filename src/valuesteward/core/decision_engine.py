@@ -17,6 +17,7 @@ from valuesteward.models import IntentRecord, PortfolioSnapshot, RiskMode
 logger = logging.getLogger(__name__)
 
 EXPLORATION_TAG = "exploration_buy"
+THOMPSON_TAG = "thompson_buy"
 
 
 class DecisionEngine:
@@ -50,6 +51,7 @@ class DecisionEngine:
         settings: ValueStewardSettings,
         portfolio_repository: PortfolioRepository,
         signal_engine: SignalEngine | None = None,
+        policy: dict | None = None,
     ) -> None:
         self.risk_governor = risk_governor
         self.pattern_library = pattern_library
@@ -57,7 +59,41 @@ class DecisionEngine:
         self.portfolio_repository = portfolio_repository
         self.signal_engine = signal_engine
         self.sector_map = SectorMap()
+        self.policy = policy or {}
         self._exploration_rng: _random.Random | None = None
+        self._thompson_rng: _random.Random | None = None
+
+    def _get_thompson_rng(self) -> _random.Random:
+        """Lazy RNG for Thompson sampling. Separate seed env var so it can be
+        controlled independently from epsilon-greedy exploration."""
+        if self._thompson_rng is None:
+            seed_raw = os.getenv("VS_SCORE_GATE_THOMPSON_SEED", "").strip()
+            if seed_raw:
+                try:
+                    self._thompson_rng = _random.Random(int(seed_raw))
+                except ValueError:
+                    self._thompson_rng = _random.Random()
+            else:
+                self._thompson_rng = _random.Random()
+        return self._thompson_rng
+
+    def _lookup_posterior(self, symbol: str) -> tuple[float, float, int]:
+        """Return (alpha, beta, sample_count) for ``symbol`` from policy
+        posteriors. Returns (0, 0, 0) if no record exists.
+        """
+        posteriors = self.policy.get("score_gate_posteriors") or {}
+        if not isinstance(posteriors, dict):
+            return 0.0, 0.0, 0
+        slot = posteriors.get(symbol)
+        if not isinstance(slot, dict):
+            return 0.0, 0.0, 0
+        alpha = slot.get("alpha", 0)
+        beta = slot.get("beta", 0)
+        sample_count = slot.get("sample_count", 0)
+        try:
+            return float(alpha), float(beta), int(sample_count)
+        except (TypeError, ValueError):
+            return 0.0, 0.0, 0
 
     def _get_exploration_rng(self) -> _random.Random:
         """Lazy RNG for epsilon-greedy exploration.
@@ -277,6 +313,54 @@ class DecisionEngine:
             exploration_size_mult = self._get_env_float(
                 "VS_NEW_ENTRY_EXPLORATION_SIZE_MULT", 0.5
             )
+
+            thompson_enabled = os.getenv(
+                "VS_SCORE_GATE_THOMPSON_ENABLED", "0"
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            thompson_threshold = self._get_env_float(
+                "VS_SCORE_GATE_THOMPSON_THRESHOLD", 0.55
+            )
+            thompson_prior_alpha = self._get_env_float(
+                "VS_SCORE_GATE_THOMPSON_PRIOR_ALPHA", 2.0
+            )
+            thompson_prior_beta = self._get_env_float(
+                "VS_SCORE_GATE_THOMPSON_PRIOR_BETA", 2.0
+            )
+            thompson_size_mult = self._get_env_float(
+                "VS_SCORE_GATE_THOMPSON_SIZE_MULT", 1.0
+            )
+
+            if thompson_enabled:
+                # Replace the hard score floor with a Beta-distribution bandit
+                # sample. The per-symbol posterior (alpha = beat-benchmark
+                # count, beta = lost count) is combined with the configurable
+                # prior. High-confidence winners almost always pass; uncertain
+                # new names get occasional exploratory entries.
+                alpha, beta, post_n = self._lookup_posterior(signal.symbol)
+                eff_alpha = thompson_prior_alpha + alpha
+                eff_beta = thompson_prior_beta + beta
+                sample = self._get_thompson_rng().betavariate(eff_alpha, eff_beta)
+                if sample >= thompson_threshold:
+                    return (
+                        True,
+                        (
+                            f"{THOMPSON_TAG} sample={sample:.3f}"
+                            f">={thompson_threshold:.2f} "
+                            f"alpha={eff_alpha:.1f} beta={eff_beta:.1f} "
+                            f"n={post_n} score={signal.score:.4f}"
+                        ),
+                        max(0.0, min(1.0, thompson_size_mult)),
+                    )
+                return (
+                    False,
+                    (
+                        f"thompson_gate sample={sample:.3f}"
+                        f"<{thompson_threshold:.2f} "
+                        f"alpha={eff_alpha:.1f} beta={eff_beta:.1f} "
+                        f"n={post_n}"
+                    ),
+                    1.0,
+                )
 
             if signal.score < min_score:
                 # Epsilon-greedy exploration: when score is just below threshold
@@ -647,18 +731,27 @@ class DecisionEngine:
                 ), signal_result
             # --------------------------------------------
 
-            is_exploration = bool(
-                buy_note and str(buy_note).startswith(EXPLORATION_TAG)
-            )
-            buy_reason_code = (
-                "BUY_EXPLORATION" if is_exploration else "UNDER_TARGET_BUY"
-            )
-            buy_explanation = (
-                f"Exploration buy {selected_signal.symbol} "
-                f"(vol_adj_size={adjusted_size:.2%}; {buy_note})"
-                if is_exploration
-                else f"Buying {selected_signal.symbol} (vol_adj_size={adjusted_size:.2%})"
-            )
+            note_str = str(buy_note) if buy_note else ""
+            is_exploration = note_str.startswith(EXPLORATION_TAG)
+            is_thompson = note_str.startswith(THOMPSON_TAG)
+            if is_exploration:
+                buy_reason_code = "BUY_EXPLORATION"
+                buy_explanation = (
+                    f"Exploration buy {selected_signal.symbol} "
+                    f"(vol_adj_size={adjusted_size:.2%}; {buy_note})"
+                )
+            elif is_thompson:
+                buy_reason_code = "BUY_THOMPSON"
+                buy_explanation = (
+                    f"Thompson buy {selected_signal.symbol} "
+                    f"(vol_adj_size={adjusted_size:.2%}; {buy_note})"
+                )
+            else:
+                buy_reason_code = "UNDER_TARGET_BUY"
+                buy_explanation = (
+                    f"Buying {selected_signal.symbol} "
+                    f"(vol_adj_size={adjusted_size:.2%})"
+                )
             return IntentRecord(
                 **{
                     **gate_meta,

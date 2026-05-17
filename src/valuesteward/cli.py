@@ -359,7 +359,21 @@ def tick() -> None:
     policy, policy_warnings = load_policy()
     for warning in policy_warnings:
         print(f"[POLICY] Warning: {warning}")
-    settings = apply_policy_to_settings(settings, policy)
+
+    # Load world context early so regime-conditional signal weights can be
+    # picked up by apply_policy_to_settings before the signal engine builds.
+    _early_world_context = load_latest_world_context()
+    _early_macro_label = None
+    if isinstance(_early_world_context, dict):
+        macro_view = _early_world_context.get("macro_view") or {}
+        if isinstance(macro_view, dict):
+            label = macro_view.get("macro_label")
+            if isinstance(label, str):
+                _early_macro_label = label
+
+    settings = apply_policy_to_settings(
+        settings, policy, world_macro_label=_early_macro_label
+    )
     print(
         f"Mode={settings.mode} | shadow_mode={settings.shadow_mode} "
         f"| execution_armed={settings.execution_armed}"
@@ -391,6 +405,7 @@ def tick() -> None:
         settings=settings,
         portfolio_repository=portfolio_repo,
         signal_engine=signal_engine,
+        policy=policy,
     )
     execution_engine = ExecutionEngine(
         alpaca_client=alpaca_client,
@@ -402,7 +417,9 @@ def tick() -> None:
     notifications = NotificationService()
 
     snapshot = portfolio_repo.get_current_snapshot()
-    world_context = load_latest_world_context()
+    # Reuse the world context loaded earlier (for regime-conditional weights)
+    # to avoid a second file read.
+    world_context = _early_world_context
     world_tags = infer_world_tags(snapshot, world_context)
     intent, signal_result = decision_engine.decide(
         snapshot, world_tags, world_context=world_context

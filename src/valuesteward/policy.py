@@ -36,6 +36,7 @@ class PolicySnapshot(BaseModel):
     min_trade_notional_dollars: float | None = None
     trade_gate_overrides: dict[str, Any] = Field(default_factory=dict)
     signal_weights: dict[str, Any] = Field(default_factory=dict)
+    score_gate_posteriors: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
 
@@ -43,6 +44,7 @@ class PolicySnapshot(BaseModel):
 SIGNAL_WEIGHT_MIN = 0.1
 SIGNAL_WEIGHT_MAX = 2.0
 SIGNAL_WEIGHT_KEYS = ("momentum", "vol", "drawdown")
+SIGNAL_WEIGHT_REGIMES = ("calm", "watchful", "stressed", "crisis-prone")
 
 
 def risk_level_to_mode(risk_level: float | None) -> str | None:
@@ -126,27 +128,77 @@ def validate_policy(raw_policy: Any) -> tuple[dict[str, Any], list[str]]:
         warnings.append("signal_weights must be an object.")
         policy["signal_weights"] = {}
     else:
-        for key in SIGNAL_WEIGHT_KEYS:
-            value = signal_weights.get(key)
-            if value is None:
-                continue
-            if not isinstance(value, (int, float)):
+        _validate_weight_triplet(signal_weights, "signal_weights", warnings)
+        by_regime = signal_weights.get("by_regime")
+        if by_regime is not None:
+            if not isinstance(by_regime, dict):
+                warnings.append("signal_weights.by_regime must be an object.")
+                signal_weights["by_regime"] = {}
+            else:
+                for regime, regime_weights in list(by_regime.items()):
+                    if not isinstance(regime_weights, dict):
+                        warnings.append(
+                            f"signal_weights.by_regime.{regime} must be an object; "
+                            "ignored."
+                        )
+                        by_regime.pop(regime, None)
+                        continue
+                    _validate_weight_triplet(
+                        regime_weights,
+                        f"signal_weights.by_regime.{regime}",
+                        warnings,
+                    )
+
+    posteriors = policy.get("score_gate_posteriors")
+    if posteriors is None:
+        policy["score_gate_posteriors"] = {}
+    elif not isinstance(posteriors, dict):
+        warnings.append("score_gate_posteriors must be an object.")
+        policy["score_gate_posteriors"] = {}
+    else:
+        for symbol, slot in list(posteriors.items()):
+            if not isinstance(slot, dict):
                 warnings.append(
-                    f"signal_weights.{key}={value} must be numeric; ignored."
+                    f"score_gate_posteriors.{symbol} must be an object; dropped."
                 )
-                signal_weights.pop(key, None)
+                posteriors.pop(symbol, None)
                 continue
-            weight = float(value)
-            if weight < SIGNAL_WEIGHT_MIN or weight > SIGNAL_WEIGHT_MAX:
-                warnings.append(
-                    f"signal_weights.{key}={weight} outside "
-                    f"[{SIGNAL_WEIGHT_MIN}, {SIGNAL_WEIGHT_MAX}]; clamped."
-                )
-                signal_weights[key] = max(
-                    SIGNAL_WEIGHT_MIN, min(SIGNAL_WEIGHT_MAX, weight)
-                )
+            for key in ("alpha", "beta"):
+                value = slot.get(key)
+                if value is None:
+                    continue
+                if not isinstance(value, (int, float)) or float(value) < 0:
+                    warnings.append(
+                        f"score_gate_posteriors.{symbol}.{key}={value} must be "
+                        "a non-negative number; reset to 0."
+                    )
+                    slot[key] = 0
 
     return policy, warnings
+
+
+def _validate_weight_triplet(
+    weights: dict[str, Any], label: str, warnings: list[str]
+) -> None:
+    """In-place validate a {momentum,vol,drawdown} weight triplet."""
+
+    for key in SIGNAL_WEIGHT_KEYS:
+        value = weights.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)):
+            warnings.append(f"{label}.{key}={value} must be numeric; ignored.")
+            weights.pop(key, None)
+            continue
+        weight = float(value)
+        if weight < SIGNAL_WEIGHT_MIN or weight > SIGNAL_WEIGHT_MAX:
+            warnings.append(
+                f"{label}.{key}={weight} outside "
+                f"[{SIGNAL_WEIGHT_MIN}, {SIGNAL_WEIGHT_MAX}]; clamped."
+            )
+            weights[key] = max(
+                SIGNAL_WEIGHT_MIN, min(SIGNAL_WEIGHT_MAX, weight)
+            )
 
 
 def load_policy(path: Path | str = DEFAULT_POLICY_PATH) -> tuple[dict[str, Any], list[str]]:
@@ -161,9 +213,17 @@ def load_policy(path: Path | str = DEFAULT_POLICY_PATH) -> tuple[dict[str, Any],
 
 
 def apply_policy_to_settings(
-    settings: ValueStewardSettings, policy: dict[str, Any]
+    settings: ValueStewardSettings,
+    policy: dict[str, Any],
+    world_macro_label: str | None = None,
 ) -> ValueStewardSettings:
-    """Return a settings copy with policy-driven overrides applied."""
+    """Return a settings copy with policy-driven overrides applied.
+
+    If ``world_macro_label`` is provided and ``signal_weights.by_regime`` has
+    an entry for that regime, the regime-specific weights take precedence over
+    the base ``signal_weights.{momentum,vol,drawdown}``. Falls back silently
+    when the regime is missing.
+    """
 
     updates: dict[str, Any] = {}
     if isinstance(policy.get("target_risk_exposure_pct_low"), (int, float)):
@@ -208,12 +268,31 @@ def apply_policy_to_settings(
             "vol": "w_rank_vol",
             "drawdown": "w_rank_dd",
         }
+        # Start with base weights, then override with regime-specific ones if
+        # available for the current macro label.
+        effective_weights: dict[str, Any] = {}
+        for policy_key in weight_map:
+            base = signal_weights.get(policy_key)
+            if isinstance(base, (int, float)):
+                effective_weights[policy_key] = float(base)
+
+        by_regime = signal_weights.get("by_regime")
+        if (
+            world_macro_label
+            and isinstance(by_regime, dict)
+            and isinstance(by_regime.get(world_macro_label), dict)
+        ):
+            regime_weights = by_regime[world_macro_label]
+            for policy_key in weight_map:
+                regime_value = regime_weights.get(policy_key)
+                if isinstance(regime_value, (int, float)):
+                    effective_weights[policy_key] = float(regime_value)
+
         for policy_key, setting_attr in weight_map.items():
-            value = signal_weights.get(policy_key)
-            if isinstance(value, (int, float)):
+            if policy_key in effective_weights:
                 updates[setting_attr] = max(
                     SIGNAL_WEIGHT_MIN,
-                    min(SIGNAL_WEIGHT_MAX, float(value)),
+                    min(SIGNAL_WEIGHT_MAX, effective_weights[policy_key]),
                 )
 
     if not updates:
