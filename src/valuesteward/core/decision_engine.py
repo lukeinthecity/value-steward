@@ -1,5 +1,6 @@
 """Decision engine for Value Steward."""
 
+import math
 import os
 import logging
 import random as _random
@@ -77,23 +78,43 @@ class DecisionEngine:
                 self._thompson_rng = _random.Random()
         return self._thompson_rng
 
-    def _lookup_posterior(self, symbol: str) -> tuple[float, float, int]:
+    # Hard cap on a single posterior count to keep Beta(alpha, beta) numerically
+    # well-behaved even if a corrupted policy.json snuck in.
+    _POSTERIOR_COUNT_CAP = 1_000_000
+
+    def _lookup_posterior(self, symbol: str | None) -> tuple[float, float, int]:
         """Return (alpha, beta, sample_count) for ``symbol`` from policy
-        posteriors. Returns (0, 0, 0) if no record exists.
+        posteriors. Returns (0, 0, 0) if no record exists or values are
+        non-finite/out-of-range.
+
+        Symbol lookup is case-insensitive — the trainer always writes
+        uppercase keys, but defensive normalization here means a mismatched
+        case in the live signal doesn't silently fall back to the prior.
         """
+        if not isinstance(symbol, str):
+            return 0.0, 0.0, 0
+        key = symbol.strip().upper()
+        if not key:
+            return 0.0, 0.0, 0
         posteriors = self.policy.get("score_gate_posteriors") or {}
         if not isinstance(posteriors, dict):
             return 0.0, 0.0, 0
-        slot = posteriors.get(symbol)
+        slot = posteriors.get(key)
         if not isinstance(slot, dict):
             return 0.0, 0.0, 0
-        alpha = slot.get("alpha", 0)
-        beta = slot.get("beta", 0)
-        sample_count = slot.get("sample_count", 0)
         try:
-            return float(alpha), float(beta), int(sample_count)
+            alpha = float(slot.get("alpha", 0))
+            beta = float(slot.get("beta", 0))
+            sample_count = int(slot.get("sample_count", 0))
         except (TypeError, ValueError):
             return 0.0, 0.0, 0
+        # Reject non-finite / negative / runaway values defensively.
+        if not (math.isfinite(alpha) and math.isfinite(beta)):
+            return 0.0, 0.0, 0
+        alpha = max(0.0, min(self._POSTERIOR_COUNT_CAP, alpha))
+        beta = max(0.0, min(self._POSTERIOR_COUNT_CAP, beta))
+        sample_count = max(0, min(self._POSTERIOR_COUNT_CAP, sample_count))
+        return alpha, beta, sample_count
 
     def _get_exploration_rng(self) -> _random.Random:
         """Lazy RNG for epsilon-greedy exploration.
@@ -299,6 +320,25 @@ class DecisionEngine:
         existing_symbols = {pos.symbol for pos in snapshot.positions}
         is_add_on = signal.symbol in existing_symbols
 
+        # Thompson-pass state — set inside the new-entry block; the
+        # downstream True-returns honor these to tag the BUY and cap size.
+        thompson_buy_note: str | None = None
+        thompson_size_override: float | None = None
+
+        def _finalize_buy(reason, size_mult):
+            """Merge Thompson approval into the final BUY tuple if active."""
+            if thompson_buy_note is None:
+                return True, reason, size_mult
+            combined_reason = (
+                f"{thompson_buy_note}; regime={reason}" if reason else thompson_buy_note
+            )
+            cap = (
+                thompson_size_override
+                if thompson_size_override is not None
+                else size_mult
+            )
+            return True, combined_reason, min(size_mult, cap)
+
         if not is_add_on:
             min_score = self._get_env_float("VS_NEW_ENTRY_MIN_SIGNAL_SCORE", 1.55)
             min_rel_20 = self._get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", 0.0)
@@ -330,39 +370,45 @@ class DecisionEngine:
                 "VS_SCORE_GATE_THOMPSON_SIZE_MULT", 1.0
             )
 
+            # Thompson sampling replaces only the score-threshold gate.
+            # The rel20 / rel60 / trend safety gates below still apply, so a
+            # Beta-favored symbol with negative relative strength is still
+            # blocked. The exploration_size_mult is reused for Thompson buys
+            # when the sample is in the "uncertain" zone (within 0.10 of the
+            # threshold) — confident wins get full size. (Declarations live in
+            # the outer function scope so _finalize_buy can observe them.)
             if thompson_enabled:
-                # Replace the hard score floor with a Beta-distribution bandit
-                # sample. The per-symbol posterior (alpha = beat-benchmark
-                # count, beta = lost count) is combined with the configurable
-                # prior. High-confidence winners almost always pass; uncertain
-                # new names get occasional exploratory entries.
                 alpha, beta, post_n = self._lookup_posterior(signal.symbol)
-                eff_alpha = thompson_prior_alpha + alpha
-                eff_beta = thompson_prior_beta + beta
+                # Floor priors at a small positive value so betavariate never
+                # sees 0 (which would raise ValueError).
+                eff_alpha = max(0.5, thompson_prior_alpha + alpha)
+                eff_beta = max(0.5, thompson_prior_beta + beta)
                 sample = self._get_thompson_rng().betavariate(eff_alpha, eff_beta)
-                if sample >= thompson_threshold:
+                if sample < thompson_threshold:
                     return (
-                        True,
+                        False,
                         (
-                            f"{THOMPSON_TAG} sample={sample:.3f}"
-                            f">={thompson_threshold:.2f} "
+                            f"thompson_gate sample={sample:.3f}"
+                            f"<{thompson_threshold:.2f} "
                             f"alpha={eff_alpha:.1f} beta={eff_beta:.1f} "
-                            f"n={post_n} score={signal.score:.4f}"
+                            f"n={post_n}"
                         ),
-                        max(0.0, min(1.0, thompson_size_mult)),
+                        1.0,
                     )
-                return (
-                    False,
-                    (
-                        f"thompson_gate sample={sample:.3f}"
-                        f"<{thompson_threshold:.2f} "
-                        f"alpha={eff_alpha:.1f} beta={eff_beta:.1f} "
-                        f"n={post_n}"
-                    ),
-                    1.0,
+                # Passed Thompson; fall through to rel/trend safety gates.
+                thompson_buy_note = (
+                    f"{THOMPSON_TAG} sample={sample:.3f}"
+                    f">={thompson_threshold:.2f} "
+                    f"alpha={eff_alpha:.1f} beta={eff_beta:.1f} "
+                    f"n={post_n} score={signal.score:.4f}"
                 )
+                # Confident win → full size; near-threshold (uncertain) → reduced.
+                if sample - thompson_threshold >= 0.10:
+                    thompson_size_override = max(0.0, min(1.0, thompson_size_mult))
+                else:
+                    thompson_size_override = max(0.0, min(1.0, exploration_size_mult))
 
-            if signal.score < min_score:
+            elif signal.score < min_score:
                 # Epsilon-greedy exploration: when score is just below threshold
                 # (within zone), occasionally allow the BUY through to gather
                 # training signal on what the gate is rejecting.
@@ -433,14 +479,12 @@ class DecisionEngine:
                     size_multiplier,
                 )
             if is_add_on:
-                return (
-                    True,
+                return _finalize_buy(
                     f"regime_add_on={macro_label} sector={selected_sector}",
                     size_multiplier,
                 )
             if is_regime_consistent:
-                return (
-                    True,
+                return _finalize_buy(
                     f"regime_sector={macro_label}:{selected_sector}",
                     size_multiplier,
                 )
@@ -451,9 +495,9 @@ class DecisionEngine:
             )
 
         if macro_label == "watchful":
-            return True, "regime_watchful_size_reduced", 0.85
+            return _finalize_buy("regime_watchful_size_reduced", 0.85)
 
-        return True, None, 1.0
+        return _finalize_buy(None, 1.0)
 
     def _allow_sell(
         self, 
