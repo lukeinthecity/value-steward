@@ -23,6 +23,18 @@ The system uses a **Hybrid-Language, Unified-State Architecture**:
 *   **Strategic Hold Logic:** Intelligent enough to let winners run by refusing to sell strong assets even when overweight.
 *   **Auditability:** Comprehensive JSONL logs of every intent, decision, and execution for performance attribution and learning.
 
+## 🧠 Adaptive Learning Loop
+
+The signal scoring and decision gates are no longer static. Every end-of-day cycle, the system grades its own decisions against the next-day, 5-day, and 20-day forward returns of the symbols it bought *and the symbols it blocked* (counterfactuals), and updates its policy:
+
+*   **Ridge-regularized OLS regression** over the three rank features (momentum / vol / drawdown) against forward alpha (`excess_vs_benchmark`). Per-feature **t-statistic gating** (`|t| ≥ 2.0`, ~p < 0.05) skips updates that aren't statistically distinguishable from noise.
+*   **Thompson sampling** on the score gate (opt-in): per-symbol Beta posteriors built from the scorecard let high-conviction winners through easily and rarely admit known losers.
+*   **Regime-conditional weights:** separate `[w_mom, w_vol, w_dd]` triplets per macro regime (calm / watchful / stressed / crisis-prone), trained independently from records taken in that regime.
+*   **Out-of-sample evaluation** (`data/oos-eval.jsonl`) tracks rolling Sharpe of decisions made under the current policy.
+*   **Champion-challenger auto-rollback** (opt-in): the trainer preserves a "champion" snapshot of the last weights that proved their OOS Sharpe; if the live policy underperforms the champion for 3 consecutive cycles it auto-reverts.
+
+All learning is gated by significance / sample-size floors and behind env vars so the system fails closed — defaults preserve the original deterministic behavior until enough data accumulates. See [`docs/ML_BACKLOG.md`](docs/ML_BACKLOG.md) for the Tier 2 / Tier 3 roadmap to revisit after each Phase 1 run.
+
 ## 🛠 Quickstart
 
 ### Prerequisites
@@ -33,7 +45,7 @@ The system uses a **Hybrid-Language, Unified-State Architecture**:
 ### Setup
 1. **Clone & Install:**
    ```bash
-   git clone https://github.com/your-repo/value-steward.git
+   git clone https://github.com/lukeinthecity/value-steward.git
    cd value-steward
    npm install
    python -m venv .venv
