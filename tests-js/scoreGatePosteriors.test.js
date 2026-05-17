@@ -95,3 +95,15 @@ test("buildScoreGatePosteriors: produces idempotent output on repeated calls", (
   const r2 = buildScoreGatePosteriors({ records });
   assert.deepEqual(r1.posteriors, r2.posteriors);
 });
+
+test("buildScoreGatePosteriors: falls back to excess_vs_benchmark on invalid target", () => {
+  const records = [
+    buildRecord({ symbol: "AAPL", excess5: 0.01, signed5: -0.99, intentId: "1" }),
+  ];
+  // Invalid target — should fall back to default (excess_vs_benchmark)
+  // rather than silently reading undefined and skipping every row.
+  const result = buildScoreGatePosteriors({ records, target: "garbage_field" });
+  assert.equal(result.diagnostics.target, "excess_vs_benchmark");
+  assert.equal(result.posteriors.AAPL.alpha, 1);
+  assert.equal(result.posteriors.AAPL.beta, 0);
+});

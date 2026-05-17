@@ -199,3 +199,135 @@ def test_thompson_reason_tag_marks_buy_thompson(monkeypatch) -> None:
     )
     assert allowed is True
     assert reason.startswith(THOMPSON_TAG)
+
+
+# ----- Regression tests for the audit-driven fixes -----
+
+
+def test_thompson_does_not_bypass_rel20_safety_gate(monkeypatch) -> None:
+    """REGRESSION: Thompson approval must not bypass rel20/rel60/trend.
+
+    Earlier implementation returned True immediately on a Thompson pass,
+    skipping the relative-strength safety gates. The fix re-routes Thompson
+    through the same downstream checks so a Beta-favored symbol with
+    negative relative strength is still blocked.
+    """
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_ENABLED", "1")
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_THRESHOLD", "0.01")  # always pass
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_SEED", "42")
+    monkeypatch.setenv("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", "0.0")
+    # Strong posterior, will always pass Thompson:
+    policy = {"score_gate_posteriors": {"XYZ": {"alpha": 30, "beta": 1}}}
+    engine = _build_engine(policy=policy)
+
+    # Signal with NEGATIVE rel_strength_20d — rel20 gate should still block.
+    signal = SymbolSignal(
+        symbol="XYZ",
+        score=1.80,
+        momentum_rank=0.9,
+        vol_rank=0.9,
+        drawdown_rank=1.0,
+        volatility=0.02,
+        last_close=50.0,
+        day_return=0.005,
+        trend_strength=0.04,
+        mom_5d=0.005,
+        mom_20d=0.01,
+        mom_60d=0.05,
+        rel_strength_20d=-0.05,  # FAILS rel20 gate
+        rel_strength_60d=0.05,
+        momentum_raw=0.03,
+        drawdown=0.01,
+        bars=100,
+    )
+
+    allowed, reason, _ = engine._allow_buy(
+        world_context={"macro_view": {"macro_label": "calm"}},
+        signal=signal,
+        snapshot=_empty_snapshot(),
+    )
+    assert allowed is False
+    assert "rel20" in (reason or "")
+
+
+def test_thompson_passes_with_thompson_tag_after_all_safety_gates(monkeypatch) -> None:
+    """When Thompson approves AND all rel/trend gates also pass, the BUY note
+    starts with the THOMPSON_TAG prefix so downstream tags reason_code=BUY_THOMPSON."""
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_ENABLED", "1")
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_THRESHOLD", "0.01")  # always pass
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_SEED", "42")
+    monkeypatch.setenv("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", "0.0")
+    policy = {"score_gate_posteriors": {"XYZ": {"alpha": 30, "beta": 1}}}
+    engine = _build_engine(policy=policy)
+    signal = _build_signal(score=1.20)  # all defaults pass rel20/rel60/trend
+    allowed, reason, _ = engine._allow_buy(
+        world_context={"macro_view": {"macro_label": "calm"}},
+        signal=signal,
+        snapshot=_empty_snapshot(),
+    )
+    assert allowed is True
+    assert reason.startswith(THOMPSON_TAG)
+
+
+def test_lookup_posterior_is_case_insensitive(monkeypatch) -> None:
+    """REGRESSION: posteriors stored uppercased; lookup must normalize."""
+    policy = {
+        "score_gate_posteriors": {"AAPL": {"alpha": 10, "beta": 2, "sample_count": 12}}
+    }
+    engine = _build_engine(policy=policy)
+    # Lower-case lookup must still hit the AAPL posterior.
+    alpha, beta, n = engine._lookup_posterior("aapl")
+    assert alpha == 10.0
+    assert beta == 2.0
+    assert n == 12
+
+    # Whitespace tolerated.
+    alpha2, beta2, _ = engine._lookup_posterior("  AAPL  ")
+    assert alpha2 == 10.0
+    assert beta2 == 2.0
+
+
+def test_lookup_posterior_handles_none_and_empty_symbol() -> None:
+    """Defensive: None or empty symbol returns (0, 0, 0) without crashing."""
+    engine = _build_engine(policy={"score_gate_posteriors": {"AAPL": {"alpha": 5}}})
+    assert engine._lookup_posterior(None) == (0.0, 0.0, 0)
+    assert engine._lookup_posterior("") == (0.0, 0.0, 0)
+    assert engine._lookup_posterior("   ") == (0.0, 0.0, 0)
+
+
+def test_lookup_posterior_rejects_nonfinite_and_caps_runaway_counts() -> None:
+    """REGRESSION: a corrupted policy.json with Infinity / huge counts must
+    not blow up betavariate. _lookup_posterior caps values defensively."""
+    engine = _build_engine(
+        policy={
+            "score_gate_posteriors": {
+                "INF": {"alpha": float("inf"), "beta": 5},
+                "HUGE": {"alpha": 5_000_000, "beta": 5},
+            }
+        }
+    )
+    # Non-finite → reset to zeros.
+    assert engine._lookup_posterior("INF") == (0.0, 0.0, 0)
+    # Huge value → capped.
+    alpha, _, _ = engine._lookup_posterior("HUGE")
+    assert alpha == DecisionEngine._POSTERIOR_COUNT_CAP
+
+
+def test_thompson_with_zero_prior_does_not_crash(monkeypatch) -> None:
+    """REGRESSION: prior_alpha=0 used to make betavariate raise ValueError.
+    The fix floors effective alpha/beta at 0.5."""
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_ENABLED", "1")
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_PRIOR_ALPHA", "0.0")
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_PRIOR_BETA", "0.0")
+    monkeypatch.setenv("VS_SCORE_GATE_THOMPSON_SEED", "42")
+    engine = _build_engine()
+    signal = _build_signal(score=1.20)
+    # Should NOT raise.
+    allowed, reason, _ = engine._allow_buy(
+        world_context={"macro_view": {"macro_label": "calm"}},
+        signal=signal,
+        snapshot=_empty_snapshot(),
+    )
+    # Either decision is acceptable here; the assertion is "no crash".
+    assert isinstance(allowed, bool)
+    assert reason is None or isinstance(reason, str)

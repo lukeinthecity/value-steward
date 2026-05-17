@@ -14,6 +14,8 @@
  * Posteriors are rebuilt from scratch each cycle for idempotency.
  */
 
+const VALID_TARGETS = new Set(["excess_vs_benchmark", "signed_return"]);
+
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -44,6 +46,9 @@ export function buildScoreGatePosteriors({
   let sampleCount = 0;
   let skippedNoTarget = 0;
   let skippedNoSymbol = 0;
+  const resolvedTarget = VALID_TARGETS.has(target)
+    ? target
+    : "excess_vs_benchmark";
 
   if (!Array.isArray(records)) {
     return {
@@ -51,14 +56,14 @@ export function buildScoreGatePosteriors({
       sampleCount: 0,
       skippedNoTarget: 0,
       skippedNoSymbol: 0,
-      diagnostics: { horizon, target },
+      diagnostics: { horizon, target: resolvedTarget },
     };
   }
 
   const horizonKey = String(horizon);
   for (const record of records) {
     const horizonData = record?.horizons?.[horizonKey];
-    const targetValue = horizonData?.[target];
+    const targetValue = horizonData?.[resolvedTarget];
     if (!isFiniteNumber(targetValue)) {
       skippedNoTarget += 1;
       continue;
@@ -94,7 +99,11 @@ export function buildScoreGatePosteriors({
     sampleCount,
     skippedNoTarget,
     skippedNoSymbol,
-    diagnostics: { horizon, target, symbolCount: Object.keys(posteriors).length },
+    diagnostics: {
+      horizon,
+      target: resolvedTarget,
+      symbolCount: Object.keys(posteriors).length,
+    },
   };
 }
 
