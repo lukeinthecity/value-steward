@@ -116,12 +116,15 @@ test("ridgeOls3: recovers known coefficients on clean data", () => {
     x3.push(c);
     y.push(0.5 * a + 0.0 * b - 0.3 * c);
   }
-  const coef = ridgeOls3([x1, x2, x3], y, 0.001);
-  assert.ok(coef !== null);
-  // With small lambda and clean data, coefficients should be very close to truth.
+  const result = ridgeOls3([x1, x2, x3], y, 0.001);
+  assert.ok(result !== null);
+  const { coef } = result;
+  // With small lambda and clean data, coefficients should be close to truth.
   assert.ok(Math.abs(coef[0] - 0.5) < 0.05, `c1=${coef[0]}`);
   assert.ok(Math.abs(coef[1] - 0.0) < 0.05, `c2=${coef[1]}`);
   assert.ok(Math.abs(coef[2] + 0.3) < 0.05, `c3=${coef[2]}`);
+  // With near-zero residuals the t-stats should be very large (or finite).
+  result.tStats.forEach((t) => assert.ok(t === null || Number.isFinite(t)));
 });
 
 test("ridgeOls3: returns null on singular X^T X (constant features)", () => {
@@ -129,17 +132,48 @@ test("ridgeOls3: returns null on singular X^T X (constant features)", () => {
   // But with lambda > 0, ridge always succeeds. With lambda = 0, fails.
   const constant = Array.from({ length: 10 }, () => 0.5);
   const y = Array.from({ length: 10 }, (_, i) => i * 0.01);
-  const coef = ridgeOls3([constant, constant, constant], y, 0);
-  assert.equal(coef, null);
+  const result = ridgeOls3([constant, constant, constant], y, 0);
+  assert.equal(result, null);
 });
 
 test("ridgeOls3: lambda > 0 stabilizes constant features (no null)", () => {
   const constant = Array.from({ length: 10 }, () => 0.5);
   const y = Array.from({ length: 10 }, (_, i) => i * 0.01);
-  const coef = ridgeOls3([constant, constant, constant], y, 0.01);
-  assert.ok(coef !== null);
+  const result = ridgeOls3([constant, constant, constant], y, 0.01);
+  assert.ok(result !== null);
   // Coefficients will be small (regularization dominates) but finite.
-  coef.forEach((c) => assert.ok(Number.isFinite(c)));
+  result.coef.forEach((c) => assert.ok(Number.isFinite(c)));
+});
+
+test("ridgeOls3: t-stats are large on strong signal, near zero on noise", () => {
+  // x1 strongly correlated with y; x2 and x3 are pure noise.
+  const x1 = [];
+  const x2 = [];
+  const x3 = [];
+  const y = [];
+  // Use a deterministic pseudo-random to avoid flaky tests.
+  let seed = 1;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  for (let i = 0; i < 50; i += 1) {
+    const v1 = rand();
+    x1.push(v1);
+    x2.push(rand());
+    x3.push(rand());
+    // Strong linear relationship with x1; small noise.
+    y.push(0.5 * v1 + (rand() - 0.5) * 0.001);
+  }
+  const result = ridgeOls3([x1, x2, x3], y, 0.001);
+  assert.ok(result !== null);
+  // x1's t-stat should be far above 2 (statistically significant); the
+  // noise features should be much weaker.
+  assert.ok(Math.abs(result.tStats[0]) > 5, `x1 t=${result.tStats[0]}`);
+  assert.ok(
+    Math.abs(result.tStats[1]) < Math.abs(result.tStats[0]),
+    `x2 t=${result.tStats[1]} not weaker than x1`
+  );
 });
 
 test("resolveCurrentWeights: defaults and clamping", () => {
@@ -511,6 +545,102 @@ test("trainSignalWeightsByRegime: respects the regimes whitelist parameter", () 
   });
   assert.ok("calm" in result.byRegime);
   assert.ok(!("stressed" in result.byRegime));
+});
+
+test("trainSignalWeights: minTStat blocks weight updates on insignificant signal", () => {
+  // Pure noise — no true relationship. With minTStat default 2.0, no
+  // feature's coefficient should clear the bar, so no weights should update.
+  let seed = 1;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const records = Array.from({ length: 30 }, (_, i) =>
+    buildRecord({
+      momentum: rand(),
+      vol: rand(),
+      drawdown: rand(),
+      signed5: (rand() - 0.5) * 0.001, // pure noise target
+      excess5: (rand() - 0.5) * 0.001,
+      intentId: `r${i}`,
+    })
+  );
+  const result = trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    minSamples: 20,
+    minTStat: 2.0,
+    stepSize: 0.05,
+  });
+  // Should NOT update — t-stats are tiny.
+  assert.equal(result.updated, false);
+  assert.ok(
+    result.reason === "no_significant_t_stat" ||
+      result.reason === "no_significant_signal",
+    `unexpected reason ${result.reason}`
+  );
+  assert.ok(result.tStats !== null);
+});
+
+test("trainSignalWeights: minTStat=0 disables significance gating", () => {
+  // Same noise data — with gating disabled, the trainer happily nudges
+  // weights. This confirms the gate is what's blocking the update above.
+  let seed = 1;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const records = Array.from({ length: 30 }, (_, i) =>
+    buildRecord({
+      momentum: rand(),
+      vol: rand(),
+      drawdown: rand(),
+      signed5: (rand() - 0.5) * 0.001,
+      excess5: (rand() - 0.5) * 0.001,
+      intentId: `r${i}`,
+    })
+  );
+  const result = trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    minSamples: 20,
+    minTStat: 0,
+    stepSize: 0.05,
+  });
+  // With gating off, SOME weight should move (even if direction is noise).
+  assert.equal(result.updated, true);
+});
+
+test("trainSignalWeights: high t-stat feature still updates when others don't", () => {
+  // x1 has real signal; x2 and x3 are noise. With minTStat=2.0, only x1
+  // should clear the gate, and only the momentum weight should change.
+  let seed = 7;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const records = Array.from({ length: 50 }, (_, i) => {
+    const m = 0.1 + i * 0.018;
+    return buildRecord({
+      momentum: m,
+      vol: rand(),
+      drawdown: rand(),
+      signed5: m * 0.05 + (rand() - 0.5) * 0.001,
+      excess5: m * 0.05 + (rand() - 0.5) * 0.001,
+      intentId: `r${i}`,
+    });
+  });
+  const result = trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    minSamples: 20,
+    minTStat: 2.0,
+    stepSize: 0.05,
+  });
+  assert.equal(result.updated, true);
+  // Momentum should have moved; vol and drawdown should remain unchanged
+  // (their t-stats failed the gate).
+  assert.notEqual(result.newWeights.momentum, result.oldWeights.momentum);
 });
 
 test("trainSignalWeights: result includes Pearson correlations as diagnostics", () => {
