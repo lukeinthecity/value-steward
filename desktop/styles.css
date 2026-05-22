@@ -393,3 +393,49 @@ input, select {
 .world-summary-thesis {
   margin-top: 0.5rem;
 }
+
+/* Runtime Status panel */
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.runtime-block {
+  background: var(--color-bg-2, #1a1a1a);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.runtime-pulse {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.runtime-pulse .pulse-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.runtime-pulse .pulse-pill.ok {
+  border-color: var(--color-success, #4ade80);
+  color: var(--color-success, #4ade80);
+}
+
+.runtime-pulse .pulse-pill.miss {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.runtime-pulse .pulse-pill.warn {
+  border-color: var(--color-warning, #fbbf24);
+  color: var(--color-warning, #fbbf24);
+}

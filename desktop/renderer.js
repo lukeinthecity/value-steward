@@ -749,6 +749,91 @@ window.addEventListener("keydown", (e) => {
 loadData();
 setInterval(loadData, 30000);
 
+function renderRuntimeStatus(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+
+  const setText = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+
+  const phaseDay = snapshot.phase1Day ?? null;
+  setText(
+    "runtime-phase1",
+    phaseDay ? `Day ${phaseDay} of 60` : "(not started)"
+  );
+
+  const missedDays = Array.isArray(snapshot.missedDays)
+    ? snapshot.missedDays
+    : [];
+  setText(
+    "runtime-missed",
+    missedDays.length === 0
+      ? "no missed days"
+      : `${missedDays.length} missed: ${missedDays.join(", ")}`
+  );
+  const missedEl = document.getElementById("runtime-missed");
+  if (missedEl) {
+    missedEl.style.color =
+      missedDays.length > 0 ? "var(--color-warning, #fbbf24)" : "";
+  }
+
+  const op = snapshot.operational || {};
+  setText("runtime-mode", op.mode ?? "?");
+  setText(
+    "runtime-executions",
+    `executions today: ${op.executions_today ?? 0} · trading: ${
+      op.trading_enabled ? "on" : "off"
+    }`
+  );
+
+  setText(
+    "runtime-last-training",
+    snapshot.lastTrainingAt
+      ? snapshot.lastTrainingAt.slice(0, 19).replace("T", " ")
+      : "(none yet)"
+  );
+  setText(
+    "runtime-last-oos",
+    snapshot.lastOosRollingSharpe === null
+      ? "OOS Sharpe: (insufficient data)"
+      : `OOS Sharpe: ${snapshot.lastOosRollingSharpe.toFixed(3)}`
+  );
+
+  const pulseEl = document.getElementById("runtime-pulse");
+  if (pulseEl) {
+    const pulse = snapshot.pulse || {};
+    pulseEl.innerHTML = "";
+    for (const [name, ran] of Object.entries(pulse)) {
+      const pill = document.createElement("span");
+      pill.className = `pulse-pill ${ran ? "ok" : "miss"}`;
+      pill.textContent = `${ran ? "✓" : "·"} ${name}`;
+      pulseEl.appendChild(pill);
+    }
+  }
+}
+
+async function loadRuntimeStatus() {
+  const api = getApi();
+  if (!api?.loadRuntimeStatus) return;
+  try {
+    const result = await api.loadRuntimeStatus();
+    if (result?.ok && result.snapshot) {
+      renderRuntimeStatus(result.snapshot);
+      const indicator = document.getElementById("runtime-refresh-indicator");
+      if (indicator) {
+        const ts = new Date().toLocaleTimeString();
+        indicator.textContent = `(last updated ${ts} · refreshes every 30s)`;
+      }
+    }
+  } catch {
+    // Silent — runtime panel is informational; don't break the rest of the UI.
+  }
+}
+
+loadRuntimeStatus();
+setInterval(loadRuntimeStatus, 30000);
+
 if (typeof window !== "undefined") {
   window.__VS_RENDERER_TEST__ = {
     buildHoldingDateMap,

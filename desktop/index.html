@@ -97,6 +97,30 @@
           </div>
         </section>
 
+        <!-- 6. Runtime Status (auto-refreshing) -->
+        <section class="panel wide">
+          <h2>Runtime Status <span id="runtime-refresh-indicator" class="label-mini">(updates every 30s)</span></h2>
+          <div class="runtime-grid">
+            <div class="runtime-block">
+              <div class="label-mini">Phase 1</div>
+              <div class="data-mono" id="runtime-phase1">--</div>
+              <div class="label-mini" id="runtime-missed">--</div>
+            </div>
+            <div class="runtime-block">
+              <div class="label-mini">Mode</div>
+              <div class="data-mono" id="runtime-mode">--</div>
+              <div class="label-mini" id="runtime-executions">--</div>
+            </div>
+            <div class="runtime-block">
+              <div class="label-mini">Last Training</div>
+              <div class="data-mono" id="runtime-last-training">--</div>
+              <div class="label-mini" id="runtime-last-oos">--</div>
+            </div>
+          </div>
+          <div class="label-mini" style="margin-top: 0.5rem;">Today's Cron Pulse</div>
+          <div class="runtime-pulse" id="runtime-pulse"></div>
+        </section>
+
 
         <section class="panel medium">
           <h2>Credential Vault</h2>

@@ -232,6 +232,44 @@ function loadDashboardData() {
   };
 }
 
+function loadRuntimeSnapshot() {
+  // Spawn the same runtimeStatus.js script the CLI uses so the desktop view
+  // never diverges from the source of truth. The --format=jsonl path emits
+  // a single compact line to stdout.
+  return new Promise((resolve) => {
+    const script = path.join(repoRoot, "scripts", "runtimeStatus.js");
+    const child = spawn("node", [script, "--format=jsonl"], {
+      cwd: repoRoot,
+      env: buildRuntimeEnv(),
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (err) => {
+      resolve({ ok: false, error: err?.message ?? String(err) });
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve({ ok: false, error: stderr.trim() || `exit_code_${code}` });
+        return;
+      }
+      try {
+        const snapshot = JSON.parse(stdout.trim().split("\n").pop() || "{}");
+        resolve({ ok: true, snapshot });
+      } catch (err) {
+        resolve({ ok: false, error: `parse_error: ${err?.message ?? err}` });
+      }
+    });
+  });
+}
+
 function runScript(name) {
   if (typeof name !== "string") {
     return Promise.resolve({ ok: false, error: "script_not_allowed" });
@@ -263,6 +301,7 @@ function runScript(name) {
 }
 
 ipcMain.handle("vs:load-dashboard-data", () => loadDashboardData());
+ipcMain.handle("vs:load-runtime-status", () => loadRuntimeSnapshot());
 ipcMain.handle("vs:run-action", (_event, name) => runScript(name));
 ipcMain.handle("vs:get-secret-status", () => getSecretStatuses());
 ipcMain.handle("vs:set-secrets", (_event, updates) => setSecrets(updates || {}));
