@@ -8,14 +8,24 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-05-17 |
+| Last updated | 2026-05-22 |
 | Active branch | `main` |
-| HEAD commit | `1e31439` — docs(readme): document the adaptive learning loop |
-| Phase 1 start | 2026-05-18 (Monday) — Day 1 of 60 |
+| HEAD commit | (see latest merge) |
+| Phase 1 start | 2026-05-18 (Monday) — currently Day 5 of 60 |
 | Phase 1 end (target) | 2026-07-17 |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
 | Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min |
-| Equity (last seen) | ~$99,976 paper |
+| Equity (last seen) | $99,976 paper |
+| Live positions | MET (0.1453 / $12.34) + OEF (0.0216 / $8.05) ≈ $20 deployed |
+
+## Quick status check
+
+```bash
+npm run runtime:status     # one-shot human-readable summary
+tail -20 data/runtime.log  # historical compact JSON snapshots
+```
+
+Run `runtime:status` first in any session — it replaces ~10 exploratory tool calls.
 
 ## Recent PRs (last 3)
 
@@ -36,13 +46,26 @@
 
 ## Known open items
 
-- **QQQM 0.017 share remnant** — sell order queued for Monday open. Verify zero positions after 9:45 AM EDT on 2026-05-18.
+- **2026-05-21 (Thu) missed** — machine power loss. Verified via runtime status. No retroactive trades; one day of data lost.
 - **Pre-commit hook bug** — `package.json` `test:js` uses `**` glob that sh can't expand. Run tests directly via `node --test tests-js/` for now. Defer fix.
+
+## Outage recovery — what actually happens
+
+When the machine goes down for a day, the system's design is **conservative idempotency**:
+
+1. **Mode flag**: on the next tick, `current_mode = "CATCHUP"` (informational only — no different behavior)
+2. **Morning refresh** auto-runs: `world:run`, `portfolio:refresh`, `intraday:observe`, `world:health` all sync fresh state
+3. **No retroactive trades**: the missed day yields no decisions, no scorecard refresh, no training cycle
+4. **Phase 1 clock**: continues calendar-wise; missed days reduce effective sample size
+
+Run `npm run runtime:status` to see if any days are missing from the training-log between phase1 start and today.
 
 ## Where to look for things
 
 | What | Where |
 |---|---|
+| Quick status snapshot | `npm run runtime:status` |
+| Daily/historical snapshots | `data/runtime.log` (append-only JSONL via `npm run runtime:append`) |
 | Backlog (Tier 2/3 items) | [`docs/ML_BACKLOG.md`](ML_BACKLOG.md) |
 | Weekly review playbook | [`docs/PLAYBOOK_WEEKLY_REVIEW.md`](PLAYBOOK_WEEKLY_REVIEW.md) |
 | Trainer audit trail | `data/training-log.jsonl` (`source` field tells you which trainer ran) |
@@ -51,6 +74,16 @@
 | Scorecard (counterfactual returns) | `data/signal-scorecard.jsonl` |
 | Policy snapshot | `config/policy.json` |
 | Live runtime state | `data/steward-state.json` |
+
+## Optional: auto-append snapshots to runtime.log
+
+To accumulate a historical record, add one line to crontab (hourly is plenty):
+
+```
+0 * * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run runtime:append >> /dev/null 2>&1
+```
+
+Then `tail -10 data/runtime.log` shows the last 10 hours of compact JSON state snapshots. Not required — `npm run runtime:status` always works without it.
 
 ## End-of-session update protocol
 
