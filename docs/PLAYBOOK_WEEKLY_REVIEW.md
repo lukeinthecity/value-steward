@@ -6,7 +6,21 @@ Discipline: **review and triage anomalies. Do NOT tune weights or hand-edit poli
 
 ---
 
-## Step 1 — Confirm the system actually ran this week
+## Step 0 — Read the runtime status
+
+```bash
+npm run runtime:status
+```
+
+This single command summarizes: today's date and Phase 1 day count, any missed days, system pulse for all cron jobs, operational state, portfolio, recent trades + blocks, latest training cycle results, OOS metrics, and feature-flag state. Most weeks the answer is "everything's fine, move on."
+
+Also useful:
+
+```bash
+tail -10 data/runtime.log    # historical compact snapshots if append cron is wired
+```
+
+## Step 1 — Confirm the system actually ran every weekday
 
 ```bash
 # eod cycles for the past 5 trading days
@@ -21,7 +35,7 @@ for d in sorted(days)[-7:]: print(d)
 "
 ```
 
-**Expected**: 5 distinct weekday dates from the past week.
+**Expected**: 5 distinct weekday dates from the past week. The `runtime:status` `Missed days` line is the fastest sanity check.
 **If missing**: check `logs/eod.log` and `logs/cron.log` for errors.
 
 ## Step 2 — Check ML trainer activity

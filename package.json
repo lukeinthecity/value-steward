@@ -27,6 +27,8 @@
     "eod:run": "node scripts/eodRun.js",
     "time:check": "node scripts/timeCheck.js",
     "health:check": "node scripts/healthCheck.js",
+    "runtime:status": "node scripts/runtimeStatus.js",
+    "runtime:append": "node scripts/runtimeStatus.js --format=jsonl --append",
     "world:influence": "node scripts/worldInfluence.js",
     "controls:status": "node scripts/controls.js status",
     "controls:enable": "node scripts/controls.js enable",
