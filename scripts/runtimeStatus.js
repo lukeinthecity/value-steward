@@ -397,26 +397,65 @@ function renderJsonl(snap) {
 }
 
 function parseArgs(argv) {
-  const args = { format: "human", append: false };
+  const args = { format: "human", append: false, watchSeconds: 0 };
   for (const a of argv) {
     if (a.startsWith("--format=")) args.format = a.slice("--format=".length);
     else if (a === "--append") args.append = true;
+    else if (a.startsWith("--watch=")) {
+      const n = Number(a.slice("--watch=".length));
+      if (Number.isFinite(n) && n > 0) args.watchSeconds = Math.max(1, Math.floor(n));
+    } else if (a === "--watch") {
+      args.watchSeconds = 10; // default refresh cadence
+    }
   }
   return args;
 }
 
+function renderOnce(format) {
+  const snap = collectSnapshot();
+  if (format === "jsonl") {
+    return { snap, output: renderJsonl(snap) };
+  }
+  return { snap, output: renderHuman(snap) };
+}
+
+// ANSI: move cursor home + clear screen below. Doesn't touch scrollback so
+// users can scroll up to see earlier renders.
+const CLEAR = "\x1b[H\x1b[J";
+
+async function runWatchLoop(format, seconds) {
+  // Hide cursor while watching for cleaner output, restore on exit.
+  process.stdout.write("\x1b[?25l");
+  const restore = () => {
+    process.stdout.write("\x1b[?25h\n");
+  };
+  process.on("SIGINT", () => {
+    restore();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    restore();
+    process.exit(0);
+  });
+
+  while (true) {
+    const { output } = renderOnce(format);
+    const banner = `(watch mode — refreshing every ${seconds}s, ctrl+c to exit)\n`;
+    process.stdout.write(CLEAR + banner + output + "\n");
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+  }
+}
+
 export function runRuntimeStatus(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  const snap = collectSnapshot();
-  if (args.format === "jsonl") {
-    const line = renderJsonl(snap);
-    if (args.append) {
-      fs.appendFileSync(path.join(ROOT, "data", "runtime.log"), `${line}\n`);
-    } else {
-      console.log(line);
-    }
+  if (args.watchSeconds > 0) {
+    return runWatchLoop(args.format, args.watchSeconds);
+  }
+  const { snap, output } = renderOnce(args.format);
+  if (args.format === "jsonl" && args.append) {
+    fs.appendFileSync(path.join(ROOT, "data", "runtime.log"), `${output}\n`);
   } else {
-    console.log(renderHuman(snap));
+    console.log(output);
   }
   return snap;
 }

@@ -28,6 +28,7 @@
     "time:check": "node scripts/timeCheck.js",
     "health:check": "node scripts/healthCheck.js",
     "runtime:status": "node scripts/runtimeStatus.js",
+    "runtime:watch": "node scripts/runtimeStatus.js --watch=10",
     "runtime:append": "node scripts/runtimeStatus.js --format=jsonl --append",
     "world:influence": "node scripts/worldInfluence.js",
     "controls:status": "node scripts/controls.js status",

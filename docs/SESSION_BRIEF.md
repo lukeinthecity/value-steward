@@ -22,10 +22,13 @@
 
 ```bash
 npm run runtime:status     # one-shot human-readable summary
+npm run runtime:watch      # live-refreshing terminal view (every 10s, ctrl+c exits)
 tail -20 data/runtime.log  # historical compact JSON snapshots
 ```
 
 Run `runtime:status` first in any session — it replaces ~10 exploratory tool calls.
+
+The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Status** panel that auto-refreshes every 30 seconds (Phase 1 day count, missed days, mode, training/OOS recency, cron pulse pills).
 
 ## Recent PRs (last 3)
 
