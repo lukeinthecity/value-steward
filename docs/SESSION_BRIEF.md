@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-05-22 |
+| Last updated | 2026-05-24 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Phase 1 start | 2026-05-18 (Monday) — currently Day 5 of 60 |
@@ -16,7 +16,13 @@
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
 | Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min |
 | Equity (last seen) | $99,976 paper |
-| Live positions | MET (0.1453 / $12.34) + OEF (0.0216 / $8.05) ≈ $20 deployed |
+| Live positions | MET (0.1453 / $12.21) + OEF (0.0216 / $8.02) = $20.23 (1¢ over cap due to market drift) |
+
+## Weekly review log
+
+| Week ending | BUYs | Blocks | Notes |
+|---|---|---|---|
+| 2026-05-24 | 3 | 13 (11 rel60, 1 rel20, 1 sandbox_headroom) | Day 5 of 60. Thu 5/21 lost to power outage. +0.13% weekly alpha at 1d horizon. Promotion blockers tripped on weekend edge cases (`cap_breach` from market drift, `world_context_exchange_date_mismatch` since world:run is Mon–Fri). Both expected to clear Monday. |
 
 ## Quick status check
 
