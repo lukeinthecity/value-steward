@@ -8,6 +8,34 @@ The thesis behind deferring everything below: it's the most common quant-shop mi
 
 ---
 
+## Known limitations (observed, not yet actioned)
+
+### OOS `strict` metric is structurally always empty
+
+`oosEvaluator.evaluateOos` produces two blocks: `strict` (rows whose
+`policy_version === currentPolicyVersion`) and `rolling` (most recent N rows,
+version-agnostic). The champion-challenger consumes `rolling`, which works
+correctly.
+
+The `strict` block, however, never populates: the EOD trainer chain bumps
+`policy.version` 1–4× per cycle (each of scorecard / signal_weights /
+by_regime / posteriors increments it), and `maybeRunOosAndChampionChallenger`
+runs *last*, passing the already-incremented version. No scorecard row was
+ever decided under a version that was minted seconds ago, so `strict` always
+shows `insufficient: true`.
+
+Not harmful (champion-challenger uses `rolling`), but the `strict` block is
+dead weight in every `oos-eval.jsonl` row. Two possible fixes, both deferred
+as they touch version semantics (regression risk mid-run):
+  1. Only bump `policy.version` when a trainer materially changes state
+     (fixes both this and general version inflation).
+  2. Capture the pre-trainer-chain version and pass it to the OOS evaluator.
+
+Decision rule: address during the post-run review alongside any version-
+semantics cleanup. Do NOT change mid-run.
+
+---
+
 ## Tier 2 — Worth doing if appetite exists
 
 ### 2.1 Risk-adjusted training label
