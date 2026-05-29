@@ -52,6 +52,9 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 | `VS_CHAMPION_CHALLENGER_ENABLED` | off | default | **enable** when `data/oos-eval.jsonl` has 20+ rows with non-null `rolling.sharpe` |
 | `VS_SCORE_GATE_THOMPSON_ENABLED` | off | default | **enable** after Phase 1 ends (defer to Tier 2 review) |
 | `VS_NEW_ENTRY_EXPLORATION_EPSILON` | 0.0 | default | **enable** at 0.05 after week 2 if 0 trades observed |
+| `VS_CAP_BREACH_SELL_ENABLED` | on | on | Two-way cap enforcement: sells smallest position when deployed > cap + tolerance. Set to `false` to revert to one-way behavior. |
+| `VS_CAP_BREACH_SELL_TRIGGER` | 0.05 | default | Dollars over cap before sell fires (hysteresis). |
+| `VS_CAP_BREACH_SELL_TARGET_BUFFER` | 1.00 | default | Dollars of headroom to leave below cap after sell. |
 
 ## Known open items
 
