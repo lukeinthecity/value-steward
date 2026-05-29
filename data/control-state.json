@@ -1,7 +1,7 @@
 {
-  "trading_enabled": null,
-  "force_no_trade": null,
-  "reason": null,
-  "updated_at": "2026-02-25T20:45:02.162Z",
-  "source": "gpio"
+  "trading_enabled": true,
+  "force_no_trade": false,
+  "reason": "phase1_run2_reset",
+  "updated_at": "2026-05-29T14:30:09.425891+00:00",
+  "source": "manual_reset"
 }

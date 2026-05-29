@@ -8,21 +8,32 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-05-24 |
+| Last updated | 2026-05-29 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
-| Phase 1 start | 2026-05-18 (Monday) — currently Day 5 of 60 |
-| Phase 1 end (target) | 2026-07-17 |
+| Phase 1 RUN | **Run 2** (Run 1 archived 2026-05-29 after cap-breach-sell logic added mid-experiment) |
+| Phase 1 start | **2026-06-01 (Monday) — Day 1 of 60** |
+| Phase 1 end (target) | 2026-07-31 |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
-| Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min |
-| Equity (last seen) | $99,976 paper |
-| Live positions | MET (0.1453 / $12.21) + OEF (0.0216 / $8.02) = $20.23 (1¢ over cap due to market drift) |
+| Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min, **two-way (cap_breach_sell active)** |
+| Equity (last seen) | $99,976.41 paper |
+| Live positions | 0 (clean baseline) |
 
-## Weekly review log
+## Phase 1 Run 1 archive
+
+| Period | Notes |
+|---|---|
+| 2026-05-18 to 2026-05-29 | 10 calendar days, 2 outage days (5/21, 5/28), 1 holiday (5/25). Yielded 3 BUYs (MET ×2, OEF), 30+ counterfactual scorecard rows, first non-null OOS Sharpe (−1.217 on N=8). Archived in `data/archive/*-phase1-run1-2026-05-29.*` and `logs/archive/intent_log-phase1-run1-2026-05-29.jsonl`. Reset because the cap_breach_sell feature (PR #16) was a structural fix that fundamentally changed system behavior — old data and new data not comparable. |
+
+## Weekly review log (Phase 1 Run 2)
+
+(Run 1 entries archived above; first Run 2 review will follow 2026-06-07.)
+
+## Weekly review log (Phase 1 Run 1 — archived)
 
 | Week ending | BUYs | Blocks | Notes |
 |---|---|---|---|
-| 2026-05-24 | 3 | 13 (11 rel60, 1 rel20, 1 sandbox_headroom) | Day 5 of 60. Thu 5/21 lost to power outage. +0.13% weekly alpha at 1d horizon. Promotion blockers tripped on weekend edge cases (`cap_breach` from market drift, `world_context_exchange_date_mismatch` since world:run is Mon–Fri). Mon 5/25 = Memorial Day (markets closed; system will skip via `isTradingDay()`). **Tuesday 5/26 is the real Day 6** — check blockers cleared then. |
+| 2026-05-24 | 3 | 13 (11 rel60, 1 rel20, 1 sandbox_headroom) | Day 5 of 60. Thu 5/21 lost to power outage. +0.13% weekly alpha at 1d horizon. Promotion blockers tripped on weekend edge cases (`cap_breach` from market drift, `world_context_exchange_date_mismatch` since world:run is Mon–Fri). Mon 5/25 = Memorial Day (markets closed; system skipped via `isTradingDay()`). |
 
 ## Quick status check
 
