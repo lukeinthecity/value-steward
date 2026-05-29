@@ -212,3 +212,93 @@ def test_portfolio_sandbox_cap_clamps_buy_to_remaining_headroom(monkeypatch) -> 
     engine.execute_intent(build_intent(size_pct=0.5), snapshot)
     assert engine.alpaca_client.submitted is True
     assert engine.alpaca_client.last_notional == 3.0
+
+
+def _sell_intent(symbol: str, size_pct: float) -> IntentRecord:
+    return IntentRecord(
+        mode=RiskMode.LOW,
+        action_type="SELL",
+        symbol=symbol,
+        size_pct=size_pct,
+        explanation="sell test",
+    )
+
+
+def test_sell_not_throttled_by_max_trade_notional(monkeypatch) -> None:
+    """REGRESSION: SELLs are risk-reducing and must NOT be capped by the
+    per-trade BUY notional cap. A position worth 7 with max_trade= must
+    be sellable in full (bounded by position MV, not the BUY cap)."""
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=8.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = ExecutionEngine(
+        alpaca_client=FakeAlpacaClient(),
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+    snapshot = build_snapshot(
+        equity=100_000.0,
+        cash=99_983.0,
+        positions=[
+            Position(symbol="MET", quantity=1.0, market_value=17.0, asset_class="us_equity"),
+        ],
+    )
+    # size_pct=1.0 -> raw_notional huge; should clamp to position MV (7),
+    # NOT to max_trade_notional ().
+    engine.execute_intent(_sell_intent("MET", size_pct=1.0), snapshot)
+    assert engine.alpaca_client.submitted is True
+    assert engine.alpaca_client.last_notional == 17.0
+
+
+def test_sell_clamped_to_position_market_value(monkeypatch) -> None:
+    """A SELL larger than the held position is clamped to the position MV."""
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=8.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = ExecutionEngine(
+        alpaca_client=FakeAlpacaClient(),
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+    snapshot = build_snapshot(
+        equity=100_000.0,
+        cash=99_988.0,
+        positions=[
+            Position(symbol="OEF", quantity=1.0, market_value=12.0, asset_class="us_equity"),
+        ],
+    )
+    engine.execute_intent(_sell_intent("OEF", size_pct=1.0), snapshot)
+    assert engine.alpaca_client.last_notional == 12.0
+
+
+def test_sell_skips_when_no_position(monkeypatch) -> None:
+    """A SELL for a symbol we do not hold submits nothing."""
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=8.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = ExecutionEngine(
+        alpaca_client=FakeAlpacaClient(),
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+    snapshot = build_snapshot(equity=100_000.0, positions=[])
+    engine.execute_intent(_sell_intent("GHOST", size_pct=1.0), snapshot)
+    assert engine.alpaca_client.submitted is False

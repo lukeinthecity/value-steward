@@ -322,10 +322,17 @@ class ExecutionEngine:
                         headroom,
                     )
                 else:
-                    remaining_notional = min(
-                        remaining_notional,
-                        self.settings.max_trade_notional_dollars,
+                    # SELLs are risk-reducing — bound by holdings, not the
+                    # per-trade BUY cap. Skip if we hold nothing in the symbol.
+                    sell_pos = next(
+                        (p for p in snapshot.positions if p.symbol == symbol), None
                     )
+                    if sell_pos is None:
+                        remaining_notional = 0.0
+                    else:
+                        remaining_notional = min(
+                            remaining_notional, float(sell_pos.market_value)
+                        )
 
                 if remaining_notional < self.settings.min_trade_notional_dollars:
                     continue
@@ -361,15 +368,23 @@ class ExecutionEngine:
             target_symbol: str = intent_symbol
 
             raw_notional = (intent.size_pct or 0.0) * snapshot.equity
-            target_notional = min(raw_notional, self.settings.max_trade_notional_dollars)
-
             pos = next((p for p in snapshot.positions if p.symbol == target_symbol), None)
-            
+
             if intent.action_type == "SELL":
+                # SELLs are risk-reducing (VOL_STOP panic exits, CAP_BREACH_SELL,
+                # rebalance trims). They must NOT be throttled by the per-trade
+                # BUY notional cap (max_trade_notional_dollars) — that cap is a
+                # position-sizing control for new exposure. A SELL is bounded
+                # only by what we actually hold; otherwise a panic exit on a
+                # position larger than the cap could only partially unwind.
                 if pos:
-                    target_notional = min(target_notional, pos.market_value)
+                    target_notional = min(raw_notional, pos.market_value)
                 else:
                     return
+            else:
+                target_notional = min(
+                    raw_notional, self.settings.max_trade_notional_dollars
+                )
 
             remaining_notional = target_notional
             for order in open_orders:

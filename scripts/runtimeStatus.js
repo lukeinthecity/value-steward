@@ -116,10 +116,38 @@ function isMarketWeekday(dateStr) {
   return day >= 1 && day <= 5;
 }
 
+let _holidayCache = null;
+function loadMarketHolidays() {
+  if (_holidayCache !== null) return _holidayCache;
+  _holidayCache = new Set();
+  try {
+    const raw = fs.readFileSync(
+      path.join(ROOT, "data", "market-holidays.json"),
+      "utf8"
+    );
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed?.holidays) ? parsed.holidays : [];
+    for (const h of list) {
+      if (typeof h === "string") _holidayCache.add(h.trim());
+    }
+  } catch {
+    // No holiday file / parse error — fall back to weekday-only logic.
+  }
+  return _holidayCache;
+}
+
+// A trading day is a weekday that is not a market holiday. Keeps the runtime
+// status (missed-day detection, Phase 1 day count) consistent with the
+// scheduler's isTradingDay() so holidays like Memorial Day aren't reported
+// as outages or counted toward the run.
+function isTradingDayStr(dateStr) {
+  if (!isMarketWeekday(dateStr)) return false;
+  return !loadMarketHolidays().has(dateStr);
+}
+
 function listMissedTradingDays(phase1Start, today) {
-  // Identify weekdays between phase1Start and today that have no
-  // training-log entry. Approximate — treats all weekdays as trading days
-  // (ignores market holidays).
+  // Identify trading days (weekdays excluding market holidays) between
+  // phase1Start and today that have no training-log entry.
   const trainingEntries = readJsonlTail(
     path.join(ROOT, "data", "training-log.jsonl"),
     500
@@ -134,7 +162,7 @@ function listMissedTradingDays(phase1Start, today) {
   const end = new Date(`${today}T12:00:00Z`);
   for (let t = start.getTime(); t < end.getTime(); t += 86400000) {
     const dStr = exchangeDate(new Date(t));
-    if (!isMarketWeekday(dStr)) continue;
+    if (!isTradingDayStr(dStr)) continue;
     if (!ranDays.has(dStr)) missed.push(dStr);
   }
   return missed;
@@ -187,14 +215,15 @@ function collectSnapshot() {
     ? listMissedTradingDays(phase1Start, today)
     : [];
 
-  // Phase 1 day count (calendar weekdays since start, inclusive)
+  // Phase 1 day count (trading days since start, inclusive — excludes
+  // weekends AND market holidays so the count matches actual run progress).
   let phase1Day = null;
   if (phase1Start) {
     const start = new Date(`${phase1Start}T12:00:00Z`);
     const end = new Date(`${today}T12:00:00Z`);
     let count = 0;
     for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
-      if (isMarketWeekday(exchangeDate(new Date(t)))) count += 1;
+      if (isTradingDayStr(exchangeDate(new Date(t)))) count += 1;
     }
     phase1Day = count;
   }
