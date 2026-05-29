@@ -292,22 +292,29 @@ class DecisionEngine:
         if amount_to_sell <= 0:
             return None
 
-        # Sell the smallest position. If it's larger than amount_to_sell we
-        # partial-sell; otherwise we fully exit it.
+        # Sell the smallest position. Partial-sell when the position is
+        # larger than the amount needed; cap at the position's full value
+        # if not (accept residual cap breach rather than over-trimming).
         smallest = min(snapshot.positions, key=lambda p: float(p.market_value))
-        sell_dollars = min(amount_to_sell, float(smallest.market_value))
+        position_mv = float(smallest.market_value)
         min_trade = float(self.settings.min_trade_notional_dollars)
+
+        # Clamp to position size first.
+        sell_dollars = min(amount_to_sell, position_mv)
+        # Alpaca won't fill orders below the min_trade floor; floor at it
+        # (overshooting by a few cents is preferable to a full exit, which
+        # was the prior behavior — that would liquidate the entire position
+        # when we only needed 50¢ shed). If even the position itself is
+        # below min_trade, we can't meaningfully sell, so bail.
         if sell_dollars < min_trade:
-            # Position is smaller than the min trade — escalate to full exit
-            # if even that is below min, just skip.
-            if float(smallest.market_value) < min_trade:
+            if position_mv < min_trade:
                 return None
-            sell_dollars = float(smallest.market_value)
+            sell_dollars = min_trade
 
         sell_size_pct = sell_dollars / max(1e-9, snapshot.equity)
-        current_exposure_pct = (
-            deployed / snapshot.equity if snapshot.equity > 0 else 0.0
-        )
+        # Use the snapshot's canonical exposure so VOL_STOP and
+        # CAP_BREACH_SELL agree on pre-trade exposure reporting.
+        current_exposure_pct = snapshot.risk_exposure_pct
         post_exposure_pct = max(0.0, current_exposure_pct - sell_size_pct)
 
         return IntentRecord(

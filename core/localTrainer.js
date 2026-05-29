@@ -392,6 +392,7 @@ function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
     symbolCount: Object.keys(result.posteriors).length,
     skippedNoTarget: result.skippedNoTarget,
     skippedNoSymbol: result.skippedNoSymbol,
+    skippedNonBuy: result.skippedNonBuy,
     diagnostics: result.diagnostics,
     policyVersionBefore: baselinePolicy.version ?? 1,
     policyVersionAfter:
