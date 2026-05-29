@@ -2,7 +2,9 @@
 
 This is the **post-run-evaluation backlog** for the ML loop. Items here were proposed during the Phase 2 audit and intentionally deferred until we have ~60 days of live data to validate against.
 
-The thesis behind deferring everything below: it's the most common quant-shop mistake to keep adding features and refactors before the existing system has produced evidence. Re-evaluate after 2026-07-17 (60 trading days from Day 1 = 2026-05-18).
+The thesis behind deferring everything below: it's the most common quant-shop mistake to keep adding features and refactors before the existing system has produced evidence. Re-evaluate after **2026-07-31** (60 trading days from Phase 1 Run 2 Day 1 = 2026-06-01).
+
+**Phase 1 Run 1 (2026-05-18 to 2026-05-29) was reset** after PR #16 added structural cap-breach sell logic mid-experiment, making old data non-comparable. Run 2 starts fresh with two-way cap enforcement active from Day 1.
 
 ---
 
@@ -40,6 +42,86 @@ The thesis behind deferring everything below: it's the most common quant-shop mi
 **Cost:** 1–2 days. Audit + statistical filtering pass.
 
 **Decision rule:** Run after 60 days. If <30% of patterns clear the significance bar, strip the feature.
+
+---
+
+### 2.3 Add `world_macro_score` as a continuous feature in the OLS regression
+
+**Current state:** The signal weight trainer (`signalWeightTrainer.js`) regresses against three rank features only: `momentum_rank`, `vol_rank`, `drawdown_rank`. The `signalWeightTrainerByRegime` partitions records by the discrete `world_macro_label` (calm / watchful / stressed / crisis-prone) and trains separate weight triplets per regime.
+
+**Issue:** The regime trainer treats `macro_score=0.55` and `macro_score=0.10` identically as long as they map to the same label bucket. That throws away the gradient — the signal that `macro_score` is *moving* up or down within a regime is lost. The continuous score is recorded on every scorecard row (`world_macro_score`) but no trainer consumes it.
+
+**Pitch:** Extend `ridgeOls3` to `ridgeOls4` (or generalize to N features) and add `world_macro_score` as a 4th feature. The OLS would then learn interaction effects like "momentum weight should decrease as macro_score rises" without requiring discrete regime partitions.
+
+**Why deferred:** Adds one feature without doubling overfitting risk (with `world_macro_score` highly correlated to label, it's largely redundant in regime-rich periods). But the matrix-inversion path and standard-error / t-stat computation all need to generalize from 3x3 to 4x4. ~2 days of work + test refresh.
+
+**Cost:** 2 days. Generalize OLS, update tests, expose new env var (`VS_SIGNAL_WEIGHT_INCLUDE_MACRO_SCORE`).
+
+**Decision rule:** Implement IF the post-run pattern shows that the **regime trainer** (`signalWeightTrainerByRegime`) is repeatedly hitting `insufficient_samples` per-regime even when total samples are healthy. That's evidence the discrete partitioning is wasting data; a continuous feature would aggregate it.
+
+---
+
+### 2.4 Per-gate "right call" post-mortem
+
+**Current state:** Every `BUY_BLOCKED` row records *which* gate fired (`entry_quality score=...`, `rel20=...`, `rel60=...`, `trend=...`, etc.) and also records the counterfactual 5-day forward return. We can grade each gate's calibration after the fact, but the system never does this.
+
+**Issue:** If `rel60 < 0` blocks ran with a 5-day excess of `+0.20%` on average, the gate is *too tight*. If they ran with `-0.10%` average, the gate is correct. We don't know.
+
+**Pitch:** Offline analysis script (`scripts/gateCalibration.js`) that reads the scorecard, groups blocked rows by gate type, and computes:
+- count of blocks per gate
+- mean and median forward excess of blocked candidates
+- t-statistic against zero (was the gate actually justified?)
+
+Output goes to a markdown table in `data/gate-calibration.md`, regenerated weekly. **Pure observation — no auto-tuning.** The operator decides whether to relax/tighten thresholds based on the report.
+
+**Why deferred:** Most valuable after the full 60-day run — small windows give misleading gate-calibration numbers (1 lucky block can flip the verdict). Doable in any window though; the report itself is harmless to produce.
+
+**Cost:** 4–6 hours. Script + cron entry + doc.
+
+**Decision rule:** Build at end of run. Use the report to inform any threshold changes for Run 3 (if there is one) rather than adjusting mid-run.
+
+---
+
+### 2.5 Predictive sell-side trainer
+
+**Current state:** The system only sells when *forced* — `VOL_STOP` (panic exit on >2σ drop), `CAP_BREACH_SELL` (cap enforcement), or rebalance (when `current_exposure > target + buffer`). There is no learned model of "when should this held position be exited?"
+
+The signal scorecard records BUY outcomes, BUY_BLOCKED counterfactuals, and real SELL outcomes — but the trainers consume only the first two. SELL rows are explicitly excluded (`isBuyRelatedRecord` filter in `scoreGatePosteriors`, BUY/MULTI-only filter in `signalWeightTrainer`).
+
+**Issue:** A symbol we bought 3 weeks ago and which has been drifting sideways is *exactly* the kind of position predictive selling would help with. The system has features that could predict reversal (declining `momentum_rank`, rising `drawdown_rank`) but those are only used for BUY selection at decision time.
+
+**Pitch:** A separate `signalWeightSellTrainer` that:
+- Reads scorecard rows where `action_type == BUY` and the position was subsequently held for ≥5 trading days
+- For each held position, computes "did the BUY signal degrade?" — track day-over-day deltas in the symbol's features
+- Train a separate weight set for predicting *exit timing*
+- Feed back into a new `_should_sell_predictive()` check in `decision_engine`
+
+**Why deferred:** Requires (a) the system to actually hold positions for multi-day windows (which `cap_breach_sell` now enables — Run 2 will produce this data), and (b) a meaningful sample of held-then-exited positions to train on (~30 SELL outcomes). Run 1 had 0. Run 2 might produce 5–10. We probably need **Run 3** before there's enough data.
+
+**Cost:** 5 days. New trainer module + integration into `decision_engine` + tests.
+
+**Decision rule:** Build if Run 2 produces ≥20 held positions with realized exit outcomes. Otherwise defer to Run 3.
+
+---
+
+### 2.6 Tag-level learning ("tag → forward return" correlation)
+
+**Current state:** The world layer produces a rich vocabulary of tags (`MACRO_RISK`, `RECESSION_FEAR`, `GEO_HIGH`, `ENERGY_SHOCK`, `RATE_HAWKISHNESS`, etc.) each with a weighted score. These tags inform the macro_label/score fusion in the regime classifier but are otherwise opaque to the trainers.
+
+**Issue:** The macro_label/score is a *single number* downstream of all this tag richness. If `RECESSION_FEAR` rises sharply but `MACRO_RISK` stays flat, the macro_score might not move — but the underlying market state has changed in a way that *could* predict differential symbol returns (e.g., bonds outperform stocks).
+
+**Pitch:** Offline correlation report (`scripts/tagSignalReport.js`) that, for each tag in the world vocabulary:
+- Aggregates the tag's score on each decision day
+- Computes correlation with subsequent 5-day excess return at the universe level
+- Surfaces tags with `|r| > 0.3` and `p < 0.05`
+
+These become *candidates* for inclusion in a future continuous-feature trainer (item 2.3 extended). Like 2.4, **observation only — no automatic feature addition.**
+
+**Why deferred:** Requires substantial historical data to compute meaningful tag-return correlations. Per-tag samples will be even sparser than per-regime samples in a 60-day window. Genuinely useful only with multi-month data.
+
+**Cost:** 3 days. Script + correlation table + ranking output.
+
+**Decision rule:** Build at end of Run 2 *only if* (a) we've decided to extend Phase 1 into Run 3, and (b) item 2.3 is also being implemented. Otherwise no point — the analysis would just sit unused.
 
 ---
 
@@ -122,9 +204,13 @@ These were considered and rejected to avoid hallucinated complexity:
 
 | Tier | Item | Status |
 |---|---|---|
-| 1 | t-stat significance gating | ✅ Shipped (this PR) |
-| 1 | OOS evaluation pipeline | ✅ Shipped (this PR) |
-| 1 | Champion-challenger auto-rollback | ✅ Shipped (this PR, behind `VS_CHAMPION_CHALLENGER_ENABLED`) |
-| 2.3 | Defer Phase 2c — partial | ✅ Default minSamples already 8; consider raising |
+| 1 | t-stat significance gating | ✅ Shipped (PR #9) |
+| 1 | OOS evaluation pipeline | ✅ Shipped (PR #9) |
+| 1 | Champion-challenger auto-rollback | ✅ Shipped (PR #9, behind `VS_CHAMPION_CHALLENGER_ENABLED`) |
+| 3.1 | Defer Phase 2c — partial | ✅ Default minSamples already 8; consider raising |
+| — | Runtime status report + log | ✅ Shipped (PRs #12, #13) — `npm run runtime:status`, watch mode, desktop panel |
+| — | Two-way sandbox cap (cap_breach_sell) | ✅ Shipped (PR #16) — was structural; triggered Run 2 reset |
+| — | Phase 1 Run 1 → Run 2 reset | ✅ Done 2026-05-29 (PR #17) — Day 1 = 2026-06-01 |
+| — | Debug-scan fixes (SELL pollution in posteriors + cap_breach over-exit + exposure consistency) | ✅ Shipped (PR #18) |
 
-Last updated: 2026-05-17
+Last updated: 2026-05-29
