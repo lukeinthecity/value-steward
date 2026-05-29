@@ -24,3 +24,6 @@ data/scorecard-summary.json
 data/scorecard-summary.jsonl
 data/signal-smoothing.json
 heartbeat.json
+# Phase reset archives
+data/archive/
+logs/archive/
