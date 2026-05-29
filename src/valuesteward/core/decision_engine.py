@@ -255,6 +255,82 @@ class DecisionEngine:
     def _snapshot_deployed_notional(snapshot: PortfolioSnapshot) -> float:
         return sum(max(0.0, float(position.market_value)) for position in snapshot.positions)
 
+    def _check_cap_breach_sell(
+        self, snapshot: PortfolioSnapshot, mode: RiskMode
+    ) -> IntentRecord | None:
+        """Cap-aware SELL gate.
+
+        When total deployed market value exceeds the sandbox cap by more than
+        the trigger tolerance, sell the smallest existing position (partial
+        if needed) to bring deployment back below the cap, leaving at least
+        a small buffer of fresh headroom so subsequent BUYs can run.
+
+        The cap is otherwise a one-way valve on BUYs — without this gate,
+        appreciation can push positions over the cap and lock the system out
+        of new entries indefinitely.
+
+        Hysteresis: only triggers when over by >= VS_CAP_BREACH_SELL_TRIGGER
+        (default 0.05 = 5¢) so we don't churn on every market wiggle. Sells
+        down to (cap - VS_CAP_BREACH_SELL_TARGET_BUFFER) (default 1.00).
+        """
+        if not self._cap_breach_sell_enabled():
+            return None
+        if not snapshot.positions:
+            return None
+
+        cap = float(self.settings.max_effective_capital_dollars)
+        trigger_tol = self._get_env_float("VS_CAP_BREACH_SELL_TRIGGER", 0.05)
+        target_headroom = self._get_env_float(
+            "VS_CAP_BREACH_SELL_TARGET_BUFFER", 1.00
+        )
+        deployed = self._snapshot_deployed_notional(snapshot)
+        if deployed <= cap + trigger_tol:
+            return None
+
+        # Excess to shed to land at (cap - target_headroom).
+        amount_to_sell = deployed - (cap - target_headroom)
+        if amount_to_sell <= 0:
+            return None
+
+        # Sell the smallest position. If it's larger than amount_to_sell we
+        # partial-sell; otherwise we fully exit it.
+        smallest = min(snapshot.positions, key=lambda p: float(p.market_value))
+        sell_dollars = min(amount_to_sell, float(smallest.market_value))
+        min_trade = float(self.settings.min_trade_notional_dollars)
+        if sell_dollars < min_trade:
+            # Position is smaller than the min trade — escalate to full exit
+            # if even that is below min, just skip.
+            if float(smallest.market_value) < min_trade:
+                return None
+            sell_dollars = float(smallest.market_value)
+
+        sell_size_pct = sell_dollars / max(1e-9, snapshot.equity)
+        current_exposure_pct = (
+            deployed / snapshot.equity if snapshot.equity > 0 else 0.0
+        )
+        post_exposure_pct = max(0.0, current_exposure_pct - sell_size_pct)
+
+        return IntentRecord(
+            mode=mode,
+            action_type="SELL",
+            symbol=smallest.symbol,
+            size_pct=sell_size_pct,
+            pre_risk_exposure_pct=current_exposure_pct,
+            post_risk_exposure_pct=post_exposure_pct,
+            reason_code="CAP_BREACH_SELL",
+            explanation=(
+                f"Cap breach: deployed=${deployed:.2f} > cap=${cap:.2f} + "
+                f"tol=${trigger_tol:.2f}. Selling ${sell_dollars:.2f} of "
+                f"{smallest.symbol} (pos_mv=${float(smallest.market_value):.2f}) "
+                f"to target deployed<=${cap - target_headroom:.2f}."
+            ),
+        )
+
+    def _cap_breach_sell_enabled(self) -> bool:
+        return os.getenv(
+            "VS_CAP_BREACH_SELL_ENABLED", "true"
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
     def _macro_score(self, world_context: dict | None) -> float | None:
         if not world_context or not isinstance(world_context, dict):
             return None
@@ -592,6 +668,15 @@ class DecisionEngine:
                         )
                     ), signal_result
         # ------------------------------------------------------
+
+        # --- Cap-aware SELL (two-way cap enforcement) ---
+        # Without this, MV appreciation can push deployed > cap and lock the
+        # system out of new BUYs indefinitely. Runs after VOL_STOP so panic
+        # exits still take precedence.
+        cap_breach_intent = self._check_cap_breach_sell(snapshot, mode)
+        if cap_breach_intent is not None:
+            return cap_breach_intent, signal_result
+        # ------------------------------------------------
 
         gate_meta = {
             "gate_world_context_fresh": context_ok,
