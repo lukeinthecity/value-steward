@@ -26,6 +26,25 @@ function normalizeSymbol(value) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function isBuyRelatedRecord(record) {
+  // The Thompson posteriors drive the BUY gate. Only count rows whose
+  // outcome reflects "did buying this symbol work":
+  //   - real BUY/MULTI intents (we bought; did it pan out?)
+  //   - NO_ACTION rows whose reason_code starts with "BUY_" (counterfactual
+  //     would-have-bought; would it have worked?)
+  //
+  // SELL rows (rebalance sells, VOL_STOP, CAP_BREACH_SELL) have inverted
+  // signed_return semantics that would push β++ when the symbol actually
+  // went UP — the opposite of what we want for predicting BUY winners.
+  const action = String(record?.action_type ?? "").toUpperCase();
+  if (action === "BUY" || action === "MULTI") return true;
+  if (action === "NO_ACTION") {
+    const reason = String(record?.reason_code ?? "").toUpperCase();
+    return reason.startsWith("BUY_");
+  }
+  return false;
+}
+
 /**
  * Build score-gate posteriors from a list of scorecard records.
  *
@@ -35,7 +54,7 @@ function normalizeSymbol(value) {
  * @param {string} args.target - Which field to interpret as the outcome
  *   (default "excess_vs_benchmark"; "signed_return" also valid).
  * @returns {object} { posteriors, sampleCount, skippedNoTarget, skippedNoSymbol,
- *   diagnostics }
+ *   skippedNonBuy, diagnostics }
  */
 export function buildScoreGatePosteriors({
   records,
@@ -46,6 +65,7 @@ export function buildScoreGatePosteriors({
   let sampleCount = 0;
   let skippedNoTarget = 0;
   let skippedNoSymbol = 0;
+  let skippedNonBuy = 0;
   const resolvedTarget = VALID_TARGETS.has(target)
     ? target
     : "excess_vs_benchmark";
@@ -56,12 +76,17 @@ export function buildScoreGatePosteriors({
       sampleCount: 0,
       skippedNoTarget: 0,
       skippedNoSymbol: 0,
+      skippedNonBuy: 0,
       diagnostics: { horizon, target: resolvedTarget },
     };
   }
 
   const horizonKey = String(horizon);
   for (const record of records) {
+    if (!isBuyRelatedRecord(record)) {
+      skippedNonBuy += 1;
+      continue;
+    }
     const horizonData = record?.horizons?.[horizonKey];
     const targetValue = horizonData?.[resolvedTarget];
     if (!isFiniteNumber(targetValue)) {
@@ -99,6 +124,7 @@ export function buildScoreGatePosteriors({
     sampleCount,
     skippedNoTarget,
     skippedNoSymbol,
+    skippedNonBuy,
     diagnostics: {
       horizon,
       target: resolvedTarget,
@@ -107,4 +133,4 @@ export function buildScoreGatePosteriors({
   };
 }
 
-export const _internals = { normalizeSymbol };
+export const _internals = { normalizeSymbol, isBuyRelatedRecord };

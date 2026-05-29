@@ -123,6 +123,25 @@ def test_cap_breach_sell_skips_when_position_below_min_trade(monkeypatch) -> Non
     assert intent is None
 
 
+def test_cap_breach_sell_floors_at_min_trade_not_full_exit(monkeypatch) -> None:
+    """REGRESSION (debug scan): when amount_to_sell < min_trade, sell
+    min_trade — not the entire position. The old behavior over-exited."""
+    monkeypatch.delenv("VS_CAP_BREACH_SELL_ENABLED", raising=False)
+    monkeypatch.setenv("VS_CAP_BREACH_SELL_TRIGGER", "0.05")
+    monkeypatch.setenv("VS_CAP_BREACH_SELL_TARGET_BUFFER", "0.00")
+    engine = _engine()
+    # 50¢ over cap, target buffer 0 → amount_to_sell = $0.50, below $1 min.
+    # OEF is $5, MET is $15.50. Smallest is OEF. Should sell $1 (not exit
+    # all of OEF for $5).
+    snapshot = _snapshot([_pos("MET", 15.50), _pos("OEF", 5.00)])
+    intent = engine._check_cap_breach_sell(snapshot, RiskMode.LOW)
+    assert intent is not None
+    sell_dollars = intent.size_pct * 100_000.0
+    # Should be exactly min_trade = $1, not $5 (the position size).
+    assert sell_dollars == pytest.approx(1.00, abs=1e-6)
+    assert intent.symbol == "OEF"
+
+
 def test_cap_breach_sell_disabled_by_env(monkeypatch) -> None:
     monkeypatch.setenv("VS_CAP_BREACH_SELL_ENABLED", "false")
     engine = _engine()
