@@ -29,10 +29,6 @@ export async function runValueSteward({
     ? parseFloat(account.portfolio_value)
     : equityParsed;
   const portfolioValue = Number.isNaN(portfolioParsed) ? null : portfolioParsed;
-  const patternDayTrader =
-    typeof account.pattern_day_trader === "boolean"
-      ? account.pattern_day_trader
-      : null;
   const marginMultiplier = account.multiplier
     ? parseFloat(account.multiplier)
     : null;
@@ -112,7 +108,6 @@ export async function runValueSteward({
     buyingPower: buyingPowerNum,
     cash,
     portfolioValue,
-    patternDayTrader,
     marginMultiplier: Number.isNaN(marginMultiplier) ? null : marginMultiplier,
     mode: policy.mode,
     agentMode: mode ?? null,

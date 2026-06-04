@@ -85,7 +85,6 @@ export function buildFallbackTickResult({
     buyingPower: null,
     cash: null,
     portfolioValue: null,
-    patternDayTrader: null,
     marginMultiplier: null,
     mode: policy?.mode ?? null,
     agentMode: state.current_mode ?? null,
