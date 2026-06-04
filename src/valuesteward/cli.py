@@ -128,7 +128,10 @@ def _format_account(account) -> dict:
         "cash": float(getattr(account, "cash", 0) or 0),
         "buying_power": float(getattr(account, "buying_power", 0) or 0),
         "portfolio_value": float(getattr(account, "portfolio_value", 0) or 0),
-        "pattern_day_trader": getattr(account, "pattern_day_trader", None),
+        # NOTE: pattern_day_trader was removed here — Alpaca deprecated the
+        # PDT fields (removal 2026-07-06) when they replaced the PDT rule with
+        # the intraday margin framework. We never used it for logic; everything
+        # that matters reads buying_power above.
         "multiplier": float(getattr(account, "multiplier", 0) or 0),
         "last_equity": float(getattr(account, "last_equity", 0) or 0),
         "last_maintenance_margin": float(
