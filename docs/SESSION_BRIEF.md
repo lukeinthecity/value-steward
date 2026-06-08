@@ -8,16 +8,16 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-05-29 |
+| Last updated | 2026-06-07 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Phase 1 RUN | **Run 2** (Run 1 archived 2026-05-29 after cap-breach-sell logic added mid-experiment) |
-| Phase 1 start | **2026-06-01 (Monday) — Day 1 of 60** |
+| Phase 1 start | **2026-06-01 (Monday)** — Day 5 of 60 as of 2026-06-07 |
 | Phase 1 end (target) | 2026-07-31 |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
 | Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min, **two-way (cap_breach_sell active)** |
-| Equity (last seen) | $99,976.41 paper |
-| Live positions | 0 (clean baseline) |
+| Equity (last seen) | $99,976.40 paper |
+| Live positions | AFBI (0.3549 / $7.99) — first trade of Run 2, bought 2026-06-05 |
 
 ## Phase 1 Run 1 archive
 
@@ -27,7 +27,9 @@
 
 ## Weekly review log (Phase 1 Run 2)
 
-(Run 1 entries archived above; first Run 2 review will follow 2026-06-07.)
+| Week ending | BUYs | Blocks | Notes |
+|---|---|---|---|
+| 2026-06-07 | 1 (AFBI $7.99) | 19 (15 rel60, 3 rel20, 1 macro_stressed) | Day 5 of 60. **All 5 weekdays ran — no outages.** First trade of Run 2: AFBI Fri 6/5. Macro went `stressed` on 6/3 → ASRT correctly blocked (UNKNOWN sector). rel60 again the dominant gate (15/19), same as Run 1. OOS rolling_n=0 (earliest 5d windows don't close until ~6/8). No activation triggers fired (champion-challenger needs 20+ OOS samples; 1 trade ≠ "0 trades for 2wk" so exploration stays off). No action taken — clean week. |
 
 ## Weekly review log (Phase 1 Run 1 — archived)
 
