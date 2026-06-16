@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
 
+import { instrumentTransporter } from "./emailHealth.js";
+
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
 /**
@@ -86,6 +88,10 @@ function loadEmailConfig(label) {
       pass: SMTP_PASS,
     },
   });
+
+  // Record every send outcome to data/email-health.json so a silent SMTP
+  // failure surfaces in `npm run runtime:status` instead of going unnoticed.
+  instrumentTransporter(transporter, label);
 
   return {
     transporter,

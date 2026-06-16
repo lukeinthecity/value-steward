@@ -228,6 +228,11 @@ function collectSnapshot() {
     phase1Day = count;
   }
 
+  const emailHealth = readJsonSafe(
+    path.join(ROOT, "data", "email-health.json"),
+    {}
+  );
+
   return {
     generatedAt: now.toISOString(),
     exchangeNow: formatExchange(now),
@@ -241,6 +246,7 @@ function collectSnapshot() {
     oosEntries,
     intentEntries,
     pulse,
+    emailHealth,
     phase1Start,
     phase1Day,
     missedDays,
@@ -368,6 +374,28 @@ function renderHuman(snap) {
   if (snap.oosEntries.length === 0) lines.push("  (no entries)");
   lines.push("");
 
+  // Email health — surfaces silent SMTP failures (the only prior alarm for
+  // broken email was email itself).
+  lines.push("Email Health:");
+  const eh = snap.emailHealth || {};
+  const ehKeys = Object.keys(eh);
+  if (ehKeys.length === 0) {
+    lines.push("  (no send attempts recorded yet)");
+  } else {
+    for (const key of ehKeys.sort()) {
+      const rec = eh[key] || {};
+      const outcome = rec.last_outcome === "ok" ? "✓ ok" : "✗ ERROR";
+      const attempt = rec.last_attempt_at
+        ? `${formatExchange(new Date(rec.last_attempt_at))} (${timeAgo(new Date(rec.last_attempt_at))})`
+        : "never";
+      lines.push(`  ${outcome.padEnd(8)} ${key.padEnd(24)} ${attempt}`);
+      if (rec.last_outcome === "error" && rec.last_error) {
+        lines.push(`           └─ ${rec.last_error}`);
+      }
+    }
+  }
+  lines.push("");
+
   // Concise feature-flag status
   lines.push("ML Feature Flags:");
   const flags = [
@@ -421,6 +449,15 @@ function renderJsonl(snap) {
       typeof lastOos?.rolling?.sharpe === "number"
         ? lastOos.rolling.sharpe
         : null,
+    emailHealth: Object.fromEntries(
+      Object.entries(snap.emailHealth || {}).map(([k, v]) => [
+        k,
+        v?.last_outcome ?? null,
+      ])
+    ),
+    emailAnyError: Object.values(snap.emailHealth || {}).some(
+      (v) => v?.last_outcome === "error"
+    ),
   };
   return JSON.stringify(compact);
 }
