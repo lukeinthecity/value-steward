@@ -153,6 +153,46 @@ These become *candidates* for inclusion in a future continuous-feature trainer (
 
 ---
 
+### 2.7 Intent → fill linkage in the audit trail
+
+**Current state:** `logs/intent_log.jsonl` records every *decision* (what the engine wanted to do) but not the *outcome* (whether the order filled). Fill status lives separately in `data/portfolio-live.json`'s `recent_orders` (filled / canceled / expired). The two are not linked.
+
+**Issue (surfaced 2026-06-15 review):** On 2026-06-08 the log shows "BUY KALV" four times — which reads like four purchases. In reality all four were mid-point limit orders that expired **unfilled**; KALV was never held. To know what actually happened you must cross-reference the broker artifact. The decision trail is legible at the *intent* level but silent on the *fill* level, which can mislead anyone reading the log alone (including a future trainer that treats a BUY intent as an executed position).
+
+**Pitch:**
+- Stamp each intent with an `order_id` (or correlation id) at submission time.
+- A reconciliation pass (fits in `eodRun.js`) joins intents to their broker order outcome and writes `fill_status` (`filled` / `canceled` / `expired` / `none`) and `filled_notional` back onto the intent record (or a parallel `logs/intent_outcomes.jsonl`).
+- Surface a one-line "today's fills vs attempts" in `runtime:status` (e.g., `KALV: 4 attempts, 0 filled`).
+
+**Why deferred:** Pure observability; no effect on decisions or training. But it's the highest-value legibility fix on the list — it closes a real gap where the primary audit log can mislead.
+
+**Cost:** 1 day. Order-id plumbing + eod reconciliation + a runtime:status line.
+
+**Decision rule:** Worth doing relatively early (even mid-run is safe — it only adds data, changes no behavior) if reading the logs becomes a regular activity. Otherwise batch with the end-of-run execution review (2.8).
+
+---
+
+### 2.8 Execution fill-rate metric ("Fishing" strategy evaluation)
+
+**Current state:** Orders use a mid-point limit ((bid+ask)/2) "Fishing" strategy with cancel-and-catch across the pre-close execution slots. It saves the bid-ask spread but only fills when price comes to the midpoint.
+
+**Issue (surfaced 2026-06-15 review):** KALV — the single highest-conviction name of the week (rel60 +40%, mom60 +55%) — never filled across four attempts because its limit was never hit, so the system walked away with nothing while lower-conviction names (PWV, AFBI) did fill. The spread savings may not be worth the missed alpha on exactly the names we most want.
+
+**Pitch:** Track fill rate as an execution-quality metric:
+- Per cycle and rolling: `fills / attempts`, segmented by signal-score bucket (are we missing the *strong* names more than the weak ones?).
+- Mean adverse selection: did unfilled names subsequently outperform filled ones? (i.e., is the limit strategy systematically leaving alpha on the table?)
+- Output to the scorecard / a `data/execution-quality.jsonl` summary and the weekly report.
+
+If the data shows high-conviction names consistently slipping, consider a **conviction-scaled execution policy**: cross the spread (marketable limit or market order) on the final pre-close slot for the top-ranked candidate only, keeping mid-point Fishing for the rest.
+
+**Why deferred:** Needs a meaningful sample of fills vs misses to be statistically honest. One week (KALV) is an anecdote, not a pattern.
+
+**Cost:** 1–2 days for the metric; the conviction-scaled execution change (if warranted) is a separate ~1 day.
+
+**Decision rule:** Build the metric at the 30-day mark. Act on execution policy only if fill rate on the top score-bucket is materially below the rest (e.g., <50% vs >70%) — concrete evidence the Fishing strategy is costing us our best ideas.
+
+---
+
 ## Tier 3 — Wait until end-of-run
 
 ### 3.1 Defer Phase 2c regime-conditional training activation
@@ -241,4 +281,4 @@ These were considered and rejected to avoid hallucinated complexity:
 | — | Phase 1 Run 1 → Run 2 reset | ✅ Done 2026-05-29 (PR #17) — Day 1 = 2026-06-01 |
 | — | Debug-scan fixes (SELL pollution in posteriors + cap_breach over-exit + exposure consistency) | ✅ Shipped (PR #18) |
 
-Last updated: 2026-05-29
+Last updated: 2026-06-16
