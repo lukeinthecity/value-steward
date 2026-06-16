@@ -6,31 +6,31 @@ import path from "node:path";
 
 import { recordEmailHealth, instrumentTransporter } from "../core/emailHealth.js";
 
-async function withTempCwd(fn) {
-  const prev = process.cwd();
+// Each test gets its own temp file via VS_EMAIL_HEALTH_PATH so we never touch
+// the real data/email-health.json and never mutate process.cwd() (which is
+// global and unsafe under node:test concurrency).
+async function withTempHealthFile(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-email-health-"));
-  fs.mkdirSync(path.join(dir, "data"), { recursive: true });
-  process.chdir(dir);
+  const file = path.join(dir, "email-health.json");
+  const prev = process.env.VS_EMAIL_HEALTH_PATH;
+  process.env.VS_EMAIL_HEALTH_PATH = file;
   try {
-    // await handles both sync and async fn — ensures the temp dir is the
-    // cwd for the entire body before we chdir back.
-    return await fn(dir);
+    // await so the env override stays in place for the entire body (sync or
+    // async) before we restore it.
+    return await fn(file);
   } finally {
-    process.chdir(prev);
+    if (prev === undefined) delete process.env.VS_EMAIL_HEALTH_PATH;
+    else process.env.VS_EMAIL_HEALTH_PATH = prev;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-function readHealth(dir) {
-  return JSON.parse(
-    fs.readFileSync(path.join(dir, "data", "email-health.json"), "utf8")
-  );
-}
+const readHealth = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 
 test("recordEmailHealth: writes ok outcome with success timestamp", async () => {
-  await withTempCwd((dir) => {
+  await withTempHealthFile((file) => {
     recordEmailHealth({ label: "eod", ok: true });
-    const h = readHealth(dir);
+    const h = readHealth(file);
     assert.equal(h.eod.last_outcome, "ok");
     assert.equal(h.eod.last_error, null);
     assert.ok(h.eod.last_success_at);
@@ -39,68 +39,58 @@ test("recordEmailHealth: writes ok outcome with success timestamp", async () => 
 });
 
 test("recordEmailHealth: error preserves prior success timestamp", async () => {
-  await withTempCwd((dir) => {
+  await withTempHealthFile((file) => {
     recordEmailHealth({ label: "eod", ok: true });
-    const firstSuccess = readHealth(dir).eod.last_success_at;
+    const firstSuccess = readHealth(file).eod.last_success_at;
     recordEmailHealth({ label: "eod", ok: false, error: "535 auth failed" });
-    const h = readHealth(dir);
+    const h = readHealth(file);
     assert.equal(h.eod.last_outcome, "error");
     assert.equal(h.eod.last_error, "535 auth failed");
-    // The last successful send timestamp is retained across a later failure.
     assert.equal(h.eod.last_success_at, firstSuccess);
   });
 });
 
 test("recordEmailHealth: tracks multiple labels independently", async () => {
-  await withTempCwd((dir) => {
+  await withTempHealthFile((file) => {
     recordEmailHealth({ label: "eod", ok: true });
-    recordEmailHealth({ label: "weekly report email", ok: false, error: "boom" });
-    const h = readHealth(dir);
+    recordEmailHealth({ label: "weekly report email", ok: false, error: "x" });
+    const h = readHealth(file);
     assert.equal(h.eod.last_outcome, "ok");
     assert.equal(h["weekly report email"].last_outcome, "error");
   });
 });
 
 test("recordEmailHealth: truncates very long error messages", async () => {
-  await withTempCwd((dir) => {
-    recordEmailHealth({ label: "x", ok: false, error: "e".repeat(1000) });
-    const h = readHealth(dir);
-    assert.ok(h.x.last_error.length <= 300);
+  await withTempHealthFile((file) => {
+    recordEmailHealth({ label: "z", ok: false, error: "e".repeat(1000) });
+    assert.ok(readHealth(file).z.last_error.length <= 300);
   });
 });
 
 test("instrumentTransporter: records ok on successful sendMail", async () => {
-  await withTempCwd(async (dir) => {
-    const fakeTransport = {
-      sendMail: async () => ({ messageId: "abc" }),
-    };
-    instrumentTransporter(fakeTransport, "health email");
-    const res = await fakeTransport.sendMail({ subject: "test" });
+  await withTempHealthFile(async (file) => {
+    const fake = { sendMail: async () => ({ messageId: "abc" }) };
+    instrumentTransporter(fake, "health email");
+    const res = await fake.sendMail({ subject: "t" });
     assert.equal(res.messageId, "abc");
-    assert.equal(readHealth(dir)["health email"].last_outcome, "ok");
+    assert.equal(readHealth(file)["health email"].last_outcome, "ok");
   });
 });
 
 test("instrumentTransporter: records error and re-throws on failed sendMail", async () => {
-  await withTempCwd(async (dir) => {
-    const fakeTransport = {
+  await withTempHealthFile(async (file) => {
+    const fake = {
       sendMail: async () => {
         throw new Error("Invalid login: 535-5.7.8");
       },
     };
-    instrumentTransporter(fakeTransport, "eod");
-    await assert.rejects(
-      () => fakeTransport.sendMail({ subject: "test" }),
-      /535-5.7.8/
-    );
-    const h = readHealth(dir);
-    assert.equal(h.eod.last_outcome, "error");
-    assert.match(h.eod.last_error, /535/);
+    instrumentTransporter(fake, "eod");
+    await assert.rejects(() => fake.sendMail({ subject: "t" }), /535-5.7.8/);
+    assert.match(readHealth(file).eod.last_error, /535/);
   });
 });
 
 test("instrumentTransporter: no-op on a transport without sendMail", () => {
   const obj = {};
-  const out = instrumentTransporter(obj, "x");
-  assert.equal(out, obj);
+  assert.equal(instrumentTransporter(obj, "x"), obj);
 });

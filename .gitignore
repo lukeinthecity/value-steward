@@ -27,3 +27,4 @@ heartbeat.json
 # Phase reset archives
 data/archive/
 logs/archive/
+data/email-health.json

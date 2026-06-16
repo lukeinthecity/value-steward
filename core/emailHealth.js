@@ -21,9 +21,12 @@
 import fs from "fs";
 import path from "path";
 
-// Resolved per-call (not at import) so the path tracks the current working
-// directory — keeps tests that chdir into a temp dir honest.
+// Resolved per-call (not at import). VS_EMAIL_HEALTH_PATH lets tests (and
+// operators) point at an explicit file without mutating process.cwd() —
+// process.chdir is global and unsafe under concurrent test runners.
 function healthPath() {
+  const override = (process.env.VS_EMAIL_HEALTH_PATH || "").trim();
+  if (override) return override;
   return path.join(process.cwd(), "data", "email-health.json");
 }
 
