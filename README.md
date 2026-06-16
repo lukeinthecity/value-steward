@@ -19,8 +19,9 @@ The system uses a **Hybrid-Language, Unified-State Architecture**:
 
 *   **Dynamic Risk Modes:** Support for `LOW`, `MEDIUM`, and `HIGH` target risk exposures.
 *   **Professional Execution:** Mid-point Limit Orders with "Cancel & Catch" logic to save the bid-ask spread.
-*   **Institutional Safety:** Multi-layered circuit breakers, including a 3% daily equity kill-switch and stale data guards.
-*   **Strategic Hold Logic:** Intelligent enough to let winners run by refusing to sell strong assets even when overweight.
+*   **Institutional Safety:** Multi-layered circuit breakers, including a 3% daily equity kill-switch, a 2.0 SD per-position vol-stop (panic exit), and stale-data guards.
+*   **Capital Discipline + Rotation:** A hard deployment cap bounds total at-risk capital. Appreciation *above* the cap is allowed — winners run. The system only sells to free room when a genuinely stronger new candidate is otherwise blocked, rotating out the weakest holding (buy-coupled rotation, not forced trimming).
+*   **Strategic Hold Logic:** Lets winners run by refusing to sell strong assets for marginal opportunities.
 *   **Auditability:** Comprehensive JSONL logs of every intent, decision, and execution for performance attribution and learning.
 
 ## 🧠 Adaptive Learning Loop
@@ -66,6 +67,26 @@ All learning is gated by significance / sample-size floors and behind env vars s
    sudo systemctl enable --now value-steward-tick.timer
    ```
 
+## 📟 Operations & Observability
+
+Day-to-day health is visible without depending on email (a silent SMTP failure can no longer go unnoticed):
+
+```bash
+npm run runtime:status     # one-shot snapshot: phase day count, cron pulse,
+                           # positions, recent trades/blocks, ML training +
+                           # OOS state, email health, feature flags
+npm run runtime:watch      # same view, auto-refreshing in the terminal (10s)
+npm run runtime:append     # append a compact JSON line to data/runtime.log
+                           # (wire to cron for a historical record)
+npm run email:test         # send a test email and verify SMTP + AI summary
+```
+
+The **desktop app** (`npm start` from `desktop/`) mirrors this in a live-updating **Runtime Status** panel.
+
+Every email send outcome is recorded to `data/email-health.json` and surfaced in `runtime:status`, so credential or transport failures show up immediately.
+
+Operating discipline and the per-run review checklist live in [`docs/SESSION_BRIEF.md`](docs/SESSION_BRIEF.md) and [`docs/PLAYBOOK_WEEKLY_REVIEW.md`](docs/PLAYBOOK_WEEKLY_REVIEW.md).
+
 ## 📊 Reporting
 
 Value Steward automatically generates a **Weekly Performance Report** every Sunday at 6:00 PM ET, summarizing:
@@ -73,6 +94,8 @@ Value Steward automatically generates a **Weekly Performance Report** every Sund
 - Excess returns versus the benchmark (SPY).
 - Execution quality (Average Slippage).
 - Strategic Hold counts (Decisions influenced by safety gates).
+
+Daily **End-of-Day** and **Health** emails include an AI-synthesized "Steward's Insight" (Google Gemini via the `generateContent` API) over the cycle's technical data.
 
 ---
 
