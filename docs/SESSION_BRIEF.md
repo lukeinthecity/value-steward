@@ -93,6 +93,7 @@ Run `npm run runtime:status` to see if any days are missing from the training-lo
 | Quick status snapshot | `npm run runtime:status` |
 | Daily/historical snapshots | `data/runtime.log` (append-only JSONL via `npm run runtime:append`) |
 | Backlog (Tier 2/3 items) | [`docs/ML_BACKLOG.md`](ML_BACKLOG.md) |
+| Counterfactual learning principle | [`docs/COUNTERFACTUAL_LEARNING.md`](COUNTERFACTUAL_LEARNING.md) — learn only from market-printed outcomes; never fabricate |
 | Weekly review playbook | [`docs/PLAYBOOK_WEEKLY_REVIEW.md`](PLAYBOOK_WEEKLY_REVIEW.md) |
 | Trainer audit trail | `data/training-log.jsonl` (`source` field tells you which trainer ran) |
 | OOS metrics | `data/oos-eval.jsonl` |

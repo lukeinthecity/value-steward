@@ -4,6 +4,8 @@ This is the **post-run-evaluation backlog** for the ML loop. Items here were pro
 
 The thesis behind deferring everything below: it's the most common quant-shop mistake to keep adding features and refactors before the existing system has produced evidence. Re-evaluate after **2026-07-31** (60 trading days from Phase 1 Run 2 Day 1 = 2026-06-01).
 
+**Evaluate every item below through the lens in [`docs/COUNTERFACTUAL_LEARNING.md`](COUNTERFACTUAL_LEARNING.md):** the system learns only from counterfactuals the market actually printed, never from assumed outcomes. Each item's "Layer" (per that doc) tells you whether its signal is ground truth or a hypothesis.
+
 **Phase 1 Run 1 (2026-05-18 to 2026-05-29) was reset** after PR #16 added structural cap-breach sell logic mid-experiment, making old data non-comparable. Run 2 starts fresh with two-way cap enforcement active from Day 1.
 
 ---
