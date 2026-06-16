@@ -45,7 +45,9 @@ npm run runtime:watch      # live-refreshing terminal view (every 10s, ctrl+c ex
 tail -20 data/runtime.log  # historical compact JSON snapshots
 ```
 
-Run `runtime:status` first in any session — it replaces ~10 exploratory tool calls.
+Run `runtime:status` first in any session — it replaces ~10 exploratory tool calls. It now includes an **Email Health** section (sourced from `data/email-health.json`) — a silent SMTP failure shows up here instead of going unnoticed (the only prior email alarm was email itself).
+
+**Known separate issue (not yet fixed):** the Gemini-powered "Steward's Insight" in emails has been falling back to the canned message for weeks. Root cause surfaced 2026-06-15: the `@google/genai` SDK uses the legacy Interactions API that Google deprecated May 2026 (`400 ... legacy Interactions API schema is no longer supported`). Needs an SDK upgrade to the `steps` schema — tracked as a standalone follow-up.
 
 The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Status** panel that auto-refreshes every 30 seconds (Phase 1 day count, missed days, mode, training/OOS recency, cron pulse pills).
 
@@ -65,9 +67,8 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 | `VS_CHAMPION_CHALLENGER_ENABLED` | off | default | **enable** when `data/oos-eval.jsonl` has 20+ rows with non-null `rolling.sharpe` |
 | `VS_SCORE_GATE_THOMPSON_ENABLED` | off | default | **enable** after Phase 1 ends (defer to Tier 2 review) |
 | `VS_NEW_ENTRY_EXPLORATION_EPSILON` | 0.0 | default | **enable** at 0.05 after week 2 if 0 trades observed |
-| `VS_CAP_BREACH_SELL_ENABLED` | on | on | Two-way cap enforcement: sells smallest position when deployed > cap + tolerance. Set to `false` to revert to one-way behavior. |
-| `VS_CAP_BREACH_SELL_TRIGGER` | 0.05 | default | Dollars over cap before sell fires (hysteresis). |
-| `VS_CAP_BREACH_SELL_TARGET_BUFFER` | 1.00 | default | Dollars of headroom to leave below cap after sell. |
+| `VS_ROTATION_SELL_ENABLED` | on | on | Buy-coupled rotation. Appreciation over the cap NEVER forces a sell (winners run). Only sells when a NEW candidate clears all gates but is blocked by cap headroom AND is stronger than the weakest holding — then exits that holding. Set `false` to disable (new buys just block at cap). |
+| `VS_ROTATION_MIN_SCORE_MARGIN` | 0.05 | default | Candidate must beat the weakest holding's signal score by this margin to trigger rotation (anti-churn / let-winners-run). Set 0 to rotate on any improvement. |
 
 ## Known open items
 

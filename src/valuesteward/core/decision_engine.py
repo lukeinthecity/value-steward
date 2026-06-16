@@ -255,88 +255,82 @@ class DecisionEngine:
     def _snapshot_deployed_notional(snapshot: PortfolioSnapshot) -> float:
         return sum(max(0.0, float(position.market_value)) for position in snapshot.positions)
 
-    def _check_cap_breach_sell(
-        self, snapshot: PortfolioSnapshot, mode: RiskMode
+    def _rotation_sell_enabled(self) -> bool:
+        return os.getenv(
+            "VS_ROTATION_SELL_ENABLED", "true"
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _build_rotation_sell(
+        self,
+        snapshot: PortfolioSnapshot,
+        signal_result: SignalResult | None,
+        candidate: SymbolSignal,
+        mode: RiskMode,
     ) -> IntentRecord | None:
-        """Cap-aware SELL gate.
+        """Buy-coupled rotation SELL.
 
-        When total deployed market value exceeds the sandbox cap by more than
-        the trigger tolerance, sell the smallest existing position (partial
-        if needed) to bring deployment back below the cap, leaving at least
-        a small buffer of fresh headroom so subsequent BUYs can run.
+        Appreciation over the cap is DESIRABLE — a reward for good picks — so
+        we never force-sell a winner just because total market value drifted
+        above the cap. The only time we sell to make room is when a NEW BUY
+        candidate has cleared every entry gate but is blocked solely by lack
+        of cap headroom AND that candidate is meaningfully stronger than our
+        weakest current holding.
 
-        The cap is otherwise a one-way valve on BUYs — without this gate,
-        appreciation can push positions over the cap and lock the system out
-        of new entries indefinitely.
+        In that case we rotate: fully exit the weakest holding (by signal
+        score; a held symbol with no current signal is treated as weakest)
+        so the better candidate can be bought on a subsequent tick.
 
-        Hysteresis: only triggers when over by >= VS_CAP_BREACH_SELL_TRIGGER
-        (default 0.05 = 5¢) so we don't churn on every market wiggle. Sells
-        down to (cap - VS_CAP_BREACH_SELL_TARGET_BUFFER) (default 1.00).
+        Returns a SELL IntentRecord, or None when no rotation is warranted
+        (caller then emits the normal BUY_BLOCKED).
         """
-        if not self._cap_breach_sell_enabled():
+        if not self._rotation_sell_enabled():
             return None
         if not snapshot.positions:
             return None
 
-        cap = float(self.settings.max_effective_capital_dollars)
-        trigger_tol = self._get_env_float("VS_CAP_BREACH_SELL_TRIGGER", 0.05)
-        target_headroom = self._get_env_float(
-            "VS_CAP_BREACH_SELL_TARGET_BUFFER", 1.00
-        )
-        deployed = self._snapshot_deployed_notional(snapshot)
-        if deployed <= cap + trigger_tol:
-            return None
+        by_symbol = (signal_result.by_symbol if signal_result else {}) or {}
 
-        # Excess to shed to land at (cap - target_headroom).
-        amount_to_sell = deployed - (cap - target_headroom)
-        if amount_to_sell <= 0:
-            return None
+        def held_score(sym: str) -> float:
+            sig = by_symbol.get(sym)
+            # No live signal for a holding => no conviction => most rotatable.
+            return sig.score if sig is not None else float("-inf")
 
-        # Sell the smallest position. Partial-sell when the position is
-        # larger than the amount needed; cap at the position's full value
-        # if not (accept residual cap breach rather than over-trimming).
-        smallest = min(snapshot.positions, key=lambda p: float(p.market_value))
-        position_mv = float(smallest.market_value)
+        weakest = min(snapshot.positions, key=lambda p: held_score(p.symbol))
+        weakest_score = held_score(weakest.symbol)
+        weakest_mv = float(weakest.market_value)
         min_trade = float(self.settings.min_trade_notional_dollars)
+        if weakest_mv < min_trade:
+            # Can't meaningfully sell it; not worth rotating.
+            return None
 
-        # Clamp to position size first.
-        sell_dollars = min(amount_to_sell, position_mv)
-        # Alpaca won't fill orders below the min_trade floor; floor at it
-        # (overshooting by a few cents is preferable to a full exit, which
-        # was the prior behavior — that would liquidate the entire position
-        # when we only needed 50¢ shed). If even the position itself is
-        # below min_trade, we can't meaningfully sell, so bail.
-        if sell_dollars < min_trade:
-            if position_mv < min_trade:
-                return None
-            sell_dollars = min_trade
+        margin = self._get_env_float("VS_ROTATION_MIN_SCORE_MARGIN", 0.05)
+        # Only rotate for a clearly better opportunity. If the candidate is
+        # not stronger than what we hold by `margin`, let the winner run.
+        if not (candidate.score > weakest_score + margin):
+            return None
 
-        sell_size_pct = sell_dollars / max(1e-9, snapshot.equity)
-        # Use the snapshot's canonical exposure so VOL_STOP and
-        # CAP_BREACH_SELL agree on pre-trade exposure reporting.
+        sell_size_pct = weakest_mv / max(1e-9, snapshot.equity)
         current_exposure_pct = snapshot.risk_exposure_pct
         post_exposure_pct = max(0.0, current_exposure_pct - sell_size_pct)
+        weakest_score_str = (
+            f"{weakest_score:.4f}" if weakest_score != float("-inf") else "none"
+        )
 
         return IntentRecord(
             mode=mode,
             action_type="SELL",
-            symbol=smallest.symbol,
+            symbol=weakest.symbol,
             size_pct=sell_size_pct,
             pre_risk_exposure_pct=current_exposure_pct,
             post_risk_exposure_pct=post_exposure_pct,
-            reason_code="CAP_BREACH_SELL",
+            reason_code="ROTATION_SELL",
             explanation=(
-                f"Cap breach: deployed=${deployed:.2f} > cap=${cap:.2f} + "
-                f"tol=${trigger_tol:.2f}. Selling ${sell_dollars:.2f} of "
-                f"{smallest.symbol} (pos_mv=${float(smallest.market_value):.2f}) "
-                f"to target deployed<=${cap - target_headroom:.2f}."
+                f"Rotation: freeing cap room for stronger candidate "
+                f"{candidate.symbol} (score={candidate.score:.4f}) by exiting "
+                f"weakest holding {weakest.symbol} "
+                f"(score={weakest_score_str}, mv=${weakest_mv:.2f})."
             ),
         )
-
-    def _cap_breach_sell_enabled(self) -> bool:
-        return os.getenv(
-            "VS_CAP_BREACH_SELL_ENABLED", "true"
-        ).strip().lower() in {"1", "true", "yes", "on"}
 
     def _macro_score(self, world_context: dict | None) -> float | None:
         if not world_context or not isinstance(world_context, dict):
@@ -676,14 +670,9 @@ class DecisionEngine:
                     ), signal_result
         # ------------------------------------------------------
 
-        # --- Cap-aware SELL (two-way cap enforcement) ---
-        # Without this, MV appreciation can push deployed > cap and lock the
-        # system out of new BUYs indefinitely. Runs after VOL_STOP so panic
-        # exits still take precedence.
-        cap_breach_intent = self._check_cap_breach_sell(snapshot, mode)
-        if cap_breach_intent is not None:
-            return cap_breach_intent, signal_result
-        # ------------------------------------------------
+        # NOTE: appreciation over the cap no longer forces a sell — winners
+        # are allowed to run above $20. The only sell-to-make-room path is
+        # buy-coupled rotation, applied in the BUY headroom block below.
 
         gate_meta = {
             "gate_world_context_fresh": context_ok,
@@ -843,6 +832,20 @@ class DecisionEngine:
                 self.settings.max_effective_capital_dollars - deployed_notional,
             )
             if remaining_headroom < self.settings.min_trade_notional_dollars:
+                # No cap headroom for a new entry. Rather than always blocking,
+                # try buy-coupled rotation: if this candidate is clearly
+                # stronger than our weakest holding, sell that holding to free
+                # room (the buy lands on a subsequent tick). Only for new
+                # entries — add-ons at the cap still just block.
+                candidate_is_add_on = selected_signal.symbol in {
+                    pos.symbol for pos in snapshot.positions
+                }
+                if not candidate_is_add_on:
+                    rotation_intent = self._build_rotation_sell(
+                        snapshot, signal_result, selected_signal, mode
+                    )
+                    if rotation_intent is not None:
+                        return rotation_intent, signal_result
                 return IntentRecord(
                     mode=mode,
                     action_type="NO_ACTION",
