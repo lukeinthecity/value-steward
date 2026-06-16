@@ -40,12 +40,17 @@ async function generateAISummary({ type, data }) {
   `;
 
   try {
-    const interaction = await client.interactions.create({
+    // Stable generateContent API. The experimental Interactions API was
+    // deprecated by Google (May 2026 — "legacy Interactions schema no longer
+    // supported"); generateContent is the mainstream, non-deprecated path.
+    const response = await client.models.generateContent({
       model: "gemini-3-flash-preview",
-      system_instruction: systemInstruction,
-      input: prompt,
+      contents: prompt,
+      config: {
+        systemInstruction,
+      },
     });
-    return interaction.outputs[interaction.outputs.length - 1].text;
+    return response.text ?? null;
   } catch (err) {
     console.warn("[email] AI Summary failed:", err.message);
     return null;

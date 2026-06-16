@@ -310,18 +310,24 @@ function extractCachedScoutFields(entry) {
 
 async function callGemini({ systemInstruction, input, useSearch = true }) {
   const client = new GoogleGenAI({ apiKey: API_KEY });
-  const config = {
-    model: MODEL_NAME,
-    system_instruction: systemInstruction,
-    input: input,
-  };
+  // Stable generateContent API (the experimental Interactions API was
+  // deprecated by Google in May 2026). Grounding tool format also changed:
+  // { type: "google_search" } -> { googleSearch: {} }.
+  const config = { systemInstruction };
   if (useSearch) {
-    config.tools = [{ type: "google_search" }];
+    config.tools = [{ googleSearch: {} }];
   }
 
-  const interaction = await client.interactions.create(config);
-  let responseText = interaction.outputs[interaction.outputs.length - 1].text;
-  
+  const response = await client.models.generateContent({
+    model: MODEL_NAME,
+    contents: input,
+    config,
+  });
+  let responseText = response.text;
+  if (!responseText) {
+    throw new Error("Gemini returned no text content.");
+  }
+
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (jsonMatch) responseText = jsonMatch[0];
   return JSON.parse(responseText);
