@@ -125,20 +125,24 @@ def sync_all_logs():
             logger.info("Syncing World Contexts...")
             with open(context_file, "r") as f:
                 for line in f:
+                    if not line.strip():
+                        continue
                     try:
                         mgr.sync_world_context(json.loads(line), conn=conn)
-                    except Exception:
-                        continue # nosec
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Failed to sync world-context row: %s", exc)
         # 2. Sync Intents
         intent_file = Path("logs/intent_log.jsonl")
         if intent_file.exists():
             logger.info("Syncing Intent Logs...")
             with open(intent_file, "r") as f:
                 for line in f:
+                    if not line.strip():
+                        continue
                     try:
                         mgr.sync_intent(json.loads(line), conn=conn)
-                    except Exception:
-                        continue # nosec
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Failed to sync intent row: %s", exc)
     
     logger.info("Database sync complete.")
 
