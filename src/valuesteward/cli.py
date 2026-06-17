@@ -576,10 +576,19 @@ def history(limit: int, filter_action: str) -> None:
             continue
         symbol = intent.symbol or "-"
         timestamp = intent.timestamp.isoformat()
-        if intent.target_risk_exposure_pct is None or intent.rebalance_buffer_pct is None:
-            raise ValueError("Intent missing target/buffer enrichment fields.")
-        target = intent.target_risk_exposure_pct
-        buffer = intent.rebalance_buffer_pct
+        # A read-only history view must not crash on a single legacy/partial
+        # row that predates enrichment — fall back to 0.0 for display rather
+        # than raising and breaking the whole listing.
+        target = (
+            intent.target_risk_exposure_pct
+            if intent.target_risk_exposure_pct is not None
+            else 0.0
+        )
+        buffer = (
+            intent.rebalance_buffer_pct
+            if intent.rebalance_buffer_pct is not None
+            else 0.0
+        )
         reason = intent.reason_code or "-"
         print(
             f"{timestamp}  {intent.mode.value}  {intent.action_type}  "

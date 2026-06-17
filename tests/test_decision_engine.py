@@ -53,6 +53,36 @@ class DummySignalEngine:
             signals=[sig], by_symbol={"SPY": sig}, correlations={}
         )
 
+def test_degraded_snapshot_equity_zero_returns_no_action_not_crash() -> None:
+    """REGRESSION (audit 2026-06-17): a degraded broker snapshot (equity=0,
+    as portfolio_repository returns on account-fetch failure) must NOT reach
+    the size paths that divide by snapshot.equity. decide() returns a clean
+    DEGRADED_SNAPSHOT NO_ACTION carrying enrichment fields (so the cli.py
+    tick guard is satisfied) instead of raising ZeroDivisionError."""
+    snapshot = PortfolioSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        cash=0.0,
+        equity=0.0,
+        positions=[],
+        risk_exposure_pct=0.0,
+    )
+    settings = build_settings()
+    governor = RiskGovernor(mode=RiskMode.LOW, settings=settings)
+    engine = DecisionEngine(
+        risk_governor=governor,
+        pattern_library=PatternLibrary(),
+        settings=settings,
+        portfolio_repository=DummyPortfolioRepository(),
+        signal_engine=DummySignalEngine(),
+    )
+
+    intent, _ = engine.decide(snapshot, world_tags=["DEFAULT"])
+    assert intent.action_type == "NO_ACTION"
+    assert intent.reason_code == "DEGRADED_SNAPSHOT"
+    assert intent.target_risk_exposure_pct is not None
+    assert intent.rebalance_buffer_pct is not None
+
+
 def test_low_mode_buy_intent_when_under_target() -> None:
     snapshot = PortfolioSnapshot(
         timestamp=datetime.now(timezone.utc),

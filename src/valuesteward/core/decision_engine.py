@@ -632,6 +632,27 @@ class DecisionEngine:
             target, buffer, world_tags
         )
 
+        # Degraded-snapshot guard. portfolio_repository returns equity=0 when the
+        # Alpaca account fetch fails; several sizing paths below divide by
+        # snapshot.equity (vol-stop, headroom, sell sizing) and would raise
+        # ZeroDivisionError. More importantly we must not act on a broker
+        # snapshot we couldn't trust. Carry target/buffer so the cli.py tick
+        # enrichment guard is satisfied.
+        if snapshot.equity is None or snapshot.equity <= 0:
+            return IntentRecord(
+                mode=mode,
+                action_type="NO_ACTION",
+                reason_code="DEGRADED_SNAPSHOT",
+                explanation=(
+                    f"Degraded portfolio snapshot (equity={snapshot.equity}); "
+                    "skipping decision to avoid acting on untrusted broker state."
+                ),
+                target_risk_exposure_pct=target,
+                rebalance_buffer_pct=buffer,
+                pre_risk_exposure_pct=snapshot.risk_exposure_pct,
+                post_risk_exposure_pct=snapshot.risk_exposure_pct,
+            ), None
+
         signal_result: SignalResult | None = None
         selected_signal: SymbolSignal | None = None
         signal_note: str | None = None
