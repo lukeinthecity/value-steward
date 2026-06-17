@@ -129,7 +129,9 @@ def test_rotation_fires_for_clearly_stronger_candidate(monkeypatch) -> None:
     snap = _snapshot([_pos("AFBI", 12.0), _pos("PWV", 8.0)])
     # PWV is the weaker holding (1.30 < 1.70).
     result = _result(candidate, _sig("AFBI", 1.70), _sig("PWV", 1.30))
-    out = engine._build_rotation_sell(snap, result, candidate, RiskMode.LOW)
+    out = engine._build_rotation_sell(
+        snap, result, candidate, RiskMode.LOW, target=0.20, buffer=0.02
+    )
     assert out is not None
     assert out.action_type == "SELL"
     assert out.symbol == "PWV"
@@ -137,6 +139,11 @@ def test_rotation_fires_for_clearly_stronger_candidate(monkeypatch) -> None:
     # Full exit of the weakest position.
     sell_dollars = out.size_pct * 100_000.0
     assert abs(sell_dollars - 8.0) < 1e-6
+    # REGRESSION (2026-06-16 crash): every intent must carry the
+    # target/buffer enrichment fields or the cli.py tick guard raises and
+    # the whole tick crashes. Sell-side intents omitted them.
+    assert out.target_risk_exposure_pct is not None
+    assert out.rebalance_buffer_pct is not None
 
 
 def test_rotation_picks_weakest_by_score_not_market_value(monkeypatch) -> None:
@@ -176,6 +183,70 @@ def test_rotation_skips_when_weakest_below_min_trade(monkeypatch) -> None:
     snap = _snapshot([_pos("AFBI", 12.0), _pos("DUST", 0.50)])
     result = _result(candidate, _sig("AFBI", 1.70), _sig("DUST", 1.10))
     assert engine._build_rotation_sell(snap, result, candidate, RiskMode.LOW) is None
+
+
+def _rich_sig(symbol: str, score: float) -> SymbolSignal:
+    """A signal that clears the entry gates (positive rel/trend)."""
+    s = _sig(symbol, score)
+    s.rel_strength_20d = 0.05
+    s.rel_strength_60d = 0.10
+    s.trend_strength = 0.05
+    s.mom_5d = 0.01
+    s.mom_20d = 0.02
+    s.mom_60d = 0.10
+    return s
+
+
+class _StubSignalEngine:
+    def __init__(self, result):
+        self._result = result
+
+    def build_signals(self):
+        return self._result
+
+
+def test_decide_at_cap_emits_enriched_rotation_sell(monkeypatch) -> None:
+    """REGRESSION (2026-06-16 tick crash): a full decide() that rotates at the
+    cap must return a SELL carrying target/buffer enrichment, or the cli.py
+    tick guard raises 'Intent missing target/buffer enrichment fields'."""
+    monkeypatch.delenv("VS_ROTATION_SELL_ENABLED", raising=False)
+    monkeypatch.setenv("VS_NEW_ENTRY_MIN_SIGNAL_SCORE", "1.50")
+    monkeypatch.setenv("VS_ROTATION_MIN_SCORE_MARGIN", "0.05")
+
+    candidate = _rich_sig("XYZ", 1.80)
+    held_a = _sig("AFBI", 1.30)
+    held_b = _sig("PWV", 1.20)
+    result = _result(candidate, held_a, held_b)
+
+    settings = ValueStewardSettings(
+        alpaca_api_key_id="x",  # nosec B106
+        alpaca_secret_key="y",  # nosec B106
+        core_symbol="SPY",
+        target_risk_exposure_pct_low=0.20,
+        rebalance_buffer_pct=0.02,
+        max_effective_capital_dollars=20.0,
+        min_trade_notional_dollars=1.0,
+    )
+    engine = DecisionEngine(
+        risk_governor=RiskGovernor(settings=settings),
+        pattern_library=PatternLibrary(),
+        settings=settings,
+        portfolio_repository=DummyPortfolioRepository(),
+        signal_engine=_StubSignalEngine(result),
+    )
+    # At cap: AFBI $12 + PWV $8 = $20 deployed, no headroom.
+    snap = _snapshot([_pos("AFBI", 12.0), _pos("PWV", 8.0)])
+
+    intent, _ = engine.decide(
+        snap, world_tags=["DEFAULT"], world_context={"macro_view": {"macro_label": "calm"}}
+    )
+
+    assert intent.action_type == "SELL"
+    assert intent.reason_code == "ROTATION_SELL"
+    assert intent.symbol == "PWV"  # weakest held by score
+    # The fields whose absence crashed the tick:
+    assert intent.target_risk_exposure_pct is not None
+    assert intent.rebalance_buffer_pct is not None
 
 
 def test_rotation_margin_zero_allows_any_improvement(monkeypatch) -> None:
