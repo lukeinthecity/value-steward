@@ -266,6 +266,8 @@ class DecisionEngine:
         signal_result: SignalResult | None,
         candidate: SymbolSignal,
         mode: RiskMode,
+        target: float | None = None,
+        buffer: float | None = None,
     ) -> IntentRecord | None:
         """Buy-coupled rotation SELL.
 
@@ -323,6 +325,18 @@ class DecisionEngine:
             size_pct=sell_size_pct,
             pre_risk_exposure_pct=current_exposure_pct,
             post_risk_exposure_pct=post_exposure_pct,
+            # The cli.py tick path requires every intent to carry the
+            # target/buffer enrichment fields; without them it raises and the
+            # whole tick crashes. The normal BUY/NO_ACTION path supplies them
+            # via gate_meta — sell-side intents must set them explicitly.
+            target_risk_exposure_pct=(
+                target if target is not None
+                else self.settings.target_risk_exposure_pct_low
+            ),
+            rebalance_buffer_pct=(
+                buffer if buffer is not None
+                else self.settings.rebalance_buffer_pct
+            ),
             reason_code="ROTATION_SELL",
             explanation=(
                 f"Rotation: freeing cap room for stronger candidate "
@@ -662,6 +676,10 @@ class DecisionEngine:
                         size_pct=position_weight,
                         pre_risk_exposure_pct=current,
                         post_risk_exposure_pct=max(0.0, current - position_weight),
+                        # Enrichment fields required by the cli.py tick guard;
+                        # a panic exit must not crash the tick for lack of them.
+                        target_risk_exposure_pct=target,
+                        rebalance_buffer_pct=buffer,
                         reason_code="VOL_STOP",
                         explanation=(
                             f"PANIC EXIT: {pos.symbol} dropped {sig.day_return:.2%}, "
@@ -842,7 +860,8 @@ class DecisionEngine:
                 }
                 if not candidate_is_add_on:
                     rotation_intent = self._build_rotation_sell(
-                        snapshot, signal_result, selected_signal, mode
+                        snapshot, signal_result, selected_signal, mode,
+                        target=target, buffer=buffer,
                     )
                     if rotation_intent is not None:
                         return rotation_intent, signal_result
