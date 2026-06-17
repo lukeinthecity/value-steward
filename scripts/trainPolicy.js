@@ -1,3 +1,7 @@
+// Load .env first: cron runs with a minimal environment, so the trainer's
+// VS_* tuning vars (champion-challenger, OOS, signal-weight, rotation, etc.)
+// would otherwise silently fall back to defaults at the EOD train step.
+import "dotenv/config";
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import { startSpinner } from "../world/spinner.js";
 

@@ -1,3 +1,7 @@
+// Load .env first — cron runs with a minimal environment, so scheduler-level
+// vars like VS_SCHEDULE_LOG_SKIPS / VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE
+// would otherwise be unset and silently use defaults.
+import "dotenv/config";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
