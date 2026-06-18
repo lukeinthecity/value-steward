@@ -7,6 +7,8 @@
     "train:policy": "node scripts/trainPolicy.js",
     "email:test": "node scripts/testEmail.js",
     "push:test": "node scripts/pushTest.js",
+    "notify:open": "node scripts/marketOpenNotice.js",
+    "notify:close": "node scripts/marketCloseNotice.js",
     "local:tick": "node local/runValueStewardTick.js",
     "local:tick:scheduled": "node scripts/localTickScheduled.js",
     "intraday:observe": "node scripts/intradayObservation.js",
