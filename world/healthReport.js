@@ -6,6 +6,7 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { startSpinner } from "./spinner.js";
+import { readJson, writeJsonAtomic } from "../core/runtimeArtifacts.js";
 
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
 const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
@@ -31,9 +32,9 @@ const AUTO_DISABLE =
 const execAsync = promisify(exec);
 
 function loadJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  const raw = fs.readFileSync(filePath, "utf8");
-  return JSON.parse(raw);
+  // Guarded: a corrupt feeds.json/state file returns null (handled by callers)
+  // instead of throwing and aborting the whole health run.
+  return readJson(filePath);
 }
 
 function loadJsonl(filePath) {
@@ -282,8 +283,8 @@ function loadState() {
 }
 
 function saveHealthState(state) {
-  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-  fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+  // Atomic write so an interrupted run can't corrupt the health state file.
+  writeJsonAtomic(STATE_PATH, state);
 }
 
 export function updateHealthState(summary, health) {
@@ -343,7 +344,9 @@ function autoDisableFeeds(feeds, summary, health) {
   }
   if (changed) {
     feeds.updatedAt = new Date().toISOString();
-    fs.writeFileSync(FEEDS_PATH, JSON.stringify(feeds, null, 2));
+    // Atomic write: feeds.json is the source of truth fetchRss reads every
+    // run; a torn write here would crash ingestion on the next fetch.
+    writeJsonAtomic(FEEDS_PATH, feeds);
   }
   return { feeds, changed, disabled };
 }

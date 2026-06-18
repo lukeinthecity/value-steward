@@ -12,6 +12,8 @@ import {
   extractLatestOrderFromPortfolioSnapshot,
   getArtifactCycleId,
   loadIntradayObservations,
+  readJsonl,
+  writeJsonlAtomic,
 } from "../core/runtimeArtifacts.js";
 
 test("extractLatestOrderFromPortfolioSnapshot prefers most recent same-day order", () => {
@@ -216,4 +218,38 @@ test("loadIntradayObservations filters to the requested exchange date", (t) => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0].exchange_time, "10:00");
   assert.equal(rows[0].top_candidates[0].symbol, "AAA");
+});
+
+test("writeJsonlAtomic round-trips and leaves no .tmp file behind", (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-jsonl-atomic-"));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const target = path.join(tmpDir, "nested", "inbox.jsonl");
+  const entries = [{ id: 1, t: "a" }, { id: 2, t: "b" }];
+  writeJsonlAtomic(target, entries);
+
+  // Round-trips through the guarded reader.
+  assert.deepEqual(readJsonl(target), entries);
+  // Trailing newline, one object per line.
+  const raw = fs.readFileSync(target, "utf8");
+  assert.equal(raw, '{"id":1,"t":"a"}\n{"id":2,"t":"b"}\n');
+  // No stray temp files survive the rename.
+  assert.deepEqual(
+    fs.readdirSync(path.dirname(target)).filter((f) => f.includes(".tmp")),
+    []
+  );
+});
+
+test("writeJsonlAtomic writes empty file for no entries; readJsonl skips corrupt lines", (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-jsonl-corrupt-"));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const target = path.join(tmpDir, "inbox.jsonl");
+  writeJsonlAtomic(target, []);
+  assert.equal(fs.readFileSync(target, "utf8"), "");
+  assert.deepEqual(readJsonl(target), []);
+
+  // A truncated/garbled line must be skipped, not throw.
+  fs.writeFileSync(target, '{"ok":1}\n{not valid json\n{"ok":2}\n');
+  assert.deepEqual(readJsonl(target), [{ ok: 1 }, { ok: 2 }]);
 });

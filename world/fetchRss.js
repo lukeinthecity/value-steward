@@ -1,10 +1,10 @@
 // Load .env first so this entrypoint never silently misses VS_*/credential
 // env vars when run under cron (which provides a minimal environment).
 import "dotenv/config";
-import fs from "fs";
 import path from "path";
 import Parser from "rss-parser";
 
+import { readJson, readJsonl, writeJsonlAtomic } from "../core/runtimeArtifacts.js";
 import { startSpinner } from "./spinner.js";
 
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
@@ -30,22 +30,29 @@ function buildCalendarSummary({ title, impact, forecast, previous, actual }) {
 }
 
 function loadFeeds() {
-  const raw = fs.readFileSync(FEEDS_PATH, "utf8");
-  return JSON.parse(raw);
+  // Guarded read: a missing or corrupt feeds.json must not crash the whole
+  // fetch (which would silently halt all world ingestion). Degrade to an
+  // empty source list with a loud log instead.
+  const feeds = readJson(FEEDS_PATH);
+  if (!feeds || typeof feeds !== "object") {
+    console.error(
+      `[world] feeds.json missing or unreadable at ${FEEDS_PATH}; no sources fetched this run.`
+    );
+    return { sources: [] };
+  }
+  return feeds;
 }
 
 function loadInbox() {
-  if (!fs.existsSync(INBOX_PATH)) return [];
-  const raw = fs.readFileSync(INBOX_PATH, "utf8");
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  // Guarded per-line read: one corrupt/truncated line (e.g. an interrupted
+  // write) must not crash the fetch — readJsonl skips bad lines.
+  return readJsonl(INBOX_PATH);
 }
 
 function saveInbox(entries) {
-  const lines = entries.map((entry) => JSON.stringify(entry));
-  fs.writeFileSync(INBOX_PATH, lines.join("\n") + (lines.length ? "\n" : ""));
+  // Atomic write (tmp -> rename) so a kill mid-write can't leave a truncated
+  // inbox that the next run would choke on.
+  writeJsonlAtomic(INBOX_PATH, entries);
 }
 
 function buildKey(entry) {
