@@ -14,7 +14,7 @@
     "scorecard:refresh": "node scripts/scorecardRefresh.js",
     "lint:py": "node scripts/lintPy.js",
     "format:py": "node scripts/formatPy.js",
-    "test:js": "node --test --test-concurrency=1 tests-js/**/*.test.js",
+    "test:js": "node --test --test-concurrency=1 tests-js/*.test.js",
     "test:py": ".venv/bin/python3 -m pytest tests/",
     "typecheck:py": "node scripts/typecheckPy.js",
     "security:py": "node scripts/securityPy.js",
