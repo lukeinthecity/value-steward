@@ -22,6 +22,21 @@ The system must have exactly ONE source of truth for operational state (`data/st
 
 ## 2. Process Scripting Best Practices
 
+### Environment Loading (`.env`) on Entrypoints
+Every Node.js script that is a **runnable entrypoint** (anything launched directly by
+cron, systemd, `npm run`, or the desktop app — not a library that is only imported)
+must load `.env` explicitly as its **first import**:
+```js
+import "dotenv/config";
+```
+- **Why:** cron and systemd provide a minimal environment that does not include the
+  developer shell's variables. Without an explicit load, the script silently falls
+  back to defaults (e.g. `VS_*` feature flags read as unset) and the failure is
+  invisible — no crash, just wrong behavior. Relying on a transitive import to pull
+  in dotenv is fragile: a future refactor of the import graph can break it by accident.
+- **Rule:** if a script reads `process.env`, it loads dotenv itself. Do not depend on
+  another module to do it.
+
 ### The Retry Decorator
 All external API calls (Alpaca, Gemini) must be wrapped in exponential backoff retry logic.
 - **Pattern:** Attempt 1 (1s wait) -> Attempt 2 (2s wait) -> Attempt 3 (4s wait).

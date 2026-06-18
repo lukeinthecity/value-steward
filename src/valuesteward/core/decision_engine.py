@@ -71,11 +71,11 @@ class DecisionEngine:
             seed_raw = os.getenv("VS_SCORE_GATE_THOMPSON_SEED", "").strip()
             if seed_raw:
                 try:
-                    self._thompson_rng = _random.Random(int(seed_raw))
+                    self._thompson_rng = _random.Random(int(seed_raw))  # nosec B311
                 except ValueError:
-                    self._thompson_rng = _random.Random()
+                    self._thompson_rng = _random.Random()  # nosec B311
             else:
-                self._thompson_rng = _random.Random()
+                self._thompson_rng = _random.Random()  # nosec B311
         return self._thompson_rng
 
     # Hard cap on a single posterior count to keep Beta(alpha, beta) numerically
@@ -126,11 +126,11 @@ class DecisionEngine:
             seed_raw = os.getenv("VS_NEW_ENTRY_EXPLORATION_SEED", "").strip()
             if seed_raw:
                 try:
-                    self._exploration_rng = _random.Random(int(seed_raw))
+                    self._exploration_rng = _random.Random(int(seed_raw))  # nosec B311
                 except ValueError:
-                    self._exploration_rng = _random.Random()
+                    self._exploration_rng = _random.Random()  # nosec B311
             else:
-                self._exploration_rng = _random.Random()
+                self._exploration_rng = _random.Random()  # nosec B311
         return self._exploration_rng
 
     def _calculate_vol_adjusted_size(

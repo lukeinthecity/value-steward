@@ -21,6 +21,9 @@
  * Wire to cron hourly to build a daily history in data/runtime.log.
  */
 
+// Load .env first so this entrypoint never silently misses VS_*/credential
+// env vars when run under cron (which provides a minimal environment).
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -504,6 +507,7 @@ async function runWatchLoop(format, seconds) {
     process.exit(0);
   });
 
+  // eslint-disable-next-line no-constant-condition -- intentional watch loop; exits via SIGINT/SIGTERM above
   while (true) {
     const { output } = renderOnce(format);
     const banner = `(watch mode — refreshing every ${seconds}s, ctrl+c to exit)\n`;

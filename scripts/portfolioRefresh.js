@@ -1,3 +1,6 @@
+// Load .env first so this entrypoint never silently misses VS_*/credential
+// env vars when run under cron (which provides a minimal environment).
+import "dotenv/config";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
