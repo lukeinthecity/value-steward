@@ -3,6 +3,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { startSpinner } from "./spinner.js";
@@ -456,7 +457,16 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("[world:health] Error:", err?.message ?? err);
-  process.exit(1);
-});
+// Only run when executed directly (cron/CLI), never on import. Importing this
+// module for tests must not run a real health report against the live data
+// tree (which would rewrite world-health.json and could auto-disable feeds).
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((err) => {
+    console.error("[world:health] Error:", err?.message ?? err);
+    process.exit(1);
+  });
+}

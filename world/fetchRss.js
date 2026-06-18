@@ -2,6 +2,7 @@
 // env vars when run under cron (which provides a minimal environment).
 import "dotenv/config";
 import path from "path";
+import { fileURLToPath } from "url";
 import Parser from "rss-parser";
 
 import { readJson, readJsonl, writeJsonlAtomic } from "../core/runtimeArtifacts.js";
@@ -238,7 +239,15 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error("[world] fetch failed:", err?.message ?? err);
-  process.exit(1);
-});
+// Only run when executed directly (cron/CLI), never on import. Importing this
+// module for tests must not kick off a real fetch against the live data tree.
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((err) => {
+    console.error("[world] fetch failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

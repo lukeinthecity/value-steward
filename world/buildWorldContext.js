@@ -5,6 +5,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 import { makeMacroDigest } from "./makeMacroDigest.js";
 import {
@@ -361,7 +362,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("[world] Fatal build error:", err.message);
-  process.exit(1);
-});
+// Only run when executed directly (cron/CLI), never on import.
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((err) => {
+    console.error("[world] Fatal build error:", err.message);
+    process.exit(1);
+  });
+}

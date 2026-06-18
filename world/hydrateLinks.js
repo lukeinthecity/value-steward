@@ -4,6 +4,7 @@ import "dotenv/config";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
@@ -239,7 +240,14 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error("[world] hydrate failed:", err?.message ?? err);
-  process.exit(1);
-});
+// Only run when executed directly (cron/CLI), never on import.
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((err) => {
+    console.error("[world] hydrate failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}
