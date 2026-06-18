@@ -207,8 +207,14 @@ def load_policy(path: Path | str = DEFAULT_POLICY_PATH) -> tuple[dict[str, Any],
     policy_path = Path(path)
     if not policy_path.exists():
         return {}, ["Policy file not found; using defaults."]
-    with policy_path.open("r", encoding="utf-8") as handle:
-        raw = json.load(handle)
+    try:
+        with policy_path.open("r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except (json.JSONDecodeError, OSError) as exc:
+        # A corrupt or unreadable policy.json must degrade to defaults, not
+        # crash the tick. Mirrors the not-found branch above; validate_policy
+        # is already fully defensive about the parsed contents.
+        return {}, [f"Policy file unreadable ({exc}); using defaults."]
     return validate_policy(raw)
 
 

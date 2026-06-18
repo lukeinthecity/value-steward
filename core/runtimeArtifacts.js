@@ -82,6 +82,18 @@ export function writeJsonAtomic(filePath, payload) {
   return payload;
 }
 
+export function writeJsonlAtomic(filePath, entries) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const lines = (entries ?? []).map((entry) => JSON.stringify(entry));
+  const data = lines.length ? `${lines.join("\n")}\n` : "";
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random()
+    .toString(16)
+    .slice(2)}.tmp`;
+  fs.writeFileSync(tmpPath, data);
+  fs.renameSync(tmpPath, filePath);
+  return entries ?? [];
+}
+
 export function appendJsonlLineSync(filePath, payload) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const fd = fs.openSync(filePath, "a");
