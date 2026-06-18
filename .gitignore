@@ -28,3 +28,4 @@ heartbeat.json
 data/archive/
 logs/archive/
 data/email-health.json
+data/push-health.json

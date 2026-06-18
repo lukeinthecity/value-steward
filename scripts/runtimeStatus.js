@@ -236,6 +236,11 @@ function collectSnapshot() {
     {}
   );
 
+  const pushHealth = readJsonSafe(
+    path.join(ROOT, "data", "push-health.json"),
+    {}
+  );
+
   return {
     generatedAt: now.toISOString(),
     exchangeNow: formatExchange(now),
@@ -250,6 +255,7 @@ function collectSnapshot() {
     intentEntries,
     pulse,
     emailHealth,
+    pushHealth,
     phase1Start,
     phase1Day,
     missedDays,
@@ -387,6 +393,28 @@ function renderHuman(snap) {
   } else {
     for (const key of ehKeys.sort()) {
       const rec = eh[key] || {};
+      const outcome = rec.last_outcome === "ok" ? "✓ ok" : "✗ ERROR";
+      const attempt = rec.last_attempt_at
+        ? `${formatExchange(new Date(rec.last_attempt_at))} (${timeAgo(new Date(rec.last_attempt_at))})`
+        : "never";
+      lines.push(`  ${outcome.padEnd(8)} ${key.padEnd(24)} ${attempt}`);
+      if (rec.last_outcome === "error" && rec.last_error) {
+        lines.push(`           └─ ${rec.last_error}`);
+      }
+    }
+  }
+  lines.push("");
+
+  // Push health — surfaces silent ntfy failures (same single-point-of-failure
+  // reasoning as email health).
+  lines.push("Push Health:");
+  const ph = snap.pushHealth || {};
+  const phKeys = Object.keys(ph);
+  if (phKeys.length === 0) {
+    lines.push("  (no send attempts recorded yet)");
+  } else {
+    for (const key of phKeys.sort()) {
+      const rec = ph[key] || {};
       const outcome = rec.last_outcome === "ok" ? "✓ ok" : "✗ ERROR";
       const attempt = rec.last_attempt_at
         ? `${formatExchange(new Date(rec.last_attempt_at))} (${timeAgo(new Date(rec.last_attempt_at))})`

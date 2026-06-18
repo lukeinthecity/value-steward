@@ -6,6 +6,7 @@
   "scripts": {
     "train:policy": "node scripts/trainPolicy.js",
     "email:test": "node scripts/testEmail.js",
+    "push:test": "node scripts/pushTest.js",
     "local:tick": "node local/runValueStewardTick.js",
     "local:tick:scheduled": "node scripts/localTickScheduled.js",
     "intraday:observe": "node scripts/intradayObservation.js",
