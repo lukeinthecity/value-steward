@@ -20,6 +20,12 @@
 # world:health scheduler - refresh feed health/context twice daily, including weekends/holidays.
 5 6,18 * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:health:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 
+# push notifications - market-open "VS live" notice at 9:25 AM ET (trading days only; script self-guards holidays + once/day)
+25 09 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run notify:open >> /home/lukes/value-steward/logs/cron.log 2>&1
+
+# push notifications - session "VS off" notice at 5:35 PM ET (after the post-close EOD window)
+35 17 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run notify:close >> /home/lukes/value-steward/logs/cron.log 2>&1
+
 # local:tick scheduler - runs every 5 minutes from 12:30 PM ET onward
 30-55/5 12 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
 */5 13-15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1

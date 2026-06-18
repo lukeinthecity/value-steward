@@ -1,6 +1,11 @@
+import "dotenv/config";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import { sendHealthEmail } from "../core/emailNotifications.js";
 import { buildHealthSnapshot, shouldSendHealthEmail } from "../core/healthStatus.js";
 import { markHealthEmailSent } from "../core/stewardState.js";
+import { maybeSendHealthAlert } from "../core/pushTriggers.js";
 
 function printIssues(issues) {
   if (!issues.length) {
@@ -29,6 +34,13 @@ async function main() {
   console.log(`- scorecard_days=${snapshot.scorecard?.trading_days ?? 0}`);
   printIssues(snapshot.issues ?? []);
 
+  // Push a (de-duped) health alert whenever issues are present — independent of
+  // the email path, so it fires on the hourly cron run.
+  const pushResult = await maybeSendHealthAlert({ snapshot });
+  if (pushResult.reason !== "no_issues" && pushResult.reason !== "deduped") {
+    console.log(`[health] push alert: ${pushResult.reason}`);
+  }
+
   if (!sendEmail) return;
 
   const decision = shouldSendHealthEmail({
@@ -46,7 +58,14 @@ async function main() {
   console.log("[health] email sent.");
 }
 
-main().catch((err) => {
-  console.error("[health] failed:", err?.message ?? err);
-  process.exit(1);
-});
+// Only run when executed directly (cron/CLI), never on import.
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((err) => {
+    console.error("[health] failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}
