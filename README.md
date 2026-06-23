@@ -99,5 +99,10 @@ Daily **End-of-Day** and **Health** emails include an AI-synthesized "Steward's 
 
 ---
 
+---
+
 ## 📜 License
-Internal Development - All Rights Reserved.
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details. 
+
+*Disclaimer: Value Steward is an automated software utility designed for educational and paper-testing purposes. Algorithmic trading carries substantial financial risk. Use of this software with live capital is entirely at your own risk under the terms of the Apache 2.0 liability shield.*
