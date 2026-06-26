@@ -1,12 +1,16 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-23T00:00:00.000Z",
+  "updatedAt": "2026-06-23T02:30:51.670Z",
   "sources": [
     {
       "id": "un-news",
       "label": "UN News (All)",
       "rss_url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
-      "tags": ["geopolitics", "global", "un"],
+      "tags": [
+        "geopolitics",
+        "global",
+        "un"
+      ],
       "weight": 0.9,
       "stale_hours": 120,
       "enabled": true
@@ -15,7 +19,11 @@
       "id": "bis-press",
       "label": "BIS (All Categories)",
       "rss_url": "https://www.bis.org/doclist/rss_all_categories.rss",
-      "tags": ["macro", "financial-stability", "global"],
+      "tags": [
+        "macro",
+        "financial-stability",
+        "global"
+      ],
       "weight": 0.8,
       "stale_hours": 336,
       "enabled": true
@@ -24,7 +32,12 @@
       "id": "ecb-press",
       "label": "ECB (Press Releases)",
       "rss_url": "https://www.ecb.europa.eu/rss/press.html",
-      "tags": ["macro", "central-bank", "europe", "official"],
+      "tags": [
+        "macro",
+        "central-bank",
+        "europe",
+        "official"
+      ],
       "weight": 0.8,
       "stale_hours": 336,
       "enabled": true
@@ -34,61 +47,101 @@
       "label": "Forex Factory (Economic Calendar)",
       "rss_url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
       "format": "calendar_json",
-      "tags": ["macro", "economic-calendar", "forward"],
+      "tags": [
+        "macro",
+        "economic-calendar",
+        "forward"
+      ],
       "weight": 0.9,
       "stale_hours": 24,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "auto_stale",
+      "disabled_at": "2026-04-04T21:14:01.859Z"
     },
     {
       "id": "nasdaq-earnings",
       "label": "Nasdaq (Earnings)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Earnings",
-      "tags": ["corporate-earnings", "media", "markets"],
+      "tags": [
+        "corporate-earnings",
+        "media",
+        "markets"
+      ],
       "weight": 0.7,
       "stale_hours": 48,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "dead_endpoint_timeout",
+      "disabled_at": "2026-06-23T02:23:57.285Z"
     },
     {
       "id": "nasdaq-commodities",
       "label": "Nasdaq (Commodities)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Commodities",
-      "tags": ["energy", "commodities", "media", "markets"],
+      "tags": [
+        "energy",
+        "commodities",
+        "media",
+        "markets"
+      ],
       "weight": 0.7,
       "stale_hours": 48,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "auto_stale",
+      "disabled_at": "2026-04-04T21:14:01.859Z"
     },
     {
       "id": "nasdaq-markets",
       "label": "Nasdaq (Markets)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Markets",
-      "tags": ["markets", "media"],
+      "tags": [
+        "markets",
+        "media"
+      ],
       "weight": 0.7,
       "stale_hours": 48,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "dead_endpoint_timeout",
+      "disabled_at": "2026-06-23T02:23:57.285Z"
     },
     {
       "id": "nasdaq-stocks",
       "label": "Nasdaq (Stocks)",
       "rss_url": "https://www.nasdaq.com/feed/rssoutbound?category=Stocks",
-      "tags": ["corporate-earnings", "media", "markets"],
+      "tags": [
+        "corporate-earnings",
+        "media",
+        "markets"
+      ],
       "weight": 0.6,
       "stale_hours": 48,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "dead_endpoint_timeout",
+      "disabled_at": "2026-06-23T02:23:57.285Z"
     },
     {
       "id": "marketwatch-topstories",
       "label": "MarketWatch (Top Stories)",
       "rss_url": "http://feeds.marketwatch.com/marketwatch/topstories/",
-      "tags": ["markets", "headlines", "media"],
+      "tags": [
+        "markets",
+        "headlines",
+        "media"
+      ],
       "weight": 0.7,
       "stale_hours": 24,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "auto_stale",
+      "disabled_at": "2026-04-04T21:14:01.859Z"
     },
     {
       "id": "investing-stocks",
       "label": "Investing.com (Stock Market News)",
       "rss_url": "https://www.investing.com/rss/news_25.rss",
-      "tags": ["markets", "media", "stocks"],
+      "tags": [
+        "markets",
+        "media",
+        "stocks"
+      ],
       "weight": 0.7,
       "stale_hours": 24,
       "enabled": true
@@ -97,7 +150,11 @@
       "id": "investing-indicators",
       "label": "Investing.com (Economic Indicators)",
       "rss_url": "https://www.investing.com/rss/news_95.rss",
-      "tags": ["macro", "economic-indicators", "media"],
+      "tags": [
+        "macro",
+        "economic-indicators",
+        "media"
+      ],
       "weight": 0.7,
       "stale_hours": 48,
       "enabled": true
@@ -106,7 +163,11 @@
       "id": "investing-economy",
       "label": "Investing.com (Economy News)",
       "rss_url": "https://www.investing.com/rss/news_14.rss",
-      "tags": ["macro", "economy", "media"],
+      "tags": [
+        "macro",
+        "economy",
+        "media"
+      ],
       "weight": 0.7,
       "stale_hours": 48,
       "enabled": true
@@ -115,8 +176,37 @@
       "id": "investing-sec-filings",
       "label": "Investing.com (SEC Filings)",
       "rss_url": "https://www.investing.com/rss/news_1064.rss",
-      "tags": ["filings", "corporate-earnings", "media"],
+      "tags": [
+        "filings",
+        "corporate-earnings",
+        "media"
+      ],
       "weight": 0.6,
+      "stale_hours": 48,
+      "enabled": true
+    },
+    {
+      "id": "cnbc-markets",
+      "label": "CNBC (Markets)",
+      "rss_url": "https://www.cnbc.com/id/20910258/device/rss/rss.html",
+      "tags": [
+        "markets",
+        "media"
+      ],
+      "weight": 0.7,
+      "stale_hours": 48,
+      "enabled": true
+    },
+    {
+      "id": "yahoo-finance",
+      "label": "Yahoo Finance (News)",
+      "rss_url": "https://finance.yahoo.com/news/rssindex",
+      "tags": [
+        "markets",
+        "stocks",
+        "media"
+      ],
+      "weight": 0.7,
       "stale_hours": 48,
       "enabled": true
     }
