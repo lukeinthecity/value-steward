@@ -37,6 +37,7 @@ export async function runValueSteward({
   let numPositions = 0;
   let longMarketValue = 0;
   let shortMarketValue = 0;
+  let positionsError = null;
 
   try {
     const positions = await alpaca.getPositions();
@@ -69,7 +70,8 @@ export async function runValueSteward({
       }
     }
   } catch (err) {
-    console.error("Error fetching positions:", err?.message ?? err);
+    positionsError = err?.message ?? String(err);
+    console.error("Error fetching positions:", positionsError);
   }
 
   const isMarketOpen = typeof marketOpen === "boolean" ? marketOpen : null;
@@ -122,6 +124,7 @@ export async function runValueSteward({
     netExposure,
     maxPositionWeight,
     positions: positionsSummary,
+    positionsError,
     isMarketOpen,
     nextOpen,
     nextClose,

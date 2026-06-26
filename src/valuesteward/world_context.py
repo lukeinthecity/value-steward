@@ -219,6 +219,12 @@ def load_latest_world_context(
         lines = chunk.strip().splitlines()
         if not lines:
             return None
+
+        # When we seeked mid-file, the first line is likely truncated — drop it.
+        if read_size < file_size:
+            lines = lines[1:]
+        if not lines:
+            return None
             
         # Search backwards for the first valid JSON entry with generated_at
         for line in reversed(lines):

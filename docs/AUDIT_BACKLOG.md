@@ -23,18 +23,19 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | `_parse_hhmm()` for early-close time | `execution_engine.py` | ⏳ | Bundle with the above |
 | Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ⏳ | Signal path — review (low risk, low value) |
 | TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ⏳ | Concurrency robustness — verify the current lock mechanism first |
-| `exec()` shell → `execFile()` (cmd-injection hardening) | `makeMacroDigest.js` | ⏸ | `WORLD_LLM_CMD` is operator-set **and currently unset** — not a live vector; do as hygiene |
-| Remove dead `internetOk`/`brokerOk` params (kept `canTrade` null) | `tradeGate.js`, `tick.js` | ⏳ | Still present in `main`; verify gate behavior before removing |
-| `await` promisified `db.close()`; guard NaN cache-age | `shadowObserver.js` | ⏳ | Verify against current code |
-| Surface positions-fetch error as `positionsError` | `runValueSteward.js` | ⏳ | Verify |
-| Validate fallback context before writing; null-guard hydrated entries | `buildWorldContext.js` | ⏳ | `main` already has layered validation fallbacks — verify if still needed |
-| Skip partial first line when tail-reading large JSONL | `world_context.py` | ⏳ | Verify |
-| Run all EOD steps regardless of intermediate failure | `eodRun.js` | ⏳ | Resilience — verify current step structure |
+| `exec()` shell → `execFile()` (cmd-injection hardening) + null-guard | `makeMacroDigest.js` | ✅ | Applied (batch 2) |
+| Remove dead `internetOk`/`brokerOk` params (`canTrade` resolves null) | `tradeGate.js`, `tick.js` | ⏳ | Touches the can-trade resolution — defer to hot-path review |
+| `await` promisified `db.close()`; guard NaN cache-age | `shadowObserver.js` | ✅ | Applied (batch 2) |
+| Surface positions-fetch error as `positionsError` | `runValueSteward.js` | ✅ | Applied (batch 2) |
+| Validate fallback context before writing; null-guard hydrated entries | `buildWorldContext.js` | ⏸ | `main` already has layered validation fallbacks — likely superseded |
+| Skip partial first line when tail-reading large JSONL | `world_context.py` | ✅ | Applied (batch 2) |
+| Run all EOD steps regardless of intermediate failure | `eodRun.js` | ✅ | Applied (batch 2) |
 
 ## Next batches
-The ⏳ items are real but split into two risk tiers:
-- **Low-risk / infra** (notifications-style): `world_context`, `eodRun`, `shadowObserver`, `runValueSteward`, `makeMacroDigest`, `steward_state` lock — can be a second salvage batch.
-- **Trading hot path**: `execution_engine`, `signal_engine`, `tradeGate` — each warrants its own reviewed, test-backed PR (changes execution/scoring/gating behavior).
+- ✅ **Batch 1** (PR #38): `config.py`, `runtime_integrity.py`, `notifications.py`, `cli.py`.
+- ✅ **Batch 2**: `world_context.py`, `eodRun.js`, `shadowObserver.js`, `runValueSteward.js`, `makeMacroDigest.js`.
+- ⏳ **State-lock race** (`steward_state.py` + `stewardState.js`): its own PR — additive PID-ownership check, but touches the core state lock, so isolate + test.
+- ⏳ **Trading hot path** (`execution_engine`, `signal_engine`, `tradeGate`/`tick`): each warrants its own reviewed, test-backed PR (changes execution / scoring / can-trade behavior).
 
 Once an item lands in `main`, mark it ✅. When all are resolved, retire
 `claude/confident-clarke-a3cd99`.
