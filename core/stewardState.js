@@ -7,6 +7,7 @@ import {
   renameSync,
   rmdirSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "fs";
 import path from "path";
@@ -18,6 +19,21 @@ const LEGACY_AGENT_STATE_PATH = path.join(process.cwd(), "data", "agent-state.js
 const LOCK_TIMEOUT_MS = Number(process.env.VS_STATE_LOCK_TIMEOUT_MS ?? 5000);
 const LOCK_STALE_MS = Number(process.env.VS_STATE_LOCK_STALE_MS ?? 15000);
 const LOCK_RETRY_MS = Number(process.env.VS_STATE_LOCK_RETRY_MS ?? 25);
+const LOCK_PID_FILE = path.join(STATE_LOCK_PATH, "owner.pid");
+
+// Best-effort liveness check for a lock-owner PID. Guards pid<=0 because
+// process.kill(0/negative, ...) targets process groups (would read as alive).
+// Exported for adversarial testing; the eviction algorithm that uses it is the
+// same one validated in Python's tests/test_state_lock.py.
+export function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err?.code === "EPERM"; // EPERM = exists (not ours); ESRCH = gone.
+  }
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -145,14 +161,38 @@ async function acquireLock() {
   while (Date.now() <= deadline) {
     try {
       await fs.mkdir(STATE_LOCK_PATH);
+      await fs.writeFile(LOCK_PID_FILE, String(process.pid));
       return;
     } catch (err) {
       if (err?.code !== "EEXIST") throw err;
       try {
         const stats = await fs.stat(STATE_LOCK_PATH);
         if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
-          await fs.rmdir(STATE_LOCK_PATH);
-          continue;
+          // Only evict a stale-looking lock if its owner is gone — never steal
+          // it from a live process. Missing/corrupt PID counts as stale.
+          let ownerAlive = false;
+          try {
+            const pid = parseInt(
+              (await fs.readFile(LOCK_PID_FILE, "utf8")).trim(),
+              10
+            );
+            ownerAlive = isPidAlive(pid);
+          } catch {
+            ownerAlive = false;
+          }
+          if (!ownerAlive) {
+            try {
+              await fs.unlink(LOCK_PID_FILE);
+            } catch {
+              /* ignore */
+            }
+            try {
+              await fs.rmdir(STATE_LOCK_PATH);
+            } catch {
+              /* ignore */
+            }
+            continue;
+          }
         }
       } catch {
         // Another process may have released the lock already.
@@ -168,14 +208,34 @@ function acquireLockSync() {
   while (Date.now() <= deadline) {
     try {
       mkdirSync(STATE_LOCK_PATH);
+      writeFileSync(LOCK_PID_FILE, String(process.pid));
       return;
     } catch (err) {
       if (err?.code !== "EEXIST") throw err;
       try {
         const stats = statSync(STATE_LOCK_PATH);
         if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
-          rmdirSync(STATE_LOCK_PATH);
-          continue;
+          // Only evict a stale-looking lock if its owner is gone.
+          let ownerAlive = false;
+          try {
+            const pid = parseInt(readFileSync(LOCK_PID_FILE, "utf8").trim(), 10);
+            ownerAlive = isPidAlive(pid);
+          } catch {
+            ownerAlive = false;
+          }
+          if (!ownerAlive) {
+            try {
+              unlinkSync(LOCK_PID_FILE);
+            } catch {
+              /* ignore */
+            }
+            try {
+              rmdirSync(STATE_LOCK_PATH);
+            } catch {
+              /* ignore */
+            }
+            continue;
+          }
         }
       } catch {
         // Another process may have released the lock already.
@@ -188,6 +248,11 @@ function acquireLockSync() {
 
 async function releaseLock() {
   try {
+    await fs.unlink(LOCK_PID_FILE);
+  } catch {
+    // PID file may already be gone.
+  }
+  try {
     await fs.rmdir(STATE_LOCK_PATH);
   } catch {
     // Lock may already be gone after a stale-lock cleanup.
@@ -195,6 +260,11 @@ async function releaseLock() {
 }
 
 function releaseLockSync() {
+  try {
+    unlinkSync(LOCK_PID_FILE);
+  } catch {
+    // PID file may already be gone.
+  }
   try {
     rmdirSync(STATE_LOCK_PATH);
   } catch {
