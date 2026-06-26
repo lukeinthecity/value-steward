@@ -180,6 +180,7 @@ async function getHistoricalPerformance() {
   
   const db = new sqlite3.Database(DB_PATH);
   const all = promisify(db.all).bind(db);
+  const close = promisify(db.close).bind(db);
 
   try {
     const actions = await all(`
@@ -196,7 +197,7 @@ async function getHistoricalPerformance() {
       ORDER BY timestamp DESC LIMIT 3
     `);
 
-    db.close();
+    await close();
 
     let digest = "Internal Audit (Last 7 Days):\n";
     digest += actions.map(a => `- ${a.action_type}: ${a.count}`).join("\n");
@@ -206,7 +207,7 @@ async function getHistoricalPerformance() {
     }
     return digest;
   } catch (err) {
-    db.close();
+    await close().catch(() => {});
     return "Could not retrieve internal audit data.";
   }
 }
@@ -342,7 +343,8 @@ export async function observeWorld({ baseContext }) {
   
   // 15-minute success cache
   if (latest && latest.scout_score !== null && latest.scout_generated_at) {
-    const ageMs = Date.now() - Date.parse(latest.scout_generated_at);
+    const generatedAt = Date.parse(latest.scout_generated_at);
+    const ageMs = Number.isFinite(generatedAt) ? Date.now() - generatedAt : Infinity;
     if (ageMs / (1000 * 60) < 15) {
       console.log(`[scout] Using cached successful analysis (age=${(ageMs/60000).toFixed(1)}m)`);
       return { ...extractCachedScoutFields(latest), scout_cached: true };

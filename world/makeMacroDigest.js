@@ -1,11 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 
 import { validateContext } from "./contextUtils.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const SCHEMA_PATH = path.join(process.cwd(), "world", "schema.worldContext.json");
 const DEFAULT_TIMEOUT_MS = 15000;
 const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -38,7 +38,7 @@ function buildHydratedDocs(entries) {
 
 export async function makeMacroDigest({ baseContext, hydratedEntries }) {
   const schema = loadSchema();
-  const recent = filterRecent(hydratedEntries);
+  const recent = filterRecent(Array.isArray(hydratedEntries) ? hydratedEntries : []);
   const hydratedDocs = buildHydratedDocs(recent);
 
   const cmd = process.env.WORLD_LLM_CMD?.trim();
@@ -58,7 +58,9 @@ export async function makeMacroDigest({ baseContext, hydratedEntries }) {
   const timeoutMs = Number(process.env.WORLD_LLM_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 
   try {
-    const { stdout } = await execAsync(cmd, {
+    // Split into executable + args so WORLD_LLM_CMD isn't interpreted by a shell.
+    const [executable, ...args] = cmd.split(/\s+/);
+    const { stdout } = await execFileAsync(executable, args, {
       timeout: timeoutMs,
       maxBuffer: 5 * 1024 * 1024,
       input: JSON.stringify(prompt),

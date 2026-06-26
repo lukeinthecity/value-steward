@@ -79,19 +79,21 @@ async function main() {
   ];
 
   const stopSpinner = startSpinner("eod runbook", { total: steps.length });
+  let exitCode = 0;
   for (let i = 0; i < steps.length; i += 1) {
     const step = steps[i];
     const result = await runCommand(step.label, step.cmd, step.args, step.env);
     stopSpinner.update(i + 1);
     if (!result.ok) {
-      console.error(`[eod] step failed: ${step.label}`);
-      // Continue through failure for email if possible, or exit
-      // We exit to ensure we fix the root cause.
-      stopSpinner("failed");
-      process.exit(result.code ?? 1);
+      // Continue through failures so a broken early step never suppresses the
+      // EOD email (the last step). Surface a non-zero exit at the end so a
+      // genuine failure still trips the health alert.
+      console.error(`[eod] step failed: ${step.label} (code=${result.code ?? 1})`);
+      exitCode = result.code ?? 1;
     }
   }
-  stopSpinner("complete");
+  stopSpinner(exitCode === 0 ? "complete" : "completed with errors");
+  if (exitCode !== 0) process.exit(exitCode);
 }
 
 main().catch((err) => {
