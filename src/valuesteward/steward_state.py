@@ -119,19 +119,57 @@ def _write_state_unlocked(state: dict[str, Any]) -> None:
     os.replace(tmp_path, STATE_PATH)
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Best-effort liveness check for a lock-owner PID (POSIX).
+
+    Guards ``pid <= 0`` because ``os.kill(0, 0)`` / negatives signal whole
+    process groups, which would falsely read as 'alive'.
+    """
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # Exists but owned by another user — still alive.
+    except OSError:
+        return False
+
+
 @contextmanager
 def _state_lock():
     deadline = time.monotonic() + LOCK_TIMEOUT_SEC
+    pid_file = STATE_LOCK_PATH / "owner.pid"
     while True:
         try:
             STATE_LOCK_PATH.mkdir()
+            pid_file.write_text(str(os.getpid()), encoding="utf-8")
             break
         except FileExistsError:
             try:
                 age = time.time() - STATE_LOCK_PATH.stat().st_mtime
                 if age > LOCK_STALE_SEC:
-                    STATE_LOCK_PATH.rmdir()
-                    continue
+                    # Only evict a stale-looking lock if its owner is gone —
+                    # never steal it from a live process (the TOCTOU race a
+                    # plain age check is vulnerable to). Missing/corrupt PID is
+                    # treated as stale (evictable).
+                    try:
+                        owner_pid = int(pid_file.read_text(encoding="utf-8").strip())
+                        owner_alive = _is_pid_alive(owner_pid)
+                    except (FileNotFoundError, ValueError, OSError):
+                        owner_alive = False
+                    if not owner_alive:
+                        try:
+                            pid_file.unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                        try:
+                            STATE_LOCK_PATH.rmdir()
+                        except OSError:
+                            pass
+                        continue
             except OSError:
                 pass
             if time.monotonic() >= deadline:
@@ -140,6 +178,10 @@ def _state_lock():
     try:
         yield
     finally:
+        try:
+            pid_file.unlink(missing_ok=True)
+        except OSError:
+            pass
         try:
             STATE_LOCK_PATH.rmdir()
         except OSError:

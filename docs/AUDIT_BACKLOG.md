@@ -22,7 +22,7 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | `cancel_open_orders()` called inside the fill loop (per-iteration) | `execution_engine.py` | ⏳ | **Trading hot path** — real correctness fix, deserves its own reviewed+tested PR |
 | `_parse_hhmm()` for early-close time | `execution_engine.py` | ⏳ | Bundle with the above |
 | Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ⏳ | Signal path — review (low risk, low value) |
-| TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ⏳ | Concurrency robustness — verify the current lock mechanism first |
+| TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ✅ | Applied + **hardened** beyond `b32a76f` (pid≤0 guard, corrupt-PID still evictable); 6 adversarial Python tests + JS `isPidAlive` test |
 | `exec()` shell → `execFile()` (cmd-injection hardening) + null-guard | `makeMacroDigest.js` | ✅ | Applied (batch 2) |
 | Remove dead `internetOk`/`brokerOk` params (`canTrade` resolves null) | `tradeGate.js`, `tick.js` | ⏳ | Touches the can-trade resolution — defer to hot-path review |
 | `await` promisified `db.close()`; guard NaN cache-age | `shadowObserver.js` | ✅ | Applied (batch 2) |
@@ -34,8 +34,8 @@ present, needs review) · ⏸ low-value / not currently exercised.
 ## Next batches
 - ✅ **Batch 1** (PR #38): `config.py`, `runtime_integrity.py`, `notifications.py`, `cli.py`.
 - ✅ **Batch 2**: `world_context.py`, `eodRun.js`, `shadowObserver.js`, `runValueSteward.js`, `makeMacroDigest.js`.
-- ⏳ **State-lock race** (`steward_state.py` + `stewardState.js`): its own PR — additive PID-ownership check, but touches the core state lock, so isolate + test.
-- ⏳ **Trading hot path** (`execution_engine`, `signal_engine`, `tradeGate`/`tick`): each warrants its own reviewed, test-backed PR (changes execution / scoring / can-trade behavior).
+- ✅ **State-lock race** (`steward_state.py` + `stewardState.js`): PID-ownership eviction, hardened + adversarially tested.
+- ⏳ **Trading hot path** (`execution_engine`, `signal_engine`, `tradeGate`/`tick`): each warrants its own reviewed, test-backed PR (changes execution / scoring / can-trade behavior). This is the only tier left before retiring `claude/confident-clarke-a3cd99`.
 
 Once an item lands in `main`, mark it ✅. When all are resolved, retire
 `claude/confident-clarke-a3cd99`.
