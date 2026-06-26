@@ -49,7 +49,6 @@ def main() -> None:
 def status() -> None:
     """Print current portfolio and system status."""
 
-    from valuesteward.steward_state import load_steward_state
     state = load_steward_state()
     
     repo = PortfolioRepository()
@@ -1215,7 +1214,7 @@ def patterns(
     trade_episodes = [ep for ep in episodes if ep.has_buy or ep.has_sell]
     scored_episodes = [ep for ep in trade_episodes if ep.realized_pnl is not None]
     print(
-        f"  Trade episodes (BUY or SELL): {len(trade_episodes)}"
+        f"  Trade episodes (BUY or SELL): {len(trade_episodes)}\n"
         f"  With PnL data: {len(scored_episodes)}"
     )
 

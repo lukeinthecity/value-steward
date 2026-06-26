@@ -50,12 +50,14 @@ def collect_runtime_integrity() -> dict[str, Any]:
             [git_bin, "rev-parse", "HEAD"],
             cwd=root,
             text=True,
+            timeout=10,
         ).strip()
         git_dirty = (
             subprocess.run(  # nosec B603
                 [git_bin, "diff", "--quiet"],
                 cwd=root,
                 check=False,
+                timeout=10,
             ).returncode
             != 0
         )
