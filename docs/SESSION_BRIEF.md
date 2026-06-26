@@ -8,11 +8,11 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-06-22 |
+| Last updated | 2026-06-25 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Phase 1 RUN | **Run 2** (Run 1 archived 2026-05-29 after cap-breach-sell logic added mid-experiment) |
-| Phase 1 start | **2026-06-01 (Monday)** — Day 15 of 60 as of 2026-06-22 |
+| Phase 1 start | **2026-06-01 (Monday)** — Day 15 of 60 as of 2026-06-25 |
 | Phase 1 end (target) | 2026-07-31 |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
 | Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min, **two-way (cap_breach_sell active)** |
@@ -30,7 +30,7 @@
 | Week ending | BUYs | Blocks | Notes |
 |---|---|---|---|
 | 2026-06-07 | 1 (AFBI $7.99) | 19 (15 rel60, 3 rel20, 1 macro_stressed) | Day 5 of 60. **All 5 weekdays ran — no outages.** First trade of Run 2: AFBI Fri 6/5. Macro went `stressed` on 6/3 → ASRT correctly blocked (UNKNOWN sector). rel60 again the dominant gate (15/19), same as Run 1. OOS rolling_n=0 (earliest 5d windows don't close until ~6/8). No activation triggers fired (champion-challenger needs 20+ OOS samples; 1 trade ≠ "0 trades for 2wk" so exploration stays off). No action taken — clean week. |
-| 2026-06-22 | 0 | 13 (all BUY_BLOCKED) | Day 15 of 60. Mon–Thu ran; **Fri 6/19 = Juneteenth, correctly skipped.** ⚠️ **OOS rolling Sharpe deteriorating: +0.54 (6/16) → +0.13 → −0.37 → −1.09 (6/22)**, policy v20→26; equity ~flat ($99,976), n=20 (tiny). Champion-challenger ENABLED, champion pinned 6/17 @ +0.131, 2 consecutive cycles below it → ~1 cycle from auto-revert. Per playbook: **documented + watching, no hand-tuning** (negative for *days*, not the 3-week bar). 0 BUYs ~2wk but exploration held OFF (don't add buys while OOS is negative). **Retired 3 dead Nasdaq RSS feeds** (nasdaq.com hangs/times out since 6/16); added CNBC Markets + Yahoo Finance + re-enabled investing-stocks (all fetch-verified, +105 items). Also this session: full silent-crash audit (PRs #31/#32/#33), ntfy push notifications shipped (#34/#35). |
+| 2026-06-22 | 0 | 13 (all BUY_BLOCKED) | Day 15 of 60. Mon–Thu ran; **Fri 6/19 = Juneteenth, correctly skipped.** ⚠️ **OOS rolling Sharpe deteriorating: +0.54 (6/16) → +0.13 → −0.37 → −1.09 (6/22)**, policy v20→26; equity ~flat ($99,976), n=20 (tiny). Champion-challenger ENABLED, champion pinned 6/17 @ +0.131, 2 consecutive cycles below it → ~1 cycle from auto-revert. Per playbook: **documented + watching, no hand-tuning** (negative for *days*, not the 3-week bar). 0 BUYs ~2wk → exploration held OFF on 6/22, then **reversed 6/25: enabled ε=0.05** (it's experiment-safe/separable, so it gathers data without contaminating the OOS measurement — see ML flags + Known items). **Retired 3 dead Nasdaq RSS feeds** (nasdaq.com hangs/times out since 6/16); added CNBC Markets + Yahoo Finance + re-enabled investing-stocks (all fetch-verified, +105 items). Also this session: full silent-crash audit (PRs #31/#32/#33), ntfy push notifications shipped (#34/#35). |
 
 ## Weekly review log (Phase 1 Run 1 — archived)
 
@@ -67,12 +67,13 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 | `VS_OOS_EVAL_ENABLED` | on | default | always (shadow logs to `data/oos-eval.jsonl`) |
 | `VS_CHAMPION_CHALLENGER_ENABLED` | off | **true (enabled 2026-06-17)** | enabled — 20+ OOS rows reached; champion pinned 6/17, now guarding against the OOS slide |
 | `VS_SCORE_GATE_THOMPSON_ENABLED` | off | default | **enable** after Phase 1 ends (defer to Tier 2 review) |
-| `VS_NEW_ENTRY_EXPLORATION_EPSILON` | 0.0 | default | **enable** at 0.05 after week 2 if 0 trades observed |
+| `VS_NEW_ENTRY_EXPLORATION_EPSILON` | 0.0 | **0.05 (enabled 2026-06-25)** | enabled — 0-trades-2wk criterion met (Day 15); probes score-gate near-misses (~1.425–1.50), half-size, tagged `BUY_EXPLORATION` (separable from policy OOS) |
 | `VS_ROTATION_SELL_ENABLED` | on | on | Buy-coupled rotation. Appreciation over the cap NEVER forces a sell (winners run). Only sells when a NEW candidate clears all gates but is blocked by cap headroom AND is stronger than the weakest holding — then exits that holding. Set `false` to disable (new buys just block at cap). |
 | `VS_ROTATION_MIN_SCORE_MARGIN` | 0.05 | default | Candidate must beat the weakest holding's signal score by this margin to trigger rotation (anti-churn / let-winners-run). Set 0 to rotate on any improvement. |
 
 ## Known open items
 
+- **Exploration enabled ε=0.05 (2026-06-25, Day 15)** — 0-trades-2wk activation criterion met. Experiment-safe (`BUY_EXPLORATION`-tagged → separable from policy OOS, unlike a cap/mode change). Caveat: the *dominant* block is **rel60** (positive-60d-momentum requirement), and exploration only probes *score* near-misses — so expect modest volume, not a flood (also a low-momentum tape). **Day-30 check:** did `BUY_EXPLORATION` picks beat the gate's blocks? → evidence to relax rel60 in Run 3. Bigger funnel levers (rel60 / cap / MEDIUM mode) stay frozen until then.
 - **⚠️ OOS Sharpe deteriorating (2026-06-22)** — rolling Sharpe +0.54 → −1.09 over 6/16–6/22 (n=20, equity flat). Champion-challenger enabled and ~1 cycle from auto-revert. **Watch; do not hand-tune** until the 3-week intervention bar or champion-challenger acts.
 - **Dead Nasdaq feeds retired (2026-06-22)** — nasdaq.com RSS (earnings/markets/stocks) times out since 6/16; disabled in `world/feeds.json`, replaced with CNBC Markets + Yahoo Finance + re-enabled investing-stocks (fetch-verified). `investing-sec-filings` borderline (Juneteenth/weekend lull) — recheck mid-week.
 - **2026-05-21 (Thu) missed** — machine power loss. No retroactive trades; one day of data lost.
