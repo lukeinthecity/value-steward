@@ -208,7 +208,7 @@ def load_latest_world_context(
     if file_size == 0:
         return None
 
-    # Institutional Optimization: Only read the last 128KB of the history file
+    # Only read the last 128KB of the history file
     # This prevents the bot from slowing down as the 60-day run progresses.
     read_size = min(file_size, 128 * 1024)
     try:

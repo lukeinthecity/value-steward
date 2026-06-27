@@ -22,9 +22,7 @@ def infer_world_tags(
     tags: List[str] = ["DEFAULT"]
     ctx = world_context if isinstance(world_context, dict) else {}
 
-    # ------------------------------------------------------------------
     # 1. Macro view
-    # ------------------------------------------------------------------
     regime_view = ctx.get("final_regime")
     macro_view = ctx.get("macro_view")
 
@@ -64,9 +62,7 @@ def infer_world_tags(
         if isinstance(regime_view, dict) and regime_view.get("divergence") is True:
             tags.append("REGIME_DIVERGENT")
 
-    # ------------------------------------------------------------------
     # 2. Individual signal tags (from JS rule-based pipeline)
-    # ------------------------------------------------------------------
     raw_tags = ctx.get("tags")
     if isinstance(raw_tags, dict):
         rate_hawk = raw_tags.get("rate_hawkishness")
@@ -97,16 +93,12 @@ def infer_world_tags(
         if isinstance(macro_risk, (int, float)) and macro_risk >= 0.5:
             tags.append("MACRO_RISK_HIGH")
 
-    # ------------------------------------------------------------------
     # 3. Session slot
-    # ------------------------------------------------------------------
     slot = ctx.get("slot")
     if slot and isinstance(slot, str):
         tags.append(f"SLOT_{slot.strip().upper()}")
 
-    # ------------------------------------------------------------------
     # 4. Portfolio state
-    # ------------------------------------------------------------------
     exposure = getattr(snapshot, "risk_exposure_pct", None)
     if isinstance(exposure, (int, float)):
         if exposure <= 0:

@@ -109,12 +109,11 @@ class AlpacaClient:
                 continue
             if getattr(asset, "asset_class", "").lower() != "us_equity":
                 continue
-            # --- Elite Quant: Fractional Check ---
+            # Fractional Check
             if getattr(asset, "fractionable", False) is not True:
                 continue
             if _is_noisy_asset(asset):
                 continue
-            # --------------------------------------
             symbol = getattr(asset, "symbol", None)
             if symbol:
                 symbols.append(symbol)
@@ -180,7 +179,7 @@ class AlpacaClient:
         
         if count > 0:
             logger.info(f"[EXEC] Sent cancel request for {count} orders ({symbol or 'all'}).")
-            # --- Professional Handshake: Wait for cancellation to propagate ---
+            # Wait for cancellation to propagate
             time.sleep(2.0) 
         return count
 

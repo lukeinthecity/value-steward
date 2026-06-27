@@ -272,7 +272,6 @@ async function main() {
     // --- Phase 1.6: Shadow Observer (Scout) ---
     const scoutResult = await observeWorld({ baseContext: contextToUse });
     contextToUse = { ...contextToUse, ...scoutResult };
-    // ------------------------------------------
 
     contextToUse.final_regime = fuseMacroRegime({
       macroView: contextToUse.macro_view,
