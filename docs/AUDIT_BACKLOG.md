@@ -19,8 +19,8 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | Git subprocess calls can hang the tick | `runtime_integrity.py` | 🔧 | Added `timeout=10` to both calls |
 | Node/script path fragile under cron | `notifications.py` | 🔧 | `shutil.which("node")` + absolute script path + `cwd` |
 | Duplicate `load_steward_state` import; missing `\n` in `patterns` output | `cli.py` | 🔧 | Trivial cleanups |
-| `cancel_open_orders()` called inside the fill loop (per-iteration) | `execution_engine.py` | ⏳ | **Trading hot path** — real correctness fix, deserves its own reviewed+tested PR |
-| `_parse_hhmm()` for early-close time | `execution_engine.py` | ⏳ | Bundle with the above |
+| `cancel_open_orders()` called inside the fill loop (per-iteration) | `execution_engine.py` | ✅ | Applied — **efficiency** fix (same outcome, fewer API calls): cancel once per symbol via `has_open_order` on both single + multi paths. 2 tests, verified to fail against pre-fix (4 cancels → 2) |
+| `_parse_hhmm()` for early-close time | `execution_engine.py` | ⏸ | Superseded — `main` already adopted `_parse_hhmm` for the early-close path |
 | Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ⏳ | Signal path — review (low risk, low value) |
 | TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ✅ | Applied + **hardened** beyond `b32a76f` (pid≤0 guard, corrupt-PID still evictable); 6 adversarial Python tests + JS `isPidAlive` test |
 | `exec()` shell → `execFile()` (cmd-injection hardening) + null-guard | `makeMacroDigest.js` | ✅ | Applied (batch 2) |
@@ -35,7 +35,8 @@ present, needs review) · ⏸ low-value / not currently exercised.
 - ✅ **Batch 1** (PR #38): `config.py`, `runtime_integrity.py`, `notifications.py`, `cli.py`.
 - ✅ **Batch 2**: `world_context.py`, `eodRun.js`, `shadowObserver.js`, `runValueSteward.js`, `makeMacroDigest.js`.
 - ✅ **State-lock race** (`steward_state.py` + `stewardState.js`): PID-ownership eviction, hardened + adversarially tested.
-- ⏳ **Trading hot path** (`execution_engine`, `signal_engine`, `tradeGate`/`tick`): each warrants its own reviewed, test-backed PR (changes execution / scoring / can-trade behavior). This is the only tier left before retiring `claude/confident-clarke-a3cd99`.
+- ✅ **`execution_engine`** cancel-loop: efficiency fix, both paths, behavior-preservation tests.
+- ⏳ **Remaining hot path** (`signal_engine` dead stub, `tradeGate`/`tick` dead params): each its own reviewed PR. These are the last items before retiring `claude/confident-clarke-a3cd99`.
 
 Once an item lands in `main`, mark it ✅. When all are resolved, retire
 `claude/confident-clarke-a3cd99`.
