@@ -31,12 +31,16 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | Skip partial first line when tail-reading large JSONL | `world_context.py` | ✅ | Applied (batch 2) |
 | Run all EOD steps regardless of intermediate failure | `eodRun.js` | ✅ | Applied (batch 2) |
 
-## Next batches
-- ✅ **Batch 1** (PR #38): `config.py`, `runtime_integrity.py`, `notifications.py`, `cli.py`.
-- ✅ **Batch 2**: `world_context.py`, `eodRun.js`, `shadowObserver.js`, `runValueSteward.js`, `makeMacroDigest.js`.
-- ✅ **State-lock race** (`steward_state.py` + `stewardState.js`): PID-ownership eviction, hardened + adversarially tested.
-- ✅ **`execution_engine`** cancel-loop: efficiency fix, both paths, behavior-preservation tests.
-- ⏳ **Remaining hot path** (`signal_engine` dead stub, `tradeGate`/`tick` dead params): each its own reviewed PR. These are the last items before retiring `claude/confident-clarke-a3cd99`.
+## Salvage PRs (all merged)
+- **Batch 1** (#38): `config.py`, `runtime_integrity.py`, `notifications.py`, `cli.py`.
+- **Batch 2** (#39): `world_context.py`, `eodRun.js`, `shadowObserver.js`, `runValueSteward.js`, `makeMacroDigest.js`.
+- **State-lock race** (#40): PID-ownership eviction, hardened beyond `b32a76f` + adversarial tests.
+- **`execution_engine`** cancel-loop (#41): efficiency fix, both paths, behavior-preservation tests.
+- **`signal_engine`** dead-stub (#42) · **`tradeGate`/`tick`** dead-params (#43).
 
-Once an item lands in `main`, mark it ✅. When all are resolved, retire
-`claude/confident-clarke-a3cd99`.
+## Unity reached (2026-06-26)
+`b32a76f`'s only unique commit touched 20 files; every one is inventoried above and
+resolved (applied / redone / deliberately superseded). `main` is a strict superset —
+all of `b32a76f`'s fixes plus the scoring / ML / push features it never had. The
+orphaned branch `claude/confident-clarke-a3cd99` has been retired. **git == running
+== every valid fix landed.**
