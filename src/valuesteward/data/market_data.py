@@ -29,7 +29,7 @@ class MarketDataClient:
     ) -> Dict[str, List]:
         """Return daily bars for each symbol over the lookback window."""
 
-        # Elite Quant: Alpaca Free Tier requires a 15-min delay for SIP data.
+        # Alpaca Free Tier requires a 15-min delay for SIP data.
         # We use 16 mins to be safe.
         end = datetime.now(timezone.utc) - timedelta(minutes=16)
         start = end - timedelta(days=lookback_days)

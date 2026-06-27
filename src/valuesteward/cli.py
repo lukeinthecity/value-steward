@@ -515,7 +515,7 @@ def tick() -> None:
     # Then log it
     intent_logger.log_intent(intent)
     
-    # --- Professional Hardening: State Update ---
+    # State Update
     from valuesteward.steward_state import update_steward_state
     run_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     update_steward_state(
@@ -524,9 +524,8 @@ def tick() -> None:
             "last_run_at": run_at,
         }
     )
-    # --------------------------------------------
     
-    # --- Professional Hardening: SQLite Sync ---
+    # SQLite Sync
     try:
         from valuesteward.data.db_manager import DatabaseManager
         db_mgr = DatabaseManager()
@@ -542,7 +541,6 @@ def tick() -> None:
             db_mgr.sync_world_context(world_context)
     except Exception as exc:
         print(f"[DB-WARN] SQLite sync failed: {exc}")
-    # ------------------------------------------
 
     print("Logged intent to logs/intent_log.jsonl")
     print(f"Memory now contains {len(memory_engine.get_all_intents())} intents.")

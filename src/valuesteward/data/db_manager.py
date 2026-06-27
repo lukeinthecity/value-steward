@@ -19,7 +19,7 @@ class DatabaseManager:
     def _get_connection(self):
         """Returns a connection with WAL mode enabled for concurrent performance."""
         conn = sqlite3.connect(self.db_path, timeout=10) # Wait up to 10s if locked
-        conn.execute("PRAGMA journal_mode=WAL") # Institutional standard for concurrency
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 

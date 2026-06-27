@@ -251,7 +251,7 @@ class ExecutionEngine:
             logger.info("[EXEC] Trading disabled in state.")
             return
 
-        # --- Professional Hardening: Execution Window Guard ---
+        # Execution Window Guard
         if intent.action_type in {"BUY", "SELL"} or intent.actions:
             if not self.is_in_execution_window():
                 logger.warning(
@@ -259,16 +259,14 @@ class ExecutionEngine:
                     "outside the configured execution window before market close."
                 )
                 return
-        # ------------------------------------------------------
 
-        # --- Professional Hardening: Equity Guard ---
+        # Equity Guard
         if snapshot.equity <= 0:
             logger.error(
                 f"[EXEC] Total Equity is zero or negative (${snapshot.equity:,.2f}). "
                 "Aborting execution."
             )
             return
-        # --------------------------------------------
 
         breaker_ok, breaker_msg = self.check_circuit_breaker(snapshot)
         if not breaker_ok:
@@ -278,7 +276,6 @@ class ExecutionEngine:
         open_orders = self.alpaca_client.get_open_orders()
         sandbox_cap = self.settings.max_effective_capital_dollars
 
-        # --- MULTI ACTION BLOCK ---
         if intent.actions:
             executed = 0
             in_flight_deployed = _position_market_value(snapshot)
@@ -365,7 +362,6 @@ class ExecutionEngine:
                 self._record_execution("MULTI", None, executed)
             return
 
-        # --- SINGLE ACTION BLOCK ---
         if intent.action_type in {"BUY", "SELL"}:
             intent_symbol = intent.symbol
             if not intent_symbol:

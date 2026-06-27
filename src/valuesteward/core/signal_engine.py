@@ -196,7 +196,7 @@ class SignalEngine:
         today = datetime.now(timezone.utc).date()
         diff = (today - lb_date).days
         
-        # --- Professional Hardening: Holiday Tolerance ---
+        # Holiday Tolerance
         # Allow up to 4 days for 3-day weekends/holidays
         allowed = max(4, self.settings.max_signal_age_days)
         if today.weekday() == 0: # Monday
@@ -310,7 +310,7 @@ class SignalEngine:
                 peak = max(closes)
                 dd = (peak - last_close) / peak if peak != 0 else 0.0
 
-                # --- Elite Quant: Risk-Adjusted Momentum ---
+                # Risk-Adjusted Momentum
                 vol_5 = statistics.pstdev(rets[-5:]) if len(rets) >= 5 else 0.01
                 vol_20 = statistics.pstdev(rets[-20:]) if len(rets) >= 20 else 0.01
                 vol_60 = statistics.pstdev(rets[-60:]) if len(rets) >= 60 else 0.01
@@ -327,7 +327,6 @@ class SignalEngine:
                     + w_rel_20 * rel_20 
                     + w_rel_60 * rel_60
                 )
-                # -------------------------------------------
                 
                 signals.append(SymbolSignal(
                     symbol=symbol, last_close=last_close, day_return=day_ret, 

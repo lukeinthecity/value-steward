@@ -599,7 +599,7 @@ class DecisionEngine:
         buffer: float
     ) -> tuple[bool, str | None]:
         macro_score = self._macro_score(world_context)
-        # Professional Calibration: 0.80 is a strong signal in the new scoring engine.
+        # 0.80 is a strong signal in the new scoring engine.
         if signal and macro_score is not None and macro_score <= 0.3 and signal.score >= 0.80:
             if current <= target + buffer * 1.5:
                 return False, f"hold_winner_macro={macro_score:.2f}_score={signal.score:.4f}"
@@ -659,7 +659,7 @@ class DecisionEngine:
 
         if self.signal_engine:
             signal_result = self.signal_engine.build_signals()
-            # Elite Quant: Signal Integrity Check
+            # Signal Integrity Check
             if not signal_result or not signal_result.signals:
                 logger.warning(
                     "[DECISION] Signal build returned zero signals. "
@@ -678,13 +678,12 @@ class DecisionEngine:
         if selected_signal:
             self.sector_map.resolve([selected_signal.symbol])
 
-        # --- Elite Quant: Risk-Off Detection ---
+        # Risk-Off Detection
         macro_label = self._macro_label(world_context)
         risk_off = macro_label in {"stressed", "crisis-prone"}
         risk_off_reason = f"Macro Regime: {macro_label}" if risk_off else None
-        # --------------------------------------
 
-        # --- Elite Quant: Asset-Level Vol-Stop (Panic Exit) ---
+        # Asset-Level Vol-Stop (Panic Exit)
         if self.signal_engine and signal_result:
             for pos in snapshot.positions:
                 sig = signal_result.by_symbol.get(pos.symbol)
@@ -707,7 +706,6 @@ class DecisionEngine:
                             f"exceeding 2.0 SD limit ({sig.volatility:.2%})."
                         )
                     ), signal_result
-        # ------------------------------------------------------
 
         # NOTE: appreciation over the cap no longer forces a sell — winners
         # are allowed to run above $20. The only sell-to-make-room path is
@@ -836,7 +834,7 @@ class DecisionEngine:
                     **gate_meta # type: ignore[arg-type]
                 ), signal_result
 
-            # --- Elite Quant: Correlation Gate ---
+            # Correlation Gate
             if signal_result and signal_result.correlations:
                 symbol_corrs = signal_result.correlations.get(selected_signal.symbol, {})
                 for pos in snapshot.positions:
@@ -853,13 +851,12 @@ class DecisionEngine:
                             ),
                             **gate_meta # type: ignore[arg-type]
                         ), signal_result
-            # -------------------------------------
 
             raw_size = min(
                 target - current, self.risk_governor.config.max_position_pct
             )
 
-            # --- Sprint A: Volatility Adjusted Sizing ---
+            # Volatility Adjusted Sizing
             adjusted_size = self._calculate_vol_adjusted_size(
                 raw_size, selected_signal, signal_result.signals if signal_result else []
             )
@@ -908,7 +905,6 @@ class DecisionEngine:
                     explanation="Buy blocked: sandbox_headroom_exhausted",
                     **gate_meta,  # type: ignore[arg-type]
                 ), signal_result
-            # --------------------------------------------
 
             note_str = str(buy_note) if buy_note else ""
             is_exploration = note_str.startswith(EXPLORATION_TAG)
@@ -961,7 +957,7 @@ class DecisionEngine:
                 snapshot.positions[0].symbol if snapshot.positions else self.settings.core_symbol
             )
             
-            # --- Elite Quant: Precision Sell Sizing ---
+            # Precision Sell Sizing
             # We need to reduce total risk by (current - target)
             reduction_needed = current - target
             pos = next((p for p in snapshot.positions if p.symbol == sell_symbol), None) # type: ignore[assignment]
@@ -971,7 +967,6 @@ class DecisionEngine:
                 sell_size = min(reduction_needed, pos_weight)
             else:
                 sell_size = reduction_needed
-            # ------------------------------------------
 
             return IntentRecord(
                 **{

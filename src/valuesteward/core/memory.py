@@ -21,7 +21,7 @@ class MemoryEngine:
         if log_path:
             self.log_path = Path(log_path)
         else:
-            # Elite Quant: Use absolute path rooted in the project directory
+            # Use absolute path rooted in the project directory
             # to ensure consistency between Cron, NPM, and CLI contexts.
             base_dir = Path(__file__).parent.parent.parent.parent
             self.log_path = base_dir / "logs" / "intent_log.jsonl"

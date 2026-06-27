@@ -40,9 +40,7 @@ _DEFAULT_PATTERNS_PATH = "data/patterns.jsonl"
 _MIN_PATTERN_SAMPLES = 3
 
 
-# ---------------------------------------------------------------------------
 # History loading
-# ---------------------------------------------------------------------------
 
 @dataclass
 class HistoryEntry:
@@ -97,9 +95,7 @@ def load_history_entries(path: str = "data/history.jsonl") -> List[HistoryEntry]
     return entries
 
 
-# ---------------------------------------------------------------------------
 # Domain models
-# ---------------------------------------------------------------------------
 
 class PatternCard(BaseModel):
     """A learned pattern linking a market-regime fingerprint to its outcomes."""
@@ -141,9 +137,7 @@ class TradingEpisode(BaseModel):
     has_sell: bool = False
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _regime_tags_from(world_tags: List[str]) -> List[str]:
     """Return only the regime-relevant tags, sorted for stable fingerprinting."""
@@ -161,9 +155,7 @@ def _pattern_id(fingerprint: str) -> str:
     return hashlib.sha1(fingerprint.encode()).hexdigest()[:12]  # nosec B324
 
 
-# ---------------------------------------------------------------------------
 # EpisodeExtractor
-# ---------------------------------------------------------------------------
 
 class EpisodeExtractor:
     """Build TradingEpisode objects from intent history.
@@ -268,9 +260,7 @@ class EpisodeExtractor:
         return episodes
 
 
-# ---------------------------------------------------------------------------
 # PatternExtractor
-# ---------------------------------------------------------------------------
 
 class PatternExtractor:
     """Derive PatternCard objects from a list of TradingEpisodes.
@@ -321,9 +311,7 @@ class PatternExtractor:
         return cards
 
 
-# ---------------------------------------------------------------------------
 # PatternLibrary
-# ---------------------------------------------------------------------------
 
 class PatternLibrary:
     """File-backed store of PatternCard objects.
@@ -346,9 +334,7 @@ class PatternLibrary:
         self._patterns: Dict[str, PatternCard] = {}  # pattern_id → card
         self._load()
 
-    # ------------------------------------------------------------------
     # Persistence
-    # ------------------------------------------------------------------
 
     def _load(self) -> None:
         if not self.path.exists():
@@ -376,9 +362,7 @@ class PatternLibrary:
         except OSError as exc:
             logger.error("Failed to write patterns file %s: %s", self.path, exc)
 
-    # ------------------------------------------------------------------
     # Query
-    # ------------------------------------------------------------------
 
     def list_patterns(self) -> List[PatternCard]:
         """Return all active patterns."""
@@ -406,9 +390,7 @@ class PatternLibrary:
                 matches.append(card)
         return matches
 
-    # ------------------------------------------------------------------
     # Update
-    # ------------------------------------------------------------------
 
     def update_from_episodes(
         self, episodes: List[TradingEpisode], save: bool = True
