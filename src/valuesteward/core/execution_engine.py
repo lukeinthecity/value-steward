@@ -288,10 +288,14 @@ class ExecutionEngine:
                 side = action.side.lower()
                 raw_notional = max(0.0, _safe_float(action.notional))
 
-                # Check for partial fills
+                # Check for partial fills, then cancel any remaining open orders
+                # once (cancel_open_orders cancels ALL of a symbol's orders, so
+                # calling it once is equivalent to per-iteration but spares the API).
                 remaining_notional = raw_notional
+                has_open_order = False
                 for order in open_orders:
                     if order.symbol == symbol:
+                        has_open_order = True
                         if side == "buy" and str(getattr(order, "side", "")).lower() == "buy":
                             in_flight_reserved = max(
                                 0.0,
@@ -312,7 +316,8 @@ class ExecutionEngine:
                                     f"${filled_qty*avg_price:.2f} already processed."
                                 )
                         
-                        self.alpaca_client.cancel_open_orders(symbol)
+                if has_open_order:
+                    self.alpaca_client.cancel_open_orders(symbol)
 
                 if side == "buy":
                     headroom = max(0.0, sandbox_cap - in_flight_deployed - in_flight_reserved)
@@ -387,8 +392,10 @@ class ExecutionEngine:
                 )
 
             remaining_notional = target_notional
+            has_open_order = False
             for order in open_orders:
                 if order.symbol == target_symbol:
+                    has_open_order = True
                     filled_qty = float(order.filled_qty or 0)
                     if filled_qty > 0:
                         avg_price = float(order.filled_avg_price or 0)
@@ -402,7 +409,8 @@ class ExecutionEngine:
                                 f"${filled_qty*avg_price:.2f} processed."
                             )
                     
-                    self.alpaca_client.cancel_open_orders(target_symbol)
+            if has_open_order:
+                self.alpaca_client.cancel_open_orders(target_symbol)
 
             if intent.action_type == "BUY":
                 deployed_notional = _position_market_value(snapshot)

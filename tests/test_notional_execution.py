@@ -7,7 +7,13 @@ import pytest
 from valuesteward.config import ValueStewardSettings
 from valuesteward.core.execution_engine import ExecutionEngine
 from valuesteward.core.risk_governor import RiskGovernor
-from valuesteward.models import IntentRecord, PortfolioSnapshot, Position, RiskMode
+from valuesteward.models import (
+    IntentRecord,
+    PortfolioSnapshot,
+    Position,
+    RiskMode,
+    TradeAction,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -302,3 +308,99 @@ def test_sell_skips_when_no_position(monkeypatch) -> None:
     snapshot = build_snapshot(equity=100_000.0, positions=[])
     engine.execute_intent(_sell_intent("GHOST", size_pct=1.0), snapshot)
     assert engine.alpaca_client.submitted is False
+
+
+class FakeOrder:
+    """Minimal stand-in for an Alpaca open order."""
+
+    def __init__(
+        self,
+        symbol: str,
+        *,
+        side: str = "buy",
+        filled_qty: float = 0.0,
+        filled_avg_price: float = 0.0,
+    ) -> None:
+        self.symbol = symbol
+        self.side = side
+        self.filled_qty = filled_qty
+        self.filled_avg_price = filled_avg_price
+
+
+class CancelCountingClient(FakeAlpacaClient):
+    """Records every cancel_open_orders(symbol) call so we can count them."""
+
+    def __init__(self, open_orders: list) -> None:
+        super().__init__()
+        self._open_orders = open_orders
+        self.cancel_calls: list[str] = []
+
+    def get_open_orders(self) -> list:
+        return self._open_orders
+
+    def cancel_open_orders(self, symbol: str) -> int:
+        self.cancel_calls.append(symbol)
+        return 0
+
+
+def _armed_engine(client) -> ExecutionEngine:
+    settings = build_settings(
+        max_effective_capital_dollars=20.0,
+        max_trade_notional_dollars=10.0,
+        min_trade_notional_dollars=1.0,
+    )
+    return ExecutionEngine(
+        alpaca_client=client,
+        risk_governor=RiskGovernor(mode=RiskMode.LOW, settings=settings),
+        settings=settings,
+    )
+
+
+def test_single_path_cancels_open_orders_once(monkeypatch) -> None:
+    """Two still-open orders for the same symbol must yield exactly ONE
+    cancel_open_orders call (pre-fix it fired once per matching order), and
+    the trade outcome is unchanged — the order still submits."""
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+    client = CancelCountingClient([FakeOrder("SPY"), FakeOrder("SPY")])
+    engine = _armed_engine(client)
+
+    engine.execute_intent(build_intent(size_pct=1.0), build_snapshot(equity=100_000.0))
+
+    assert client.cancel_calls == ["SPY"]  # was 2 before the fix
+    assert client.submitted is True  # outcome preserved
+
+
+def test_multi_path_cancels_each_symbol_once(monkeypatch) -> None:
+    """In the multi-action path, each leg cancels its symbol once — not once
+    per matching open order (pre-fix this leg would emit 4 cancels)."""
+    monkeypatch.setattr(
+        "valuesteward.core.execution_engine.ExecutionEngine.is_in_execution_window",
+        lambda self: True,
+    )
+    client = CancelCountingClient(
+        [
+            FakeOrder("SPY"),
+            FakeOrder("SPY"),
+            FakeOrder("QQQ"),
+            FakeOrder("QQQ"),
+        ]
+    )
+    engine = _armed_engine(client)
+    intent = IntentRecord(
+        mode=RiskMode.LOW,
+        action_type="BUY",
+        symbol="SPY",
+        size_pct=0.0,
+        explanation="multi-leg test",
+        actions=[
+            TradeAction(symbol="SPY", side="buy", notional=5.0),
+            TradeAction(symbol="QQQ", side="buy", notional=5.0),
+        ],
+    )
+
+    engine.execute_intent(intent, build_snapshot(equity=100_000.0))
+
+    assert sorted(client.cancel_calls) == ["QQQ", "SPY"]  # was 4 before the fix
