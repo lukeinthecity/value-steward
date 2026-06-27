@@ -178,19 +178,6 @@ class SignalEngine:
                 matrix[sym1][sym2] = matrix[sym2][sym1] = corr
         return matrix
 
-    def _apply_smoothing(self, signals: List[SymbolSignal]) -> tuple[int | None, float | None]:
-        days = self._get_env_int("VS_SIGNAL_SMOOTH_DAYS", 0)
-        if days <= 1 or not signals:
-            for s in signals:
-                s.score_raw = s.score_smoothed = s.score
-            return None, None
-        
-        alpha = 2 / (days + 1)
-        # Smoothing logic here if needed...
-        for s in signals:
-            s.score_raw = s.score_smoothed = s.score # Default
-        return days, alpha
-
     def _is_stale(self, last_bar_date: Any) -> bool:
         if last_bar_date is None:
             return True
