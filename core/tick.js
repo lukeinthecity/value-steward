@@ -190,8 +190,6 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
     });
   const tradeGate = computeCanTrade({
     mode: state.current_mode,
-    internetOk: null,
-    brokerOk: null,
   });
   let finalResult = buildFallbackTickResult({
     now,

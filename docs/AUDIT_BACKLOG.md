@@ -24,7 +24,7 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ⏳ | Signal path — review (low risk, low value) |
 | TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ✅ | Applied + **hardened** beyond `b32a76f` (pid≤0 guard, corrupt-PID still evictable); 6 adversarial Python tests + JS `isPidAlive` test |
 | `exec()` shell → `execFile()` (cmd-injection hardening) + null-guard | `makeMacroDigest.js` | ✅ | Applied (batch 2) |
-| Remove dead `internetOk`/`brokerOk` params (`canTrade` resolves null) | `tradeGate.js`, `tick.js` | ⏳ | Touches the can-trade resolution — defer to hot-path review |
+| Remove dead `internetOk`/`brokerOk` params (`canTrade` resolves null) | `tradeGate.js`, `tick.js` | ✅ | Applied — **traced all consumers first**: `canTrade` is advisory only (tick artifact + email; `gpioDaemon` computes its own; nothing gates orders on it). Removed dead params; `canTrade` now a definitive boolean. 5 branch-coverage tests via injected state. |
 | `await` promisified `db.close()`; guard NaN cache-age | `shadowObserver.js` | ✅ | Applied (batch 2) |
 | Surface positions-fetch error as `positionsError` | `runValueSteward.js` | ✅ | Applied (batch 2) |
 | Validate fallback context before writing; null-guard hydrated entries | `buildWorldContext.js` | ⏸ | `main` already has layered validation fallbacks — likely superseded |

@@ -4,21 +4,23 @@ import { loadStateSync } from "./stewardState.js";
 
 /**
  * Gate logic to decide if the bot is allowed to submit actual orders.
+ * Infrastructure health (internet, broker) is not pre-checked here — it is
+ * validated implicitly by the Python process's Alpaca retry logic — so this
+ * resolves to a definitive boolean rather than a tri-state. This flag is
+ * advisory/reporting only (it feeds the tick artifact + email summary); the
+ * authoritative order gate lives in the Python execution engine.
  */
-export function computeCanTrade({ mode, internetOk, brokerOk }) {
-  const state = loadStateSync();
+export function computeCanTrade({ mode }, { loadState = loadStateSync } = {}) {
+  const state = loadState();
 
   const tradingEnabled = state.trading_enabled === true;
   const forceNoTrade = state.force_no_trade === true;
-  const infrastructureKnown =
-    typeof internetOk === "boolean" && typeof brokerOk === "boolean";
 
-  // Trading is only allowed if:
+  // Trading is allowed only if:
   // 1. The master toggle is ON (tradingEnabled)
   // 2. The safety kill-switch is OFF (forceNoTrade)
-  // 3. Infrastructure is healthy (internet, broker)
-  // 4. The mode is NOT Inactive or Read-Only
-  let canTrade = null;
+  // 3. The mode is NOT Inactive or Read-Only
+  let canTrade = true;
   if (
     tradingEnabled !== true ||
     forceNoTrade === true ||
@@ -26,8 +28,6 @@ export function computeCanTrade({ mode, internetOk, brokerOk }) {
     mode === MODES.READ_ONLY
   ) {
     canTrade = false;
-  } else if (infrastructureKnown) {
-    canTrade = internetOk && brokerOk;
   }
 
   return {
@@ -35,7 +35,5 @@ export function computeCanTrade({ mode, internetOk, brokerOk }) {
     tradingEnabled,
     forceNoTrade,
     mode,
-    internetOk,
-    brokerOk,
   };
 }
