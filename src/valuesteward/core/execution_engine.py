@@ -144,10 +144,9 @@ def _is_market_open_now(snapshot: PortfolioSnapshot | None = None) -> bool:
         
     for ec in (holidays.get("early_closes") or []):
         if ec.get("date") == today_str:
-            # Parse early close time (usually 13:00)
-            ec_time = ec.get("close_time", "13:00").split(":")
+            ec_hour, ec_minute = _parse_hhmm(ec.get("close_time"), 13, 0)
             ec_close = now.replace(
-                hour=int(ec_time[0]), minute=int(ec_time[1]), second=0, microsecond=0
+                hour=ec_hour, minute=ec_minute, second=0, microsecond=0
             )
             if now > ec_close:
                 return False
