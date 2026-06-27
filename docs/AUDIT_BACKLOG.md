@@ -21,7 +21,7 @@ present, needs review) · ⏸ low-value / not currently exercised.
 | Duplicate `load_steward_state` import; missing `\n` in `patterns` output | `cli.py` | 🔧 | Trivial cleanups |
 | `cancel_open_orders()` called inside the fill loop (per-iteration) | `execution_engine.py` | ✅ | Applied — **efficiency** fix (same outcome, fewer API calls): cancel once per symbol via `has_open_order` on both single + multi paths. 2 tests, verified to fail against pre-fix (4 cancels → 2) |
 | `_parse_hhmm()` for early-close time | `execution_engine.py` | ⏸ | Superseded — `main` already adopted `_parse_hhmm` for the early-close path |
-| Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ⏳ | Signal path — review (low risk, low value) |
+| Dead `_apply_smoothing` stub; Sunday stale-branch | `signal_engine.py` | ✅ | Removed the **dead** `_apply_smoothing` stub (defined, never called; `score_raw`/`score_smoothed` set in the live path). **Did NOT** apply the rest of b32a76f's signal_engine diff — it predates `main` and would delete current scoring (exec-quality / alpha-prior / intraday-persistence). Left the Sunday staleness branch intact (deliberate tolerance, not a bug). |
 | TOCTOU lock race — write owner PID, verify before evicting | `steward_state.py`, `stewardState.js` | ✅ | Applied + **hardened** beyond `b32a76f` (pid≤0 guard, corrupt-PID still evictable); 6 adversarial Python tests + JS `isPidAlive` test |
 | `exec()` shell → `execFile()` (cmd-injection hardening) + null-guard | `makeMacroDigest.js` | ✅ | Applied (batch 2) |
 | Remove dead `internetOk`/`brokerOk` params (`canTrade` resolves null) | `tradeGate.js`, `tick.js` | ⏳ | Touches the can-trade resolution — defer to hot-path review |
