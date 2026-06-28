@@ -7,15 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-
-def _safe_float(value: Any) -> Optional[float]:
-    try:
-        num = float(value)
-    except (TypeError, ValueError):
-        return None
-    if num != num:  # NaN
-        return None
-    return num
+from valuesteward.num_utils import safe_float
 
 
 def _load_macro_policy() -> Dict[str, Any]:
@@ -59,7 +51,7 @@ def classify_macro_from_tags(tags: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     null_count = 0
     for key in required_tags:
         raw = tags.get(key)
-        parsed = _safe_float(raw)
+        parsed = safe_float(raw)
         if parsed is None:
             null_count += 1
             values[key] = 0.0
@@ -80,7 +72,7 @@ def classify_macro_from_tags(tags: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     inputs_used = [
         k for k in required_tags 
-        if tags.get(k) is not None and _safe_float(tags.get(k)) is not None
+        if tags.get(k) is not None and safe_float(tags.get(k)) is not None
     ]
     coverage = len(inputs_used) / len(required_tags) if required_tags else 0
 
@@ -119,9 +111,9 @@ def fuse_macro_regime(
     scout_score: Any = None,
 ) -> Dict[str, Any]:
     guardian_label = _normalize_regime_label((macro_view or {}).get("macro_label"))
-    guardian_score = _safe_float((macro_view or {}).get("macro_score"))
+    guardian_score = safe_float((macro_view or {}).get("macro_score"))
     scout_norm_label = _normalize_regime_label(scout_label)
-    scout_norm_score = _safe_float(scout_score)
+    scout_norm_score = safe_float(scout_score)
 
     if guardian_label is None and scout_norm_label is None:
         return {
