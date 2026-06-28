@@ -332,3 +332,121 @@ test("health snapshot accepts prior trading-day tick artifacts on market holiday
   assert.equal(issueCodes.includes("tick_stale"), false);
   assert.equal(issueCodes.includes("tick_artifact_stale"), false);
 });
+
+test("null last_run_at reports unreadable state, not tick_stale", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-unreadable-"));
+  process.chdir(tmpDir);
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("config", "policy.json"), {
+    version: 8,
+    mode: "rebalance",
+    risk_level: 0.2,
+  });
+  writeJson(path.join("data", "world-health.json"), {
+    last_checked: new Date().toISOString(),
+    sources: {},
+  });
+
+  const { buildHealthSnapshot } = await importHealthStatus();
+  const snapshot = await buildHealthSnapshot({
+    agentState: { current_mode: "LIVE", last_run_at: null, executions_today: 0 },
+    policy: { version: 8, mode: "rebalance", risk_level: 0.2 },
+    worldContext: {
+      generated_at: new Date().toISOString(),
+      date: "2026-06-28",
+      slot: "pre_open",
+    },
+  });
+
+  const codes = snapshot.issues.map((issue) => issue.code);
+  assert.equal(codes.includes("tick_state_unreadable"), true);
+  assert.equal(codes.includes("tick_stale"), false);
+});
+
+test("fresh world-context file with stale parsed entry reports a read anomaly, not stale", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-world-anomaly-"));
+  process.chdir(tmpDir);
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("config", "policy.json"), {
+    version: 8,
+    mode: "rebalance",
+    risk_level: 0.2,
+  });
+  writeJson(path.join("data", "world-health.json"), {
+    last_checked: new Date().toISOString(),
+    sources: {},
+  });
+  // Fresh file (mtime now); the injected context simulates a transient old read.
+  writeJsonl(path.join("data", "world-context.jsonl"), [
+    { generated_at: "2026-06-28T10:00:00.000Z", date: "2026-06-28" },
+  ]);
+
+  const { buildHealthSnapshot } = await importHealthStatus();
+  const snapshot = await buildHealthSnapshot({
+    agentState: {
+      current_mode: "LIVE",
+      last_run_at: new Date().toISOString(),
+      executions_today: 0,
+    },
+    policy: { version: 8, mode: "rebalance", risk_level: 0.2 },
+    worldContext: {
+      generated_at: "2026-03-20T15:30:00.000Z",
+      date: "2026-03-20",
+      slot: "pre_close",
+    },
+  });
+
+  const codes = snapshot.issues.map((issue) => issue.code);
+  assert.equal(codes.includes("world_context_read_anomaly"), true);
+  assert.equal(codes.includes("world_context_stale"), false);
+});
+
+test("genuinely stale world (no fresh file) still flags world_context_stale", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-world-stale-"));
+  process.chdir(tmpDir);
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("config", "policy.json"), {
+    version: 8,
+    mode: "rebalance",
+    risk_level: 0.2,
+  });
+  writeJson(path.join("data", "world-health.json"), {
+    last_checked: new Date().toISOString(),
+    sources: {},
+  });
+  // No world-context.jsonl on disk — nothing vouches for a live pipeline.
+
+  const { buildHealthSnapshot } = await importHealthStatus();
+  const snapshot = await buildHealthSnapshot({
+    agentState: {
+      current_mode: "LIVE",
+      last_run_at: new Date().toISOString(),
+      executions_today: 0,
+    },
+    policy: { version: 8, mode: "rebalance", risk_level: 0.2 },
+    worldContext: {
+      generated_at: "2026-03-20T15:30:00.000Z",
+      date: "2026-03-20",
+      slot: "pre_close",
+    },
+  });
+
+  const codes = snapshot.issues.map((issue) => issue.code);
+  assert.equal(codes.includes("world_context_stale"), true);
+  assert.equal(codes.includes("world_context_read_anomaly"), false);
+});
