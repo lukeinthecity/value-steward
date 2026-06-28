@@ -25,6 +25,7 @@ const SCORECARD_PATH = path.join(DATA_DIR, "signal-scorecard.jsonl");
 const SCORECARD_SUMMARY_PATH = path.join(DATA_DIR, "scorecard-summary.json");
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
+const WORLD_CONTEXT_PATH = path.join(DATA_DIR, "world-context.jsonl");
 
 function readJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -79,6 +80,14 @@ function daysSince(value) {
   const hours = hoursSince(value);
   if (hours === null) return null;
   return hours / 24;
+}
+
+function hoursSinceFileMtime(filePath) {
+  try {
+    return (Date.now() - fs.statSync(filePath).mtimeMs) / (1000 * 60 * 60);
+  } catch {
+    return null;
+  }
 }
 
 function artifactTimestamp(...values) {
@@ -209,14 +218,22 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     tickLastRunExchangeDate === tickExpectedExchangeDate;
 
   if (!tickMeetsDateExpectation && (tickAgeHours === null || tickAgeHours > tickMaxHours)) {
-    issues.push({
-      level: "warn",
-      code: "tick_stale",
-      message:
-        tickLastRunExchangeDate !== null
-          ? `Last tick exchange date ${tickLastRunExchangeDate} does not match expected ${tickExpectedExchangeDate}.`
-          : `Last tick age ${tickAgeHours?.toFixed(1) ?? "n/a"}h (max ${tickMaxHours}h).`,
-    });
+    if (tickLastRunExchangeDate === null) {
+      // No last_run_at — the state read returned empty (e.g. a transient read
+      // miss that fell back to defaults), which is not evidence of staleness.
+      issues.push({
+        level: "warn",
+        code: "tick_state_unreadable",
+        message:
+          "Could not read last_run_at from state (no tick timestamp available).",
+      });
+    } else {
+      issues.push({
+        level: "warn",
+        code: "tick_stale",
+        message: `Last tick exchange date ${tickLastRunExchangeDate} does not match expected ${tickExpectedExchangeDate}.`,
+      });
+    }
   }
 
   const marketOpen = isMarketOpenNow(now);
@@ -246,11 +263,27 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   }
 
   if (worldAgeHours === null || worldAgeHours > worldLimit) {
-    issues.push({
-      level: "warn",
-      code: "world_context_stale",
-      message: `World context age ${worldAgeHours?.toFixed(1) ?? "n/a"}h (max ${worldLimit}h).`,
-    });
+    const worldFileAgeHours = hoursSinceFileMtime(WORLD_CONTEXT_PATH);
+    if (
+      worldAgeHours !== null &&
+      worldFileAgeHours !== null &&
+      worldFileAgeHours <= worldLimit
+    ) {
+      // The parsed entry looks stale but the world-context file was written
+      // recently — the pipeline is alive, so this is a transient read/parse
+      // anomaly, not genuine staleness.
+      issues.push({
+        level: "warn",
+        code: "world_context_read_anomaly",
+        message: `World context entry age ${worldAgeHours.toFixed(1)}h but file updated ${worldFileAgeHours.toFixed(1)}h ago.`,
+      });
+    } else {
+      issues.push({
+        level: "warn",
+        code: "world_context_stale",
+        message: `World context age ${worldAgeHours?.toFixed(1) ?? "n/a"}h (max ${worldLimit}h).`,
+      });
+    }
   }
 
   if (worldHealthAgeHours === null || worldHealthAgeHours > worldHealthMax) {
