@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 import logging
-from typing import Literal, cast, SupportsFloat, SupportsIndex
+from typing import Literal, cast
 
 from valuesteward.config import ValueStewardSettings, get_settings
 from valuesteward.core.risk_governor import RiskGovernor
@@ -11,16 +11,15 @@ from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.models import IntentRecord, PortfolioSnapshot
 from valuesteward.steward_state import load_steward_state, update_steward_state
 from valuesteward.market_holidays import get_market_timezone
+from valuesteward.num_utils import safe_float
 
 logger = logging.getLogger(__name__)
 
 
 def _safe_float(value: object, default: float = 0.0) -> float:
-    try:
-        parsed = float(cast(str | bytes | SupportsFloat | SupportsIndex, value))
-    except (TypeError, ValueError):
-        return default
-    return parsed if parsed == parsed else default
+    """Float-guaranteed variant of num_utils.safe_float for numeric call sites."""
+    result = safe_float(value, default)
+    return default if result is None else result
 
 
 def _position_market_value(snapshot: PortfolioSnapshot) -> float:
