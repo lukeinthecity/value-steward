@@ -153,6 +153,22 @@ def _default_tz() -> str:
     return os.getenv("VS_MARKET_TIMEZONE") or "America/New_York"
 
 
+def get_market_timezone() -> ZoneInfo:
+    """Resolve the market timezone as a ZoneInfo, honoring VS_EXECUTION_TIMEZONE
+    then VS_MARKET_TIMEZONE, falling back to America/New_York on an unset or
+    invalid name. Single source of truth for execution engine, state, and CLI.
+    """
+    tz = (
+        os.getenv("VS_EXECUTION_TIMEZONE")
+        or os.getenv("VS_MARKET_TIMEZONE")
+        or "America/New_York"
+    )
+    try:
+        return ZoneInfo(tz)
+    except Exception:
+        return ZoneInfo("America/New_York")
+
+
 def _now_in_tz(tz: str) -> datetime:
     return datetime.now(tz=ZoneInfo(tz))
 

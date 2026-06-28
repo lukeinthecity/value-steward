@@ -1,7 +1,6 @@
 """Execution engine for Value Steward intents."""
 
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 import os
 import logging
 from typing import Literal, cast, SupportsFloat, SupportsIndex
@@ -11,6 +10,7 @@ from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.models import IntentRecord, PortfolioSnapshot
 from valuesteward.steward_state import load_steward_state, update_steward_state
+from valuesteward.market_holidays import get_market_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -51,19 +51,8 @@ def _open_buy_reservations(open_orders: list[object], exclude_symbol: str | None
         reserved += max(0.0, _open_order_notional(order))
     return reserved
 
-def _get_market_timezone() -> ZoneInfo:
-    tz = (
-        os.getenv("VS_EXECUTION_TIMEZONE")
-        or os.getenv("VS_MARKET_TIMEZONE")
-        or "America/New_York"
-    )
-    try:
-        return ZoneInfo(tz)
-    except Exception:
-        return ZoneInfo("America/New_York")
-
 def _today_in_market_tz(now: datetime | None = None) -> str:
-    tz = _get_market_timezone()
+    tz = get_market_timezone()
     now = now or datetime.now(tz=tz)
     return now.astimezone(tz).date().isoformat()
 
@@ -85,7 +74,7 @@ def _parse_hhmm(value: str | None, default_hour: int, default_minute: int) -> tu
 def _market_close_time(now: datetime) -> datetime | None:
     from valuesteward.market_holidays import ensure_holiday_file
 
-    tz = _get_market_timezone()
+    tz = get_market_timezone()
     local_now = now.astimezone(tz)
     today_str = local_now.date().isoformat()
 
@@ -121,7 +110,7 @@ def _is_market_open_now(snapshot: PortfolioSnapshot | None = None) -> bool:
     """Check if NYSE market is currently open (9:30 AM - 4:00 PM ET, non-holiday)."""
     from valuesteward.market_holidays import ensure_holiday_file
     
-    tz = _get_market_timezone()
+    tz = get_market_timezone()
     now = datetime.now(tz=tz)
     
     # 1. Weekends
@@ -217,7 +206,7 @@ class ExecutionEngine:
 
     def is_in_execution_window(self) -> bool:
         """Check if current time is within the final execution window before market close."""
-        tz = _get_market_timezone()
+        tz = get_market_timezone()
         now = datetime.now(tz=tz)
 
         market_close = _market_close_time(now)
