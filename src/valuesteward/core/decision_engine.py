@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from valuesteward.config import ValueStewardSettings
+from valuesteward.env_utils import get_env_float
 from valuesteward.core.patterns import PatternLibrary
 from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.core.sector_map import SectorMap
@@ -34,16 +35,6 @@ class DecisionEngine:
         "SILVER",
     }
     CRISIS_ALIGNED_SECTORS = DEFENSIVE_SECTORS | {"INDUSTRIALS"}
-
-    @staticmethod
-    def _get_env_float(name: str, default: float) -> float:
-        raw = os.getenv(name)
-        if raw is None or not raw.strip():
-            return default
-        try:
-            return float(raw)
-        except ValueError:
-            return default
 
     def __init__(
         self,
@@ -305,7 +296,7 @@ class DecisionEngine:
             # Can't meaningfully sell it; not worth rotating.
             return None
 
-        margin = self._get_env_float("VS_ROTATION_MIN_SCORE_MARGIN", 0.05)
+        margin = get_env_float("VS_ROTATION_MIN_SCORE_MARGIN", 0.05)
         # Only rotate for a clearly better opportunity. If the candidate is
         # not stronger than what we hold by `margin`, let the winner run.
         if not (candidate.score > weakest_score + margin):
@@ -431,33 +422,33 @@ class DecisionEngine:
             return True, combined_reason, min(size_mult, cap)
 
         if not is_add_on:
-            min_score = self._get_env_float("VS_NEW_ENTRY_MIN_SIGNAL_SCORE", 1.55)
-            min_rel_20 = self._get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", 0.0)
-            min_rel_60 = self._get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_60D", 0.0)
-            min_trend = self._get_env_float("VS_NEW_ENTRY_MIN_TREND_STRENGTH", 0.0)
-            exploration_eps = self._get_env_float(
+            min_score = get_env_float("VS_NEW_ENTRY_MIN_SIGNAL_SCORE", 1.55)
+            min_rel_20 = get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_20D", 0.0)
+            min_rel_60 = get_env_float("VS_NEW_ENTRY_MIN_REL_STRENGTH_60D", 0.0)
+            min_trend = get_env_float("VS_NEW_ENTRY_MIN_TREND_STRENGTH", 0.0)
+            exploration_eps = get_env_float(
                 "VS_NEW_ENTRY_EXPLORATION_EPSILON", 0.0
             )
-            exploration_zone = self._get_env_float(
+            exploration_zone = get_env_float(
                 "VS_NEW_ENTRY_EXPLORATION_ZONE_PCT", 0.05
             )
-            exploration_size_mult = self._get_env_float(
+            exploration_size_mult = get_env_float(
                 "VS_NEW_ENTRY_EXPLORATION_SIZE_MULT", 0.5
             )
 
             thompson_enabled = os.getenv(
                 "VS_SCORE_GATE_THOMPSON_ENABLED", "0"
             ).strip().lower() in {"1", "true", "yes", "on"}
-            thompson_threshold = self._get_env_float(
+            thompson_threshold = get_env_float(
                 "VS_SCORE_GATE_THOMPSON_THRESHOLD", 0.55
             )
-            thompson_prior_alpha = self._get_env_float(
+            thompson_prior_alpha = get_env_float(
                 "VS_SCORE_GATE_THOMPSON_PRIOR_ALPHA", 2.0
             )
-            thompson_prior_beta = self._get_env_float(
+            thompson_prior_beta = get_env_float(
                 "VS_SCORE_GATE_THOMPSON_PRIOR_BETA", 2.0
             )
-            thompson_size_mult = self._get_env_float(
+            thompson_size_mult = get_env_float(
                 "VS_SCORE_GATE_THOMPSON_SIZE_MULT", 1.0
             )
 

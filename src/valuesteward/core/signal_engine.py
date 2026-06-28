@@ -14,6 +14,7 @@ from pydantic import Field
 from valuesteward.data.alpaca_client import AlpacaClient
 from valuesteward.data.market_data import MarketDataClient
 from valuesteward.config import ValueStewardSettings
+from valuesteward.env_utils import get_env_float, get_env_int
 from valuesteward.core.execution_quality import load_execution_quality_map
 from valuesteward.core.intraday_persistence import load_intraday_persistence_map
 from valuesteward.core.realized_alpha import load_realized_alpha_prior_map
@@ -87,31 +88,13 @@ class SignalEngine:
         from valuesteward.config import get_settings
         self.settings = settings or get_settings()
 
-    def _get_env_int(self, key: str, default: int) -> int:
-        raw = os.getenv(key)
-        if raw is None or not raw.strip():
-            return default
-        try:
-            return int(raw)
-        except ValueError:
-            return default
-
-    def _get_env_float(self, key: str, default: float) -> float:
-        raw = os.getenv(key)
-        if raw is None or not raw.strip():
-            return default
-        try:
-            return float(raw)
-        except ValueError:
-            return default
-
     def build_universe(self) -> List[str]:
         raw = os.getenv("VS_UNIVERSE_SYMBOLS", "")
         if raw.strip():
             return [item.strip().upper() for item in raw.split(",") if item.strip()]
         
         symbols = self.alpaca_client.list_tradable_symbols()
-        max_symbols = self._get_env_int("VS_SIGNAL_MAX_SYMBOLS", 0)
+        max_symbols = get_env_int("VS_SIGNAL_MAX_SYMBOLS", 0)
         if max_symbols and len(symbols) > max_symbols:
             return symbols[:max_symbols]
         return symbols
@@ -208,18 +191,18 @@ class SignalEngine:
         return diff > allowed
 
     def build_signals(self) -> SignalResult:
-        lookback_days = self._get_env_int("VS_SIGNAL_LOOKBACK_DAYS", 120)
-        fast = self._get_env_int("VS_SIGNAL_SMA_FAST", 20)
-        slow = self._get_env_int("VS_SIGNAL_SMA_SLOW", 60)
-        vol_window = self._get_env_int("VS_SIGNAL_VOL_WINDOW", 20)
-        min_bars = self._get_env_int("VS_SIGNAL_MIN_BARS", 60)
+        lookback_days = get_env_int("VS_SIGNAL_LOOKBACK_DAYS", 120)
+        fast = get_env_int("VS_SIGNAL_SMA_FAST", 20)
+        slow = get_env_int("VS_SIGNAL_SMA_SLOW", 60)
+        vol_window = get_env_int("VS_SIGNAL_VOL_WINDOW", 20)
+        min_bars = get_env_int("VS_SIGNAL_MIN_BARS", 60)
         benchmark = os.getenv("VS_SIGNAL_BENCHMARK", "SPY").strip().upper()
         
-        w_mom_5 = self._get_env_float("VS_SIGNAL_W_MOM_5", 0.2)
-        w_mom_20 = self._get_env_float("VS_SIGNAL_W_MOM_20", 0.3)
-        w_mom_60 = self._get_env_float("VS_SIGNAL_W_MOM_60", 0.5)
-        w_rel_20 = self._get_env_float("VS_SIGNAL_W_REL_20", 0.3)
-        w_rel_60 = self._get_env_float("VS_SIGNAL_W_REL_60", 0.7)
+        w_mom_5 = get_env_float("VS_SIGNAL_W_MOM_5", 0.2)
+        w_mom_20 = get_env_float("VS_SIGNAL_W_MOM_20", 0.3)
+        w_mom_60 = get_env_float("VS_SIGNAL_W_MOM_60", 0.5)
+        w_rel_20 = get_env_float("VS_SIGNAL_W_REL_20", 0.3)
+        w_rel_60 = get_env_float("VS_SIGNAL_W_REL_60", 0.7)
         
         w_rank_mom = self.settings.w_rank_mom
         w_rank_vol = self.settings.w_rank_vol
@@ -347,16 +330,16 @@ class SignalEngine:
         alpha_prior_by_symbol = load_realized_alpha_prior_map(
             [signal.symbol for signal in signals]
         )
-        alpha_prior_weight = self._get_env_float(
+        alpha_prior_weight = get_env_float(
             "VS_SIGNAL_ALPHA_PRIOR_WEIGHT", 0.10
         )
         intraday_persistence_by_symbol = load_intraday_persistence_map(
             [signal.symbol for signal in signals],
-            lookback_days=self._get_env_int(
+            lookback_days=get_env_int(
                 "VS_INTRADAY_PERSISTENCE_LOOKBACK_DAYS", 5
             ),
         )
-        intraday_persistence_weight = self._get_env_float(
+        intraday_persistence_weight = get_env_float(
             "VS_SIGNAL_INTRADAY_PERSISTENCE_WEIGHT", 0.05
         )
 
