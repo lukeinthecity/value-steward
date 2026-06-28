@@ -10,7 +10,8 @@ from datetime import date as date_cls
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
-from zoneinfo import ZoneInfo
+
+from valuesteward.market_holidays import get_market_timezone
 
 STATE_PATH = Path("data/steward-state.json")
 STATE_LOCK_PATH = Path(f"{STATE_PATH}.lock")
@@ -67,14 +68,6 @@ def _normalize_state(data: dict[str, Any] | None = None) -> dict[str, Any]:
     return state
 
 
-def _market_timezone() -> ZoneInfo:
-    tz = os.getenv("VS_MARKET_TIMEZONE") or "America/New_York"
-    try:
-        return ZoneInfo(tz)
-    except Exception:
-        return ZoneInfo("America/New_York")
-
-
 def _coerce_exchange_date(value: Any) -> date_cls | None:
     if value is None:
         return None
@@ -82,7 +75,7 @@ def _coerce_exchange_date(value: Any) -> date_cls | None:
         return value
     if isinstance(value, datetime):
         dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        return dt.astimezone(_market_timezone()).date()
+        return dt.astimezone(get_market_timezone()).date()
     if isinstance(value, str):
         raw = value.strip()
         if not raw:
@@ -98,7 +91,7 @@ def _coerce_exchange_date(value: Any) -> date_cls | None:
             return None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(_market_timezone()).date()
+        return dt.astimezone(get_market_timezone()).date()
     return None
 
 

@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import click
 import statistics
@@ -21,6 +20,7 @@ from valuesteward.core.risk_governor import RiskGovernor
 from valuesteward.core.sector_map import SectorMap
 from valuesteward.core.signal_engine import SignalEngine
 from valuesteward.core.world_recognition import infer_world_tags
+from valuesteward.market_holidays import get_market_timezone
 from valuesteward.models import IntentRecord
 from valuesteward.world_context import (
     load_latest_world_context,
@@ -108,16 +108,8 @@ def _write_jsonl_atomic(output_path: Path, records: list[dict]) -> None:
     tmp_path.replace(output_path)
 
 
-def _market_timezone() -> ZoneInfo:
-    tz = os.getenv("VS_MARKET_TIMEZONE") or "America/New_York"
-    try:
-        return ZoneInfo(tz)
-    except Exception:
-        return ZoneInfo("America/New_York")
-
-
 def _exchange_date_iso_now() -> str:
-    return datetime.now(timezone.utc).astimezone(_market_timezone()).date().isoformat()
+    return datetime.now(timezone.utc).astimezone(get_market_timezone()).date().isoformat()
 
 
 def _format_account(account) -> dict:
