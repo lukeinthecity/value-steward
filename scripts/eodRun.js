@@ -57,6 +57,11 @@ async function main() {
       },
     },
     {
+      label: "intent:reconcile",
+      cmd: "node",
+      args: ["scripts/intentReconcile.js"],
+    },
+    {
       label: "scorecard:refresh",
       cmd: pythonCmd,
       args: ["-m", "valuesteward.cli", "scorecard"],

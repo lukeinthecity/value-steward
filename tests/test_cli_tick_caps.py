@@ -82,7 +82,7 @@ def test_cli_tick_clamps_large_buy_to_configured_cap(tmp_path, monkeypatch) -> N
         def cancel_open_orders(self, symbol):
             return 0
 
-        def submit_steward_order(self, symbol, side, notional):
+        def submit_steward_order(self, symbol, side, notional, client_order_id=None):
             submitted.append((symbol, side, notional))
             return 100.0
 

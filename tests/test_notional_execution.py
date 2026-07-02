@@ -33,9 +33,16 @@ class FakeAlpacaClient:
         self.submitted = False
         self.last_notional = None
 
-    def submit_steward_order(self, symbol: str, side: str, notional: float) -> float:
+    def submit_steward_order(
+        self,
+        symbol: str,
+        side: str,
+        notional: float,
+        client_order_id: str | None = None,
+    ) -> float:
         self.submitted = True
         self.last_notional = notional
+        self.last_client_order_id = client_order_id
         return 100.0 # Return a dummy price
 
     def get_open_orders(self) -> list:

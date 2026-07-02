@@ -28,6 +28,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { summarizeFillAttempts } from "../core/intentReconciliation.js";
+
 const ROOT = process.cwd();
 const ET_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -198,6 +200,10 @@ function collectSnapshot() {
     path.join(ROOT, "logs", "intent_log.jsonl"),
     25
   );
+  const fillsToday = summarizeFillAttempts(
+    readJsonlTail(path.join(ROOT, "logs", "intent_outcomes.jsonl"), 300),
+    today
+  );
 
   const pulseFiles = {
     "world:run": "data/world-context.jsonl",
@@ -253,6 +259,7 @@ function collectSnapshot() {
     trainingEntries,
     oosEntries,
     intentEntries,
+    fillsToday,
     pulse,
     emailHealth,
     pushHealth,
@@ -335,6 +342,19 @@ function renderHuman(snap) {
       lines.push(
         `  ${ts}  ${(t.action_type ?? "?").padEnd(5)}  ${(t.symbol ?? "-").padEnd(6)}  ${t.reason_code ?? ""}`
       );
+    }
+  }
+  lines.push("");
+
+  lines.push("Fills vs Attempts (today, from intent reconciliation):");
+  if (!snap.fillsToday?.attempts) {
+    lines.push("  (no reconciled attempts today)");
+  } else {
+    lines.push(
+      `  total: ${snap.fillsToday.fills}/${snap.fillsToday.attempts} filled`
+    );
+    for (const [sym, s] of Object.entries(snap.fillsToday.bySymbol)) {
+      lines.push(`  ${sym}: ${s.attempts} attempts, ${s.fills} filled`);
     }
   }
   lines.push("");
