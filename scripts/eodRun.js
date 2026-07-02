@@ -62,6 +62,11 @@ async function main() {
       args: ["scripts/intentReconcile.js"],
     },
     {
+      label: "execution:quality",
+      cmd: "node",
+      args: ["scripts/executionQualityReport.js"],
+    },
+    {
       label: "scorecard:refresh",
       cmd: pythonCmd,
       args: ["-m", "valuesteward.cli", "scorecard"],

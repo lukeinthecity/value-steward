@@ -42,7 +42,7 @@ function safeNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function toExchangeDate(value) {
+export function toExchangeDate(value) {
   const ms = Date.parse(value ?? "");
   if (!Number.isFinite(ms)) return null;
   return new Intl.DateTimeFormat("en-CA", {
