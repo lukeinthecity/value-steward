@@ -1,5 +1,7 @@
 # Value Steward
 
+[![CI](https://github.com/lukeinthecity/value-steward/actions/workflows/ci.yml/badge.svg)](https://github.com/lukeinthecity/value-steward/actions/workflows/ci.yml)
+
 **Systematic, Risk-Aware Portfolio Management Agent**
 
 Value Steward is an institutional-grade automated trading agent designed to "turn one dollar into two" through systematic momentum capture and rigorous risk management. It bridges global macro intelligence with local mathematical precision to operate as a disciplined portfolio manager.
