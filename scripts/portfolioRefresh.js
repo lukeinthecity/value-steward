@@ -9,6 +9,7 @@ import { buildArtifactCycleId } from "../core/runtimeArtifacts.js";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import { startSpinner } from "../world/spinner.js";
+import { fileURLToPath } from "url";
 
 function resolvePythonCommand() {
   const explicit = (process.env.VS_PYTHON || "").trim();
@@ -50,7 +51,13 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  console.error("[portfolio] refresh failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[portfolio] refresh failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

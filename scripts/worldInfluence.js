@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
@@ -115,4 +116,10 @@ function main() {
   }
 }
 
-main();
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main();
+}

@@ -6,6 +6,7 @@ import { loadStateSync } from "../core/stewardState.js";
 import { getTradingEnabled } from "../core/tradingEnabled.js";
 import { buildHealthSnapshot } from "../core/healthStatus.js";
 import { getMarketTimeZone } from "../core/timeUtils.js";
+import { fileURLToPath } from "url";
 
 const DEFAULT_GPIO_PATH = path.join(process.cwd(), "data", "gpio-state.json");
 const DEFAULT_LED_PATH = path.join(process.cwd(), "data", "led-status.json");
@@ -151,7 +152,13 @@ async function main() {
   await loop();
 }
 
-main().catch((err) => {
-  console.error("[gpio] failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[gpio] failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

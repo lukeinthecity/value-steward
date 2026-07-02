@@ -19,6 +19,7 @@ import { markEodEmailSent } from "../core/stewardState.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import { startSpinner } from "../world/spinner.js";
 import { buildDailyPromotionSnapshot } from "../core/promotionMetrics.js";
+import { fileURLToPath } from "url";
 
 const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 
@@ -257,7 +258,13 @@ async function main() {
   console.log(`[ValueSteward] Real EOD report dispatched for ${result.equity.toFixed(2)} equity.`);
 }
 
-main().catch((err) => {
-  console.error("[ValueSteward] EOD email failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[ValueSteward] EOD email failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

@@ -189,7 +189,7 @@ class ExecutionEngine:
 
         return True, "ok"
 
-    def _record_execution(self, action: str, symbol: str | None, count: int = 1):
+    def _record_execution(self, action: str, symbol: str | None, count: int = 1) -> None:
         today = _today_in_market_tz()
         executed_at = datetime.now(timezone.utc).isoformat()
 

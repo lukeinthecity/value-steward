@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date as date_cls
 from datetime import datetime, timezone
@@ -132,7 +133,7 @@ def _is_pid_alive(pid: int) -> bool:
 
 
 @contextmanager
-def _state_lock():
+def _state_lock() -> Iterator[None]:
     deadline = time.monotonic() + LOCK_TIMEOUT_SEC
     pid_file = STATE_LOCK_PATH / "owner.pid"
     while True:
