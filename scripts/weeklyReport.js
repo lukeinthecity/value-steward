@@ -5,6 +5,7 @@ import "dotenv/config";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { readJsonl } from "../core/runtimeArtifacts.js";
 import { buildExecutionQualitySnapshot } from "../core/executionQualityReport.js";
+import { getGateCalibrationPath, runGateCalibration } from "../core/gateCalibration.js";
 import { getIntentOutcomesPath } from "../core/intentReconciliation.js";
 import { sendWeeklyReportEmail } from "../core/emailNotifications.js";
 import {
@@ -203,6 +204,16 @@ async function main() {
         `  Adverse selection: unfilled ${fmtPct(adv.unfilled_mean_excess_5d)} vs filled ${fmtPct(adv.filled_mean_excess_5d)} 5d excess (t=${adv.t_stat === null ? "n/a" : adv.t_stat.toFixed(2)})`,
       );
     }
+  }
+
+  // Gate calibration (BUY_BLOCKED post-mortem) — regenerated weekly.
+  try {
+    const gateCal = runGateCalibration({ now });
+    console.log(
+      `\nGate Calibration: ${gateCal.gates.length} gates over ${gateCal.total_blocked} blocked rows → ${getGateCalibrationPath()}`
+    );
+  } catch (err) {
+    console.warn("Gate calibration report failed:", err?.message ?? err);
   }
 
   // 4. Performance Scorecard

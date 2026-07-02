@@ -12,6 +12,7 @@ npm-debug.log*
 logs/*.log
 logs/*.jsonl
 data/*.jsonl
+data/gate-calibration.md
 data/steward.db
 data/market-holidays.json
 data/world-health.json

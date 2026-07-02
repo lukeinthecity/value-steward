@@ -12,6 +12,13 @@ export function mean(values) {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+export function median(values) {
+  const nums = (values ?? []).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!nums.length) return null;
+  const mid = Math.floor(nums.length / 2);
+  return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
+}
+
 export function sampleStd(values) {
   const nums = (values ?? []).filter((v) => Number.isFinite(v));
   if (nums.length < 2) return null;

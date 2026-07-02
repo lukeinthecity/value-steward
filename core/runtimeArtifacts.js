@@ -94,6 +94,16 @@ export function writeJsonlAtomic(filePath, entries) {
   return entries ?? [];
 }
 
+export function writeTextAtomic(filePath, text) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random()
+    .toString(16)
+    .slice(2)}.tmp`;
+  fs.writeFileSync(tmpPath, text);
+  fs.renameSync(tmpPath, filePath);
+  return text;
+}
+
 export function appendJsonlLineSync(filePath, payload) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const fd = fs.openSync(filePath, "a");
