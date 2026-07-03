@@ -45,6 +45,7 @@ class TradeAction(BaseModel):
     notional: float
     size_pct: Optional[float] = None
     reason: Optional[str] = None
+    order_client_id: Optional[str] = None
 
 
 class IntentRecord(BaseModel):
@@ -131,6 +132,7 @@ class IntentRecord(BaseModel):
     gate_scout_binding: Optional[bool] = None
     gate_risk_governor_allowed: Optional[bool] = None
     gate_reason: Optional[str] = None
+    order_client_ids: List[str] = Field(default_factory=list)
     actions: List[TradeAction] = Field(default_factory=list)
 
     def to_json_dict(self) -> dict:

@@ -189,10 +189,11 @@ class AlpacaClient:
         symbol: str,
         side: Literal["buy", "sell"],
         notional: float,
+        client_order_id: str | None = None,
     ) -> float | None:
         """Submit a mid-point Limit Order with retry resilience."""
         order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
-        
+
         try:
             snapshot = self.get_snapshots([symbol])
             snap = snapshot.get(symbol)
@@ -202,7 +203,7 @@ class AlpacaClient:
                 if bid > 0 and ask > 0:
                     limit_price = round((bid + ask) / 2.0, 2)
                     qty = round(notional / limit_price, 4)
-                    
+
                     from alpaca.trading.requests import LimitOrderRequest
                     order: Any = LimitOrderRequest(
                         symbol=symbol,
@@ -210,6 +211,7 @@ class AlpacaClient:
                         limit_price=limit_price,
                         side=order_side,
                         time_in_force=TimeInForce.DAY,
+                        client_order_id=client_order_id,
                     )
                     self._trading_client.submit_order(order_data=order)
                     logger.info(
@@ -228,6 +230,7 @@ class AlpacaClient:
             notional=round(notional, 2),
             side=order_side,
             time_in_force=TimeInForce.DAY,
+            client_order_id=client_order_id,
         )
         self._trading_client.submit_order(order_data=order)
         logger.info(

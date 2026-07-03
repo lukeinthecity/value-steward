@@ -134,6 +134,7 @@ def _format_account(account) -> dict:
 def _format_order(order) -> dict:
     return {
         "id": _json_scalar(getattr(order, "id", None)),
+        "client_order_id": _json_scalar(getattr(order, "client_order_id", None)),
         "symbol": _json_scalar(getattr(order, "symbol", None)),
         "side": _json_scalar(getattr(order, "side", None)),
         "status": _json_scalar(getattr(order, "status", None)),
@@ -143,6 +144,7 @@ def _format_order(order) -> dict:
         "time_in_force": _json_scalar(getattr(order, "time_in_force", None)),
         "submitted_at": _iso(getattr(order, "submitted_at", None)),
         "filled_at": _iso(getattr(order, "filled_at", None)),
+        "filled_qty": _json_scalar(getattr(order, "filled_qty", None)),
         "filled_avg_price": _json_scalar(getattr(order, "filled_avg_price", None)),
     }
 
@@ -179,7 +181,8 @@ def portfolio(out: str) -> None:
         print(f"[WARN] Failed to fetch open orders: {exc}")
         orders = []
     try:
-        recent_orders = alpaca_client.get_recent_orders(limit=20)
+        # 100 keeps multi-day expiries inside the intent-reconciliation window.
+        recent_orders = alpaca_client.get_recent_orders(limit=100)
     except Exception as exc:  # noqa: BLE001
         print(f"[WARN] Failed to fetch recent orders: {exc}")
         recent_orders = []

@@ -332,10 +332,14 @@ class ExecutionEngine:
                     )
                     continue
 
+                client_order_id = f"{intent.id}:{symbol}"
+                action.order_client_id = client_order_id
+                intent.order_client_ids.append(client_order_id)
                 price = self.alpaca_client.submit_steward_order(
                     symbol=symbol,
                     side=cast(Literal["buy", "sell"], side),
-                    notional=round(remaining_notional, 2)
+                    notional=round(remaining_notional, 2),
+                    client_order_id=client_order_id,
                 )
                 if price:
                     action.reason = f"{action.reason or ''} mid_price={price:.2f}".strip()
@@ -417,10 +421,13 @@ class ExecutionEngine:
                 )
                 return
 
+            client_order_id = f"{intent.id}:{target_symbol}"
+            intent.order_client_ids.append(client_order_id)
             price = self.alpaca_client.submit_steward_order(
                 symbol=target_symbol,
                 side="buy" if intent.action_type == "BUY" else "sell",
-                notional=round(remaining_notional, 2)
+                notional=round(remaining_notional, 2),
+                client_order_id=client_order_id,
             )
             intent.expected_price = price
             self._record_execution(intent.action_type, target_symbol)
