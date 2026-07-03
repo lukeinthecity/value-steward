@@ -44,14 +44,18 @@ function printState(state) {
 
 function buildPayload(overrides, reason) {
   return {
-    trading_enabled:
-      Object.prototype.hasOwnProperty.call(overrides, "trading_enabled")
-        ? overrides.trading_enabled
-        : null,
-    force_no_trade:
-      Object.prototype.hasOwnProperty.call(overrides, "force_no_trade")
-        ? overrides.force_no_trade
-        : null,
+    trading_enabled: Object.prototype.hasOwnProperty.call(
+      overrides,
+      "trading_enabled",
+    )
+      ? overrides.trading_enabled
+      : null,
+    force_no_trade: Object.prototype.hasOwnProperty.call(
+      overrides,
+      "force_no_trade",
+    )
+      ? overrides.force_no_trade
+      : null,
     reason,
     updated_at: new Date().toISOString(),
     source: "gpio_sim",
@@ -85,7 +89,9 @@ function main() {
   }
 
   if (action === "clear") {
-    writeState(buildPayload({ trading_enabled: null, force_no_trade: null }, reason));
+    writeState(
+      buildPayload({ trading_enabled: null, force_no_trade: null }, reason),
+    );
     return;
   }
 

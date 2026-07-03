@@ -27,7 +27,11 @@ function capturingSend(result = { ok: true, skipped: false, status: 200 }) {
   return { send, calls };
 }
 
-const SNAPSHOT = { policy: { mode: "LOW" }, feeds: { stale_count: 0 }, issues: [] };
+const SNAPSHOT = {
+  policy: { mode: "LOW" },
+  feeds: { stale_count: 0 },
+  issues: [],
+};
 const STATE_OK = {
   current_mode: "LOW",
   trading_enabled: true,
@@ -59,7 +63,10 @@ test("composeStatusLine flags halted trading and stale feeds", () => {
 });
 
 test("isHalted true when disabled or force_no_trade", () => {
-  assert.equal(isHalted({ trading_enabled: true, force_no_trade: false }), false);
+  assert.equal(
+    isHalted({ trading_enabled: true, force_no_trade: false }),
+    false,
+  );
   assert.equal(isHalted({ trading_enabled: false }), true);
   assert.equal(isHalted({ force_no_trade: true }), true);
 });

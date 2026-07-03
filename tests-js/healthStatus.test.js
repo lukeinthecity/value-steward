@@ -16,13 +16,12 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
 async function importHealthStatus() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "core", "healthStatus.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "core", "healthStatus.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -125,7 +124,7 @@ test("health snapshot filters scorecard progress to the configured phase1 start 
     generated_at: "2026-03-13T20:15:00.000Z",
     phase1_start_date: "2026-03-13",
     horizons: {
-      "1": {
+      1: {
         avg_excess_benchmark: 0.01,
       },
     },
@@ -335,7 +334,9 @@ test("health snapshot accepts prior trading-day tick artifacts on market holiday
 
 test("null last_run_at reports unreadable state, not tick_stale", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-unreadable-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-health-unreadable-"),
+  );
   process.chdir(tmpDir);
   t.after(() => {
     process.chdir(prevCwd);
@@ -354,7 +355,11 @@ test("null last_run_at reports unreadable state, not tick_stale", async (t) => {
 
   const { buildHealthSnapshot } = await importHealthStatus();
   const snapshot = await buildHealthSnapshot({
-    agentState: { current_mode: "LIVE", last_run_at: null, executions_today: 0 },
+    agentState: {
+      current_mode: "LIVE",
+      last_run_at: null,
+      executions_today: 0,
+    },
     policy: { version: 8, mode: "rebalance", risk_level: 0.2 },
     worldContext: {
       generated_at: new Date().toISOString(),
@@ -370,7 +375,9 @@ test("null last_run_at reports unreadable state, not tick_stale", async (t) => {
 
 test("fresh world-context file with stale parsed entry reports a read anomaly, not stale", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-world-anomaly-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-health-world-anomaly-"),
+  );
   process.chdir(tmpDir);
   t.after(() => {
     process.chdir(prevCwd);
@@ -413,7 +420,9 @@ test("fresh world-context file with stale parsed entry reports a read anomaly, n
 
 test("genuinely stale world (no fresh file) still flags world_context_stale", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-health-world-stale-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-health-world-stale-"),
+  );
   process.chdir(tmpDir);
   t.after(() => {
     process.chdir(prevCwd);

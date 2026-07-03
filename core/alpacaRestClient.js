@@ -24,7 +24,7 @@ export function createAlpacaRestClient({
 
   if (!resolvedKeyId || !resolvedSecretKey) {
     throw new Error(
-      "Alpaca REST client requires ALPACA_API_KEY_ID and ALPACA_SECRET_KEY."
+      "Alpaca REST client requires ALPACA_API_KEY_ID and ALPACA_SECRET_KEY.",
     );
   }
 
@@ -39,7 +39,9 @@ export function createAlpacaRestClient({
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
-      throw new Error(`Alpaca REST GET ${path} failed: HTTP ${response.status}`);
+      throw new Error(
+        `Alpaca REST GET ${path} failed: HTTP ${response.status}`,
+      );
     }
     return response.json();
   }
@@ -63,7 +65,7 @@ export function createAlpacaRestClient({
       const body = await requestJson("/v2/positions");
       if (!Array.isArray(body)) {
         throw new Error(
-          "Alpaca REST GET /v2/positions returned a non-array body."
+          "Alpaca REST GET /v2/positions returned a non-array body.",
         );
       }
       return body;

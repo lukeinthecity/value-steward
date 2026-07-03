@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importModule() {
-  const moduleUrl = `${pathToFileURL(
-    path.join(repoRoot, "core", "executionQualityReport.js")
-  ).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${
+    pathToFileURL(path.join(repoRoot, "core", "executionQualityReport.js")).href
+  }?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -53,7 +53,7 @@ test("snapshot computes fill rate, buckets, and adverse selection", async () => 
         score: i,
         // Unfilled (high-score) names outperformed: +2%; filled ones: 0%.
         excess5d: filled ? 0.0 + i * 0.001 : 0.02 + i * 0.001,
-      })
+      }),
     );
   }
 
@@ -86,7 +86,10 @@ test("snapshot computes fill rate, buckets, and adverse selection", async () => 
 
 test("duplicate outcome rows collapse to the latest per attempt", async () => {
   const { buildExecutionQualitySnapshot } = await importModule();
-  const open = { ...outcome({ intentId: "a", filled: false }), fill_status: "open" };
+  const open = {
+    ...outcome({ intentId: "a", filled: false }),
+    fill_status: "open",
+  };
   const done = outcome({ intentId: "a", filled: true });
   const snap = buildExecutionQualitySnapshot({
     outcomes: [open, done],
@@ -140,7 +143,7 @@ test("runExecutionQualityReport appends a snapshot row", async (t) => {
   const today = new Date().toISOString().slice(0, 10);
   fs.writeFileSync(
     path.join(tmpDir, "logs", "intent_outcomes.jsonl"),
-    `${JSON.stringify(outcome({ intentId: "x", filled: true, date: today }))}\n`
+    `${JSON.stringify(outcome({ intentId: "x", filled: true, date: today }))}\n`,
   );
 
   const snapshot = runExecutionQualityReport({ windowDays: 30 });

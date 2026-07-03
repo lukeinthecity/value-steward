@@ -20,8 +20,8 @@
  * revert and writing the updated policy.
  */
 
-const DEFAULT_PROMOTE_MARGIN = 0.10;
-const DEFAULT_REVERT_MARGIN = 0.10;
+const DEFAULT_PROMOTE_MARGIN = 0.1;
+const DEFAULT_REVERT_MARGIN = 0.1;
 const DEFAULT_REVERT_CYCLES = 3;
 const DEFAULT_MIN_SAMPLES = 5;
 
@@ -82,9 +82,11 @@ export function evaluateChampionChallenger({
 
   const nowIso = new Date().toISOString();
   const snapshotFromCurrent = () => ({
-    momentum: currentWeights?.momentum ?? currentSignalWeights?.momentum ?? null,
+    momentum:
+      currentWeights?.momentum ?? currentSignalWeights?.momentum ?? null,
     vol: currentWeights?.vol ?? currentSignalWeights?.vol ?? null,
-    drawdown: currentWeights?.drawdown ?? currentSignalWeights?.drawdown ?? null,
+    drawdown:
+      currentWeights?.drawdown ?? currentSignalWeights?.drawdown ?? null,
     oos_sharpe: currentSharpe,
     oos_sample_count: currentSamples,
     snapshot_at: nowIso,
@@ -102,10 +104,11 @@ export function evaluateChampionChallenger({
   }
 
   const championSharpe = existingChampion.oos_sharpe;
-  const deficitCycles =
-    Number.isInteger(existingChampion.consecutive_deficit_cycles)
-      ? existingChampion.consecutive_deficit_cycles
-      : 0;
+  const deficitCycles = Number.isInteger(
+    existingChampion.consecutive_deficit_cycles,
+  )
+    ? existingChampion.consecutive_deficit_cycles
+    : 0;
 
   // Promote on sustained improvement.
   if (currentSharpe >= championSharpe + promoteMargin) {

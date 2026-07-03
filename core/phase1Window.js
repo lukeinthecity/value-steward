@@ -29,7 +29,7 @@ export function getRecordExchangeDate(record) {
       record.timestamp ??
       record.generated_at ??
       record.ranAt ??
-      null
+      null,
   );
 }
 

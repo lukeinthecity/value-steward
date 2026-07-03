@@ -16,7 +16,7 @@ function loadJsonl(filePath) {
       .map((line) => JSON.parse(line));
   } catch (err) {
     console.error(
-      `[world:inspect] Failed to parse ${filePath}: ${err?.message ?? err}`
+      `[world:inspect] Failed to parse ${filePath}: ${err?.message ?? err}`,
     );
     return [];
   }
@@ -70,7 +70,7 @@ function main() {
     stopSpinner.update(1);
     stopSpinner("no entries");
     console.log(
-      '[world:inspect] No world context entries found. Run "npm run world:run" first.'
+      '[world:inspect] No world context entries found. Run "npm run world:run" first.',
     );
     process.exit(0);
   }
@@ -80,7 +80,7 @@ function main() {
     stopSpinner.update(1);
     stopSpinner("invalid");
     console.log(
-      '[world:inspect] No valid world context entries found. Run "npm run world:run" first.'
+      '[world:inspect] No valid world context entries found. Run "npm run world:run" first.',
     );
     process.exit(0);
   }
@@ -117,7 +117,8 @@ function main() {
     console.log(`- notes: ${latest.notes}`);
   }
 
-  const preview = latest.corpus_preview ?? latest.hydration?.corpus_preview ?? [];
+  const preview =
+    latest.corpus_preview ?? latest.hydration?.corpus_preview ?? [];
   if (!Array.isArray(preview) || preview.length === 0) {
     console.log("[world:inspect] No corpus_preview entries found.");
     process.exit(0);

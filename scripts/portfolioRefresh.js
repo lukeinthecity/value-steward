@@ -33,7 +33,13 @@ async function main() {
 
   const child = spawn(
     pythonCmd,
-    ["-m", "valuesteward.cli", "portfolio", "--out", "data/portfolio-live.json"],
+    [
+      "-m",
+      "valuesteward.cli",
+      "portfolio",
+      "--out",
+      "data/portfolio-live.json",
+    ],
     {
       cwd: process.cwd(),
       env: {
@@ -41,7 +47,7 @@ async function main() {
         VS_ARTIFACT_CYCLE_ID: cycleId ?? "",
       },
       stdio: "inherit",
-    }
+    },
   );
 
   child.on("close", (code) => {

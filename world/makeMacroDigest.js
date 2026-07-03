@@ -6,7 +6,11 @@ import { promisify } from "util";
 import { validateContext } from "./contextUtils.js";
 
 const execFileAsync = promisify(execFile);
-const SCHEMA_PATH = path.join(process.cwd(), "world", "schema.worldContext.json");
+const SCHEMA_PATH = path.join(
+  process.cwd(),
+  "world",
+  "schema.worldContext.json",
+);
 const DEFAULT_TIMEOUT_MS = 15000;
 const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
@@ -35,10 +39,11 @@ function buildHydratedDocs(entries) {
   }));
 }
 
-
 export async function makeMacroDigest({ baseContext, hydratedEntries }) {
   const schema = loadSchema();
-  const recent = filterRecent(Array.isArray(hydratedEntries) ? hydratedEntries : []);
+  const recent = filterRecent(
+    Array.isArray(hydratedEntries) ? hydratedEntries : [],
+  );
   const hydratedDocs = buildHydratedDocs(recent);
 
   const cmd = process.env.WORLD_LLM_CMD?.trim();
@@ -55,7 +60,9 @@ export async function makeMacroDigest({ baseContext, hydratedEntries }) {
     hydrated_docs: hydratedDocs,
   };
 
-  const timeoutMs = Number(process.env.WORLD_LLM_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+  const timeoutMs = Number(
+    process.env.WORLD_LLM_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS,
+  );
 
   try {
     // Split into executable + args so WORLD_LLM_CMD isn't interpreted by a shell.
@@ -74,7 +81,9 @@ export async function makeMacroDigest({ baseContext, hydratedEntries }) {
     }
 
     if (!validateContext(parsed)) {
-      console.warn("[world] digest validation failed; using rule-based context");
+      console.warn(
+        "[world] digest validation failed; using rule-based context",
+      );
       return { context: null, digest: "rule" };
     }
 

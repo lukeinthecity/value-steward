@@ -19,7 +19,9 @@ function formatBar(percent, frameIndex) {
 }
 
 export function startSpinner(label, options = {}) {
-  let total = Number.isFinite(options.total) ? Math.max(0, options.total) : null;
+  let total = Number.isFinite(options.total)
+    ? Math.max(0, options.total)
+    : null;
   let current = 0;
 
   const getPercent = () => {

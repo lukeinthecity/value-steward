@@ -1,6 +1,6 @@
 function parseAllowedModes() {
   const raw = String(
-    process.env.VS_TRAIN_ALLOWED_POLICY_MODES ?? "read-only,rebalance"
+    process.env.VS_TRAIN_ALLOWED_POLICY_MODES ?? "read-only,rebalance",
   );
   const values = raw
     .split(",")
@@ -10,6 +10,8 @@ function parseAllowedModes() {
 }
 
 export function isTrainingModeAllowed(policyMode) {
-  const normalized = String(policyMode ?? "").trim().toLowerCase();
+  const normalized = String(policyMode ?? "")
+    .trim()
+    .toLowerCase();
   return parseAllowedModes().has(normalized);
 }

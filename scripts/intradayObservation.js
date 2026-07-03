@@ -5,7 +5,10 @@ import { spawn } from "child_process";
 import { pathToFileURL } from "url";
 
 import { appendIntradayObservation } from "../core/runtimeArtifacts.js";
-import { getExchangeDateString, getExchangeTimeParts } from "../core/timeUtils.js";
+import {
+  getExchangeDateString,
+  getExchangeTimeParts,
+} from "../core/timeUtils.js";
 
 function resolvePythonCommand() {
   const explicit = (process.env.VS_PYTHON || "").trim();
@@ -20,7 +23,13 @@ function runPortfolioSnapshot(cycleId = null) {
     const pythonCmd = resolvePythonCommand();
     const child = spawn(
       pythonCmd,
-      ["-m", "valuesteward.cli", "portfolio", "--out", "data/portfolio-live.json"],
+      [
+        "-m",
+        "valuesteward.cli",
+        "portfolio",
+        "--out",
+        "data/portfolio-live.json",
+      ],
       {
         cwd: process.cwd(),
         env: {
@@ -28,14 +37,16 @@ function runPortfolioSnapshot(cycleId = null) {
           VS_ARTIFACT_CYCLE_ID: cycleId ?? "",
         },
         stdio: "ignore",
-      }
+      },
     );
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`portfolio snapshot failed with exit code ${code ?? 1}`));
+        reject(
+          new Error(`portfolio snapshot failed with exit code ${code ?? 1}`),
+        );
       }
     });
   });
@@ -70,7 +81,7 @@ function runSignalSnapshot(outPath, limit = 5, cycleId = null) {
           VS_ARTIFACT_CYCLE_ID: cycleId ?? "",
         },
         stdio: "ignore",
-      }
+      },
     );
     child.on("error", reject);
     child.on("close", (code) => {
@@ -93,7 +104,8 @@ function normalizeTopCandidates(signalSnapshot) {
         signal_score: candidate?.signal_score ?? null,
         signal_sector: candidate?.signal_sector ?? null,
         execution_quality_score: candidate?.execution_quality_score ?? null,
-        intraday_persistence_score: candidate?.intraday_persistence_score ?? null,
+        intraday_persistence_score:
+          candidate?.intraday_persistence_score ?? null,
         realized_alpha_prior: candidate?.realized_alpha_prior ?? null,
         world_regime_label: null,
         reason_code: "RANKED_SIGNAL",
@@ -108,7 +120,9 @@ export function buildObservation({
   signalSnapshot,
   now,
 }) {
-  const positions = Array.isArray(portfolio?.positions) ? portfolio.positions : [];
+  const positions = Array.isArray(portfolio?.positions)
+    ? portfolio.positions
+    : [];
   const topCandidates = normalizeTopCandidates(signalSnapshot).slice(0, 5);
   const parts = getExchangeTimeParts(now);
 
@@ -128,14 +142,22 @@ export function buildObservation({
       equity: portfolio?.account?.equity ?? latestTick?.result?.equity ?? null,
       cash: portfolio?.account?.cash ?? latestTick?.result?.cash ?? null,
       buying_power:
-        portfolio?.account?.buying_power ?? latestTick?.result?.buyingPower ?? null,
+        portfolio?.account?.buying_power ??
+        latestTick?.result?.buyingPower ??
+        null,
       position_count:
-        portfolio?.snapshot?.position_count ?? latestTick?.result?.numPositions ?? 0,
+        portfolio?.snapshot?.position_count ??
+        latestTick?.result?.numPositions ??
+        0,
       gross_exposure:
         latestTick?.result?.grossExposure ??
         positions.reduce(
-          (sum, position) => sum + Math.abs(Number(position.market_value ?? position.marketValue ?? 0)),
-          0
+          (sum, position) =>
+            sum +
+            Math.abs(
+              Number(position.market_value ?? position.marketValue ?? 0),
+            ),
+          0,
         ),
     },
     positions: positions.map((position) => ({
@@ -162,11 +184,19 @@ async function main() {
   const signalSnapshotPath = path.join(
     process.cwd(),
     "data",
-    "intraday-signal-snapshot.json"
+    "intraday-signal-snapshot.json",
   );
-  const worldContextPath = path.join(process.cwd(), "data", "world-context.jsonl");
+  const worldContextPath = path.join(
+    process.cwd(),
+    "data",
+    "world-context.jsonl",
+  );
   const worldLines = fs.existsSync(worldContextPath)
-    ? fs.readFileSync(worldContextPath, "utf8").trim().split("\n").filter(Boolean)
+    ? fs
+        .readFileSync(worldContextPath, "utf8")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
     : [];
   const worldContext = worldLines.length
     ? JSON.parse(worldLines[worldLines.length - 1])
@@ -176,8 +206,12 @@ async function main() {
   await runPortfolioSnapshot(cycleId);
   await runSignalSnapshot(signalSnapshotPath, 5, cycleId);
 
-  const portfolio = readJson(path.join(process.cwd(), "data", "portfolio-live.json"));
-  const latestTick = readJson(path.join(process.cwd(), "data", "latest-tick.json"));
+  const portfolio = readJson(
+    path.join(process.cwd(), "data", "portfolio-live.json"),
+  );
+  const latestTick = readJson(
+    path.join(process.cwd(), "data", "latest-tick.json"),
+  );
   const signalSnapshot = readJson(signalSnapshotPath);
 
   const observation = buildObservation({
@@ -190,7 +224,7 @@ async function main() {
   appendIntradayObservation(observation);
   console.log(
     `[intraday] snapshot ${observation.exchange_date} ${observation.exchange_time} ` +
-      `positions=${observation.account.position_count} candidates=${observation.top_candidates.length}`
+      `positions=${observation.account.position_count} candidates=${observation.top_candidates.length}`,
   );
 }
 

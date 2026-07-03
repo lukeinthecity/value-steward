@@ -4,10 +4,7 @@ import path from "path";
 import { filterPhase1Records } from "./phase1Window.js";
 import { normalizePolicySnapshot } from "./policySnapshot.js";
 import { trainPolicyWithMetrics } from "./deepTrainer.js";
-import {
-  appendJsonlLineSync,
-  writeJsonAtomic,
-} from "./runtimeArtifacts.js";
+import { appendJsonlLineSync, writeJsonAtomic } from "./runtimeArtifacts.js";
 import {
   loadScorecardRecords,
   trainPolicyWithScorecard,
@@ -26,12 +23,12 @@ const HISTORY_PATH = path.join(process.cwd(), "data", "history.jsonl");
 const SCORECARD_PATH = path.join(
   process.cwd(),
   "data",
-  "signal-scorecard.jsonl"
+  "signal-scorecard.jsonl",
 );
 const TRAINING_LOG_PATH = path.join(
   process.cwd(),
   "data",
-  "training-log.jsonl"
+  "training-log.jsonl",
 );
 const OOS_EVAL_PATH = path.join(process.cwd(), "data", "oos-eval.jsonl");
 
@@ -118,7 +115,7 @@ function buildWorldSnapshot(worldContext) {
 
 function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
   const enabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase()
+    String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase(),
   );
   if (!enabled) return baselinePolicy;
 
@@ -140,7 +137,7 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
   // Champion-challenger only acts if explicitly enabled (default off until
   // we have meaningful OOS samples — the OOS log itself runs in shadow).
   const ccEnabled = ["1", "true", "yes", "on"].includes(
-    String(process.env.VS_CHAMPION_CHALLENGER_ENABLED ?? "false").toLowerCase()
+    String(process.env.VS_CHAMPION_CHALLENGER_ENABLED ?? "false").toLowerCase(),
   );
   if (!ccEnabled) {
     return baselinePolicy;
@@ -155,8 +152,8 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
       drawdown: signalWeights.drawdown,
     },
     oosMetrics: oos,
-    promoteMargin: parseNumber(process.env.VS_CHAMPION_PROMOTE_MARGIN, 0.10),
-    revertMargin: parseNumber(process.env.VS_CHAMPION_REVERT_MARGIN, 0.10),
+    promoteMargin: parseNumber(process.env.VS_CHAMPION_PROMOTE_MARGIN, 0.1),
+    revertMargin: parseNumber(process.env.VS_CHAMPION_REVERT_MARGIN, 0.1),
     revertCycles: parseNumber(process.env.VS_CHAMPION_REVERT_CYCLES, 3),
     minSamples: parseNumber(process.env.VS_CHAMPION_MIN_SAMPLES, 5),
   });
@@ -174,7 +171,7 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
     policyVersionAfter:
       ccResult.action === "revert"
         ? (baselinePolicy.version ?? 1) + 1
-        : baselinePolicy.version ?? 1,
+        : (baselinePolicy.version ?? 1),
     worldMacroSnapshot: buildWorldSnapshot(worldContext),
   });
 
@@ -201,7 +198,7 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
     version:
       ccResult.action === "revert"
         ? (baselinePolicy.version ?? 1) + 1
-        : baselinePolicy.version ?? 1,
+        : (baselinePolicy.version ?? 1),
     signal_weights: updatedSignalWeights,
     lastTrainedAt:
       ccResult.action === "revert" ? nowIso : baselinePolicy.lastTrainedAt,
@@ -216,7 +213,7 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
 
 function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
   const weightLearningDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase(),
   );
   if (weightLearningDisabled) return baselinePolicy;
 
@@ -230,7 +227,9 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
     minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
-    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+    target: (
+      process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark"
+    ).trim(),
   });
 
   const nowIso = new Date().toISOString();
@@ -249,7 +248,7 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     policyVersionBefore: baselinePolicy.version ?? 1,
     policyVersionAfter: weightTraining.updated
       ? (baselinePolicy.version ?? 1) + 1
-      : baselinePolicy.version ?? 1,
+      : (baselinePolicy.version ?? 1),
     worldMacroSnapshot: buildWorldSnapshot(worldContext),
   };
   appendTrainingLog(logEntry);
@@ -282,7 +281,7 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
 
 function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
   const regimeDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SIGNAL_WEIGHT_REGIME_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SIGNAL_WEIGHT_REGIME_LEARN ?? "true").toLowerCase(),
   );
   if (regimeDisabled) return baselinePolicy;
 
@@ -294,7 +293,9 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
     minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
     minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
-    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+    target: (
+      process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark"
+    ).trim(),
   };
 
   const regimeResult = trainSignalWeightsByRegime({
@@ -323,12 +324,12 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
           newWeights: result.newWeights,
           coefficients: result.coefficients,
         },
-      ])
+      ]),
     ),
     policyVersionBefore: baselinePolicy.version ?? 1,
     policyVersionAfter: regimeResult.anyUpdated
       ? (baselinePolicy.version ?? 1) + 1
-      : baselinePolicy.version ?? 1,
+      : (baselinePolicy.version ?? 1),
     worldMacroSnapshot: buildWorldSnapshot(worldContext),
   };
   appendTrainingLog(logEntry);
@@ -371,14 +372,15 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
 
 function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
   const posteriorsDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase(),
   );
   if (posteriorsDisabled) return baselinePolicy;
 
   const records = loadScorecardRecords(SCORECARD_PATH);
   const horizon = parseNumber(process.env.VS_SCORE_GATE_POSTERIORS_HORIZON, 5);
-  const target =
-    (process.env.VS_SCORE_GATE_POSTERIORS_TARGET || "excess_vs_benchmark").trim();
+  const target = (
+    process.env.VS_SCORE_GATE_POSTERIORS_TARGET || "excess_vs_benchmark"
+  ).trim();
 
   const result = buildScoreGatePosteriors({ records, horizon, target });
 
@@ -398,7 +400,7 @@ function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
     policyVersionAfter:
       result.sampleCount > 0
         ? (baselinePolicy.version ?? 1) + 1
-        : baselinePolicy.version ?? 1,
+        : (baselinePolicy.version ?? 1),
     worldMacroSnapshot: buildWorldSnapshot(worldContext),
   };
   appendTrainingLog(logEntry);
@@ -457,16 +459,17 @@ export function trainPolicyFromHistoryLocal({
   }
 
   const oncePerDay = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase()
+    String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase(),
   );
 
   const scorecardEnabled =
     allowScorecard &&
     !["0", "false", "no", "off"].includes(
-      String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase()
+      String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase(),
     );
   if (scorecardEnabled) {
-    const latestScorecardTraining = loadLatestTrainingEntryBySource("scorecard");
+    const latestScorecardTraining =
+      loadLatestTrainingEntryBySource("scorecard");
     if (
       !force &&
       oncePerDay &&
@@ -493,15 +496,15 @@ export function trainPolicyFromHistoryLocal({
       minSamples: parseNumber(process.env.VS_SCORECARD_MIN_SAMPLES, 5),
       trainingReasonPrefixes: parseReasonPrefixList(
         process.env.VS_SCORECARD_TRAINING_REASON_PREFIXES,
-        ["BUY_", "SELL_"]
+        ["BUY_", "SELL_"],
       ),
       signedThreshold: parseNumber(
         process.env.VS_SCORECARD_SIGNED_THRESHOLD,
-        0
+        0,
       ),
       benchmarkThreshold: parseNumber(
         process.env.VS_SCORECARD_BENCHMARK_THRESHOLD,
-        parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0)
+        parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0),
       ),
       riskStep: parseNumber(process.env.VS_SCORECARD_RISK_STEP, 0.01),
       bufferStep: parseNumber(process.env.VS_SCORECARD_BUFFER_STEP, 0.005),
@@ -518,11 +521,13 @@ export function trainPolicyFromHistoryLocal({
         policyVersionBefore: policy.version ?? 1,
         policyVersionAfter: scorecardTraining.updated
           ? scorecardTraining.policyVersion
-          : policy.version ?? 1,
+          : (policy.version ?? 1),
         oldRisk: scorecardTraining.oldRisk ?? policy.risk_level,
         newRisk: scorecardTraining.newRisk ?? policy.risk_level,
-        oldBuffer: scorecardTraining.oldBuffer ?? policy.rebalance_buffer_pct ?? null,
-        newBuffer: scorecardTraining.newBuffer ?? policy.rebalance_buffer_pct ?? null,
+        oldBuffer:
+          scorecardTraining.oldBuffer ?? policy.rebalance_buffer_pct ?? null,
+        newBuffer:
+          scorecardTraining.newBuffer ?? policy.rebalance_buffer_pct ?? null,
         decision: scorecardTraining.updated ? "update" : "no_update",
         reason: scorecardTraining.reason,
         source: scorecardTraining.source ?? "scorecard",
@@ -614,11 +619,11 @@ export function trainPolicyFromHistoryLocal({
 
   const resolvedEquityDeltaThreshold = parseNumber(
     equityDeltaThreshold,
-    parseNumber(process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD, 0)
+    parseNumber(process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD, 0),
   );
   const resolvedMinRiskDelta = parseNumber(
     minRiskDelta,
-    parseNumber(process.env.VS_TRAIN_MIN_RISK_DELTA, 0)
+    parseNumber(process.env.VS_TRAIN_MIN_RISK_DELTA, 0),
   );
 
   const training = trainPolicyWithMetrics({
@@ -637,7 +642,7 @@ export function trainPolicyFromHistoryLocal({
     policyVersionBefore: policy.version ?? 1,
     policyVersionAfter: training.updated
       ? training.policyVersion
-      : policy.version ?? 1,
+      : (policy.version ?? 1),
     oldRisk: training.oldRisk ?? policy.risk_level,
     newRisk: training.newRisk ?? policy.risk_level,
     oldBuffer: policy.rebalance_buffer_pct ?? null,

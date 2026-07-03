@@ -14,7 +14,7 @@ import { loadStateSync } from "../core/stewardState.js";
 
 function shouldLogSkip() {
   return ["1", "true", "yes", "on"].includes(
-    String(process.env.VS_SCHEDULE_LOG_SKIPS ?? "false").toLowerCase()
+    String(process.env.VS_SCHEDULE_LOG_SKIPS ?? "false").toLowerCase(),
   );
 }
 
@@ -23,9 +23,11 @@ export function shouldRunScheduledEod({
   force = false,
   lastEodDate = null,
   postCloseStart = Number(
-    process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_START ?? 15
+    process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_START ?? 15,
   ),
-  postCloseEnd = Number(process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_END ?? 90),
+  postCloseEnd = Number(
+    process.env.VS_EOD_WINDOW_MINUTES_AFTER_CLOSE_END ?? 90,
+  ),
 } = {}) {
   const today = getExchangeDateString(now);
   if (force) {

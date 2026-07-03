@@ -133,7 +133,11 @@ export function toWorldDateString(date) {
     const parts = fmt.formatToParts(d);
     const byType = {};
     for (const part of parts) {
-      if (part.type === "year" || part.type === "month" || part.type === "day") {
+      if (
+        part.type === "year" ||
+        part.type === "month" ||
+        part.type === "day"
+      ) {
         byType[part.type] = part.value;
       }
     }
@@ -185,7 +189,7 @@ export function classifyMacroFromTags(tags) {
   // Weighted blend of the key risks, clamped to [0,1]
   const rawScore = Object.entries(weights).reduce(
     (sum, [key, weight]) => sum + (values[key] || 0) * weight,
-    0
+    0,
   );
 
   const macroScore = Math.max(0, Math.min(1, rawScore));
@@ -196,7 +200,7 @@ export function classifyMacroFromTags(tags) {
   else if (macroScore >= thresholds.watchful) macroLabel = "watchful";
 
   const inputsUsed = reqTags.filter(
-    (key) => tags[key] !== null && tags[key] !== undefined
+    (key) => tags[key] !== null && tags[key] !== undefined,
   );
 
   const coverage = inputsUsed.length / reqTags.length;
@@ -235,7 +239,9 @@ const REGIME_SEVERITY = {
 };
 
 function normalizeRegimeLabel(label) {
-  const normalized = String(label ?? "").trim().toLowerCase();
+  const normalized = String(label ?? "")
+    .trim()
+    .toLowerCase();
   return Object.prototype.hasOwnProperty.call(REGIME_SEVERITY, normalized)
     ? normalized
     : null;
@@ -246,8 +252,7 @@ export function fuseMacroRegime({ macroView, scoutLabel, scoutScore }) {
   const scoutNormLabel = normalizeRegimeLabel(scoutLabel);
   const guardianScore =
     typeof macroView?.macro_score === "number" ? macroView.macro_score : null;
-  const scoutNormScore =
-    typeof scoutScore === "number" ? scoutScore : null;
+  const scoutNormScore = typeof scoutScore === "number" ? scoutScore : null;
 
   if (!guardianLabel && !scoutNormLabel) {
     return {
@@ -279,16 +284,12 @@ export function fuseMacroRegime({ macroView, scoutLabel, scoutScore }) {
       finalLabel = scoutNormLabel;
       finalScore = scoutNormScore ?? guardianScore ?? null;
       source = "scout_more_cautious";
-      fusionReason = divergence
-        ? "scout_more_cautious"
-        : "aligned";
+      fusionReason = divergence ? "scout_more_cautious" : "aligned";
     } else if (guardianSeverity > scoutSeverity) {
       finalLabel = guardianLabel;
       finalScore = guardianScore ?? scoutNormScore ?? null;
       source = "guardian_more_cautious";
-      fusionReason = divergence
-        ? "guardian_more_cautious"
-        : "aligned";
+      fusionReason = divergence ? "guardian_more_cautious" : "aligned";
     } else {
       finalLabel = guardianLabel;
       finalScore = Math.max(

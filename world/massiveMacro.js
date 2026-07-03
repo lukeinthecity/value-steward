@@ -54,7 +54,10 @@ export function summarizeMassiveMacroContext(massiveMacro) {
   return parts.length ? parts.join(" | ") : "Massive macro available";
 }
 
-export async function fetchMassiveMacroContext({ client, env = process.env } = {}) {
+export async function fetchMassiveMacroContext({
+  client,
+  env = process.env,
+} = {}) {
   const { apiKey, baseUrl } = resolveMassiveConfig(env);
   const fetchedAt = new Date().toISOString();
 
@@ -74,13 +77,17 @@ export async function fetchMassiveMacroContext({ client, env = process.env } = {
   const massive = client ?? createMassiveRestClient(apiKey, baseUrl);
 
   try {
-    const [treasuryResponse, inflationResponse, expectationsResponse, laborResponse] =
-      await Promise.all([
-        massive.getFedV1TreasuryYields({ limit: 1, sort: "desc" }),
-        massive.getFedV1Inflation({ limit: 1, sort: "desc" }),
-        massive.getFedV1InflationExpectations({ limit: 1, sort: "desc" }),
-        massive.getFedV1LaborMarket({ limit: 1, sort: "desc" }),
-      ]);
+    const [
+      treasuryResponse,
+      inflationResponse,
+      expectationsResponse,
+      laborResponse,
+    ] = await Promise.all([
+      massive.getFedV1TreasuryYields({ limit: 1, sort: "desc" }),
+      massive.getFedV1Inflation({ limit: 1, sort: "desc" }),
+      massive.getFedV1InflationExpectations({ limit: 1, sort: "desc" }),
+      massive.getFedV1LaborMarket({ limit: 1, sort: "desc" }),
+    ]);
 
     const treasury = latestResult(treasuryResponse);
     const inflation = latestResult(inflationResponse);
@@ -137,7 +144,7 @@ export async function fetchMassiveMacroContext({ client, env = process.env } = {
         date: labor?.date ?? null,
         unemployment_rate: parseNumber(labor?.unemployment_rate),
         labor_force_participation_rate: parseNumber(
-          labor?.labor_force_participation_rate
+          labor?.labor_force_participation_rate,
         ),
         avg_hourly_earnings: parseNumber(labor?.avg_hourly_earnings),
         job_openings: parseNumber(labor?.job_openings),

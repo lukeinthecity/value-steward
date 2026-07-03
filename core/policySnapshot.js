@@ -11,21 +11,23 @@ function normalizePositiveNumber(value, fallback) {
 
 export function normalizePolicySnapshot(policy) {
   const base =
-    policy && typeof policy === "object" && !Array.isArray(policy) ? policy : {};
+    policy && typeof policy === "object" && !Array.isArray(policy)
+      ? policy
+      : {};
 
   return {
     ...base,
     max_effective_capital_dollars: normalizePositiveNumber(
       base.max_effective_capital_dollars,
-      DEFAULT_POLICY_CAPS.max_effective_capital_dollars
+      DEFAULT_POLICY_CAPS.max_effective_capital_dollars,
     ),
     max_trade_notional_dollars: normalizePositiveNumber(
       base.max_trade_notional_dollars,
-      DEFAULT_POLICY_CAPS.max_trade_notional_dollars
+      DEFAULT_POLICY_CAPS.max_trade_notional_dollars,
     ),
     min_trade_notional_dollars: normalizePositiveNumber(
       base.min_trade_notional_dollars,
-      DEFAULT_POLICY_CAPS.min_trade_notional_dollars
+      DEFAULT_POLICY_CAPS.min_trade_notional_dollars,
     ),
   };
 }

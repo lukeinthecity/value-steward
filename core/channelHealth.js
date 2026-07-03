@@ -48,7 +48,9 @@ export function createChannelHealth({ envVar, defaultFile }) {
   }
 
   function normalizeLabel(label) {
-    const s = String(label || "").trim().toLowerCase();
+    const s = String(label || "")
+      .trim()
+      .toLowerCase();
     return s.length ? s : "unknown";
   }
 
@@ -64,12 +66,13 @@ export function createChannelHealth({ envVar, defaultFile }) {
     const nowIso = new Date().toISOString();
     let health = readHealth();
     if (!health || typeof health !== "object") health = {};
-    const prev = health[key] && typeof health[key] === "object" ? health[key] : {};
+    const prev =
+      health[key] && typeof health[key] === "object" ? health[key] : {};
     health[key] = {
       last_attempt_at: nowIso,
       last_outcome: ok ? "ok" : "error",
       last_error: ok ? null : error ? String(error).slice(0, 300) : "unknown",
-      last_success_at: ok ? nowIso : prev.last_success_at ?? null,
+      last_success_at: ok ? nowIso : (prev.last_success_at ?? null),
     };
     try {
       const p = healthPath();

@@ -1,9 +1,25 @@
 const SECRET_FIELD_CONFIG = [
-  { key: "ALPACA_API_KEY_ID", label: "Alpaca API Key ID", inputId: "conf-alpaca-id" },
-  { key: "ALPACA_SECRET_KEY", label: "Alpaca Secret Key", inputId: "conf-alpaca-secret" },
-  { key: "GOOGLE_GENAI_API_KEY", label: "Gemini API Key", inputId: "conf-gemini-key" },
+  {
+    key: "ALPACA_API_KEY_ID",
+    label: "Alpaca API Key ID",
+    inputId: "conf-alpaca-id",
+  },
+  {
+    key: "ALPACA_SECRET_KEY",
+    label: "Alpaca Secret Key",
+    inputId: "conf-alpaca-secret",
+  },
+  {
+    key: "GOOGLE_GENAI_API_KEY",
+    label: "Gemini API Key",
+    inputId: "conf-gemini-key",
+  },
   { key: "SMTP_PASS", label: "SMTP App Password", inputId: "conf-smtp-pass" },
-  { key: "MASSIVE_API_KEY", label: "Massive API Key", inputId: "conf-massive-key" },
+  {
+    key: "MASSIVE_API_KEY",
+    label: "Massive API Key",
+    inputId: "conf-massive-key",
+  },
 ];
 
 const elements = {
@@ -25,7 +41,10 @@ const elements = {
   saveSecretsBtn: document.getElementById("save-secrets"),
   storageHint: document.getElementById("secret-storage-hint"),
   secretInputs: Object.fromEntries(
-    SECRET_FIELD_CONFIG.map((field) => [field.key, document.getElementById(field.inputId)])
+    SECRET_FIELD_CONFIG.map((field) => [
+      field.key,
+      document.getElementById(field.inputId),
+    ]),
   ),
 };
 
@@ -130,7 +149,10 @@ function ensureTickerLoop(tickerEl) {
     if (tickerTravelWidthPx > 0) {
       const pixelsPerSecond = tickerTravelWidthPx / durationSeconds;
       tickerOffsetPx -= pixelsPerSecond * deltaSeconds;
-      tickerOffsetPx = normalizeTickerOffset(tickerOffsetPx, tickerTravelWidthPx);
+      tickerOffsetPx = normalizeTickerOffset(
+        tickerOffsetPx,
+        tickerTravelWidthPx,
+      );
       tickerEl.style.transform = `translateX(${tickerOffsetPx}px)`;
     }
 
@@ -162,7 +184,7 @@ function mergePositionMetrics(positions, fallbackPositions = []) {
     (fallbackPositions || [])
       .map(normalizePosition)
       .filter(Boolean)
-      .map((position) => [position.symbol, position])
+      .map((position) => [position.symbol, position]),
   );
 
   return (positions || [])
@@ -174,9 +196,13 @@ function mergePositionMetrics(positions, fallbackPositions = []) {
       return {
         ...position,
         unrealizedPl:
-          position.unrealizedPl === null ? fallback.unrealizedPl : position.unrealizedPl,
+          position.unrealizedPl === null
+            ? fallback.unrealizedPl
+            : position.unrealizedPl,
         unrealizedPlPc:
-          position.unrealizedPlPc === null ? fallback.unrealizedPlPc : position.unrealizedPlPc,
+          position.unrealizedPlPc === null
+            ? fallback.unrealizedPlPc
+            : position.unrealizedPlPc,
         side: position.side || fallback.side || "long",
       };
     });
@@ -208,11 +234,15 @@ function normalizeHudSnapshot(snapshot) {
 function resolveHudSnapshot({ history, portfolio, latestTick }) {
   const candidates = [
     {
-      timestamp: parseTimestamp(portfolio?.updated_at || portfolio?.snapshot?.timestamp),
+      timestamp: parseTimestamp(
+        portfolio?.updated_at || portfolio?.snapshot?.timestamp,
+      ),
       snapshot: normalizeHudSnapshot(portfolio),
     },
     {
-      timestamp: parseTimestamp(latestTick?.generated_at || latestTick?.result?.ranAt),
+      timestamp: parseTimestamp(
+        latestTick?.generated_at || latestTick?.result?.ranAt,
+      ),
       snapshot: normalizeHudSnapshot(latestTick?.result),
     },
     {
@@ -239,7 +269,9 @@ function resolvePositionSnapshot({ history, portfolio, latestTick }) {
     },
     {
       source: "latestTick",
-      timestamp: parseTimestamp(latestTick?.generated_at || latestTick?.result?.ranAt),
+      timestamp: parseTimestamp(
+        latestTick?.generated_at || latestTick?.result?.ranAt,
+      ),
       positions: latestTickPositions,
     },
     {
@@ -250,7 +282,9 @@ function resolvePositionSnapshot({ history, portfolio, latestTick }) {
   ];
 
   candidates.sort((left, right) => right.timestamp - left.timestamp);
-  const selected = candidates.find((candidate) => candidate.positions !== null) || candidates[0];
+  const selected =
+    candidates.find((candidate) => candidate.positions !== null) ||
+    candidates[0];
   return {
     source: selected?.source || "history",
     positions: selected?.positions || [],
@@ -258,7 +292,9 @@ function resolvePositionSnapshot({ history, portfolio, latestTick }) {
 }
 
 function buildHoldingDateMap(intents = [], positions = []) {
-  const heldSymbols = new Set((positions || []).map((position) => position.symbol));
+  const heldSymbols = new Set(
+    (positions || []).map((position) => position.symbol),
+  );
   const openedAtBySymbol = new Map();
 
   intents.forEach((intent) => {
@@ -309,27 +345,36 @@ function renderMacro(world) {
       : finalRegime?.source === "unavailable"
         ? "Partial"
         : "Aligned";
-  const fusionSource = finalRegime?.source ? String(finalRegime.source) : "guardian";
+  const fusionSource = finalRegime?.source
+    ? String(finalRegime.source)
+    : "guardian";
 
   clearElement(elements.worldSummary);
-  appendLine(elements.worldSummary, `System Regime: ${finalLabel}`, "text-ai world-summary-primary");
+  appendLine(
+    elements.worldSummary,
+    `System Regime: ${finalLabel}`,
+    "text-ai world-summary-primary",
+  );
   appendLine(
     elements.worldSummary,
     `System Logic: Deterministic ${guardianLabel} / Probabilistic ${scoutLabel}`,
-    "label-mini"
+    "label-mini",
   );
   appendLine(
     elements.worldSummary,
     `Agreement: ${agreementLabel} · Fusion: ${fusionSource}`,
-    "label-mini"
+    "label-mini",
   );
   appendLine(
     elements.worldSummary,
     world.scout_thesis || world.summary || "No macro thesis available.",
-    "world-summary-thesis"
+    "world-summary-thesis",
   );
 
-  if (Array.isArray(world.scout_headlines) && world.scout_headlines.length > 0) {
+  if (
+    Array.isArray(world.scout_headlines) &&
+    world.scout_headlines.length > 0
+  ) {
     newsHeadlines = world.scout_headlines.map((headline) => String(headline));
   } else if (world.summary) {
     newsHeadlines = String(world.summary)
@@ -349,7 +394,10 @@ function renderHUD(snapshot, state) {
     return;
   }
 
-  const exposurePct = snapshot.grossExposure && snapshot.equity ? snapshot.grossExposure / snapshot.equity : 0;
+  const exposurePct =
+    snapshot.grossExposure && snapshot.equity
+      ? snapshot.grossExposure / snapshot.equity
+      : 0;
   elements.hudExposure.textContent = formatPct(exposurePct);
 
   const equity = snapshot.equity || 0;
@@ -360,7 +408,8 @@ function renderHUD(snapshot, state) {
   elements.hudBaseline.textContent = formatCurrency(baseline);
 
   const loss = baseline ? equity / baseline - 1 : 0;
-  elements.hudEquity.style.color = loss >= 0 ? "var(--color-bullish)" : "var(--color-bearish)";
+  elements.hudEquity.style.color =
+    loss >= 0 ? "var(--color-bullish)" : "var(--color-bearish)";
 }
 
 function renderIntents(intents) {
@@ -370,66 +419,71 @@ function renderIntents(intents) {
     return;
   }
 
-  intents.slice().reverse().forEach((intent) => {
-    let tsString = intent.timestamp;
-    if (tsString && !tsString.endsWith("Z") && !tsString.includes("+")) {
-      tsString += "Z";
-    }
-    const ts = new Date(tsString);
+  intents
+    .slice()
+    .reverse()
+    .forEach((intent) => {
+      let tsString = intent.timestamp;
+      if (tsString && !tsString.endsWith("Z") && !tsString.includes("+")) {
+        tsString += "Z";
+      }
+      const ts = new Date(tsString);
 
-    const row = document.createElement("div");
-    row.className = "intent-item data-mono";
+      const row = document.createElement("div");
+      row.className = "intent-item data-mono";
 
-    const time = document.createElement("span");
-    time.className = "text-muted";
-    const dateText = Number.isNaN(ts.getTime())
-      ? "unknown"
-      : ts.toLocaleDateString([], {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        });
-    const timeText = Number.isNaN(ts.getTime())
-      ? "unknown"
-      : ts.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
-        });
-    time.textContent = `[${dateText} ${timeText}]`;
-    row.appendChild(time);
-    row.appendChild(document.createTextNode(" "));
+      const time = document.createElement("span");
+      time.className = "text-muted";
+      const dateText = Number.isNaN(ts.getTime())
+        ? "unknown"
+        : ts.toLocaleDateString([], {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+      const timeText = Number.isNaN(ts.getTime())
+        ? "unknown"
+        : ts.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          });
+      time.textContent = `[${dateText} ${timeText}]`;
+      row.appendChild(time);
+      row.appendChild(document.createTextNode(" "));
 
-    const action = document.createElement("span");
-    action.className =
-      intent.action_type === "BUY"
-        ? "text-bullish"
-        : intent.action_type === "SELL"
-          ? "text-bearish"
-          : "text-muted";
-    action.textContent = String(intent.action_type || "").padEnd(6);
-    row.appendChild(action);
-    row.appendChild(document.createTextNode(" "));
+      const action = document.createElement("span");
+      action.className =
+        intent.action_type === "BUY"
+          ? "text-bullish"
+          : intent.action_type === "SELL"
+            ? "text-bearish"
+            : "text-muted";
+      action.textContent = String(intent.action_type || "").padEnd(6);
+      row.appendChild(action);
+      row.appendChild(document.createTextNode(" "));
 
-    const symbol = document.createElement("span");
-    symbol.style.width = "60px";
-    symbol.style.display = "inline-block";
-    symbol.textContent = intent.symbol || "---";
-    row.appendChild(symbol);
-    row.appendChild(document.createTextNode(` | ${intent.reason_code || "N/A"}`));
+      const symbol = document.createElement("span");
+      symbol.style.width = "60px";
+      symbol.style.display = "inline-block";
+      symbol.textContent = intent.symbol || "---";
+      row.appendChild(symbol);
+      row.appendChild(
+        document.createTextNode(` | ${intent.reason_code || "N/A"}`),
+      );
 
-    if (intent.world_scout_label) {
-      const scout = document.createElement("span");
-      scout.className = "text-ai";
-      scout.style.marginLeft = "10px";
-      scout.style.fontSize = "0.75rem";
-      scout.textContent = String(intent.world_scout_label);
-      row.appendChild(scout);
-    }
+      if (intent.world_scout_label) {
+        const scout = document.createElement("span");
+        scout.className = "text-ai";
+        scout.style.marginLeft = "10px";
+        scout.style.fontSize = "0.75rem";
+        scout.textContent = String(intent.world_scout_label);
+        row.appendChild(scout);
+      }
 
-    elements.intentFeed.appendChild(row);
-  });
+      elements.intentFeed.appendChild(row);
+    });
 }
 
 function renderPositions(snapshot, holdingDates = new Map()) {
@@ -437,7 +491,11 @@ function renderPositions(snapshot, holdingDates = new Map()) {
   const positions = snapshot?.positions || [];
 
   if (!positions.length) {
-    appendLine(elements.portfolioPositions, "No active positions.", "text-muted");
+    appendLine(
+      elements.portfolioPositions,
+      "No active positions.",
+      "text-muted",
+    );
     return;
   }
 
@@ -513,9 +571,12 @@ function renderPositions(snapshot, holdingDates = new Map()) {
 }
 
 function describeSecretStatus(status) {
-  if (!status?.configured) return { text: "Missing", className: "text-bearish" };
-  if (status.source === "secure_store") return { text: "Stored securely", className: "text-bullish" };
-  if (status.source === ".env_fallback") return { text: "Using .env fallback", className: "text-warning" };
+  if (!status?.configured)
+    return { text: "Missing", className: "text-bearish" };
+  if (status.source === "secure_store")
+    return { text: "Stored securely", className: "text-bullish" };
+  if (status.source === ".env_fallback")
+    return { text: "Using .env fallback", className: "text-warning" };
   return { text: "Configured", className: "text-bullish" };
 }
 
@@ -527,7 +588,8 @@ function renderSecretStatus(secretStatus) {
     elements.storageHint.textContent = secretStatus?.storageAvailable
       ? "Secrets entered here are encrypted in desktop storage. Existing .env values remain as privileged fallback until replaced."
       : "Secure desktop storage is unavailable on this device. The app can still use existing .env fallback values, but it cannot store new secrets securely here.";
-    elements.storageHint.className = `label-mini ${secretStatus?.storageAvailable ? "" : "text-warning"}`.trim();
+    elements.storageHint.className =
+      `label-mini ${secretStatus?.storageAvailable ? "" : "text-warning"}`.trim();
   }
 
   if (elements.saveSecretsBtn) {
@@ -559,12 +621,15 @@ function renderSecretStatus(secretStatus) {
     clearButton.className = "secret-clear";
     clearButton.dataset.secretKey = field.key;
     clearButton.textContent = "Clear";
-    const canClear = secretStatus?.storageAvailable && secretStatus?.secrets?.[field.key]?.source === "secure_store";
+    const canClear =
+      secretStatus?.storageAvailable &&
+      secretStatus?.secrets?.[field.key]?.source === "secure_store";
     clearButton.disabled = !canClear;
     if (!canClear) {
-      clearButton.title = secretStatus?.secrets?.[field.key]?.source === ".env_fallback"
-        ? "This credential is coming from .env fallback and cannot be cleared from the desktop UI."
-        : "No securely stored credential to clear.";
+      clearButton.title =
+        secretStatus?.secrets?.[field.key]?.source === ".env_fallback"
+          ? "This credential is coming from .env fallback and cannot be cleared from the desktop UI."
+          : "No securely stored credential to clear.";
     }
     row.appendChild(clearButton);
 
@@ -576,7 +641,7 @@ function collectSecretUpdates() {
   return Object.fromEntries(
     Object.entries(elements.secretInputs)
       .map(([key, input]) => [key, String(input?.value || "").trim()])
-      .filter(([, value]) => value)
+      .filter(([, value]) => value),
   );
 }
 
@@ -619,12 +684,22 @@ async function loadData() {
   if (!api) return;
 
   try {
-    const { world, intents, state, history, portfolio, latestTick, tickLog, secretStatus } =
-      (await api.loadDashboardData()) || {};
+    const {
+      world,
+      intents,
+      state,
+      history,
+      portfolio,
+      latestTick,
+      tickLog,
+      secretStatus,
+    } = (await api.loadDashboardData()) || {};
 
     if (state && elements.nextTick) {
       elements.nextTick.textContent = state.current_mode || "INACTIVE";
-      elements.nextTick.style.color = state.trading_enabled ? "var(--color-action)" : "var(--color-warning)";
+      elements.nextTick.style.color = state.trading_enabled
+        ? "var(--color-action)"
+        : "var(--color-warning)";
       if (elements.tickMeta) {
         const lastRun = state.last_run_at
           ? new Date(state.last_run_at).toLocaleString([], {
@@ -644,8 +719,15 @@ async function loadData() {
     renderMacro(world);
     renderHUD(resolveHudSnapshot({ history, portfolio, latestTick }), state);
     renderIntents(intents);
-    const positionSnapshot = resolvePositionSnapshot({ history, portfolio, latestTick });
-    const holdingDates = buildHoldingDateMap(intents, positionSnapshot.positions);
+    const positionSnapshot = resolvePositionSnapshot({
+      history,
+      portfolio,
+      latestTick,
+    });
+    const holdingDates = buildHoldingDateMap(
+      intents,
+      positionSnapshot.positions,
+    );
     renderPositions(positionSnapshot, holdingDates);
     renderSecretStatus(secretStatus);
 
@@ -760,7 +842,7 @@ function renderRuntimeStatus(snapshot) {
   const phaseDay = snapshot.phase1Day ?? null;
   setText(
     "runtime-phase1",
-    phaseDay ? `Day ${phaseDay} of 60` : "(not started)"
+    phaseDay ? `Day ${phaseDay} of 60` : "(not started)",
   );
 
   const missedDays = Array.isArray(snapshot.missedDays)
@@ -770,7 +852,7 @@ function renderRuntimeStatus(snapshot) {
     "runtime-missed",
     missedDays.length === 0
       ? "no missed days"
-      : `${missedDays.length} missed: ${missedDays.join(", ")}`
+      : `${missedDays.length} missed: ${missedDays.join(", ")}`,
   );
   const missedEl = document.getElementById("runtime-missed");
   if (missedEl) {
@@ -784,20 +866,20 @@ function renderRuntimeStatus(snapshot) {
     "runtime-executions",
     `executions today: ${op.executions_today ?? 0} · trading: ${
       op.trading_enabled ? "on" : "off"
-    }`
+    }`,
   );
 
   setText(
     "runtime-last-training",
     snapshot.lastTrainingAt
       ? snapshot.lastTrainingAt.slice(0, 19).replace("T", " ")
-      : "(none yet)"
+      : "(none yet)",
   );
   setText(
     "runtime-last-oos",
     snapshot.lastOosRollingSharpe === null
       ? "OOS Sharpe: (insufficient data)"
-      : `OOS Sharpe: ${snapshot.lastOosRollingSharpe.toFixed(3)}`
+      : `OOS Sharpe: ${snapshot.lastOosRollingSharpe.toFixed(3)}`,
   );
 
   const pulseEl = document.getElementById("runtime-pulse");

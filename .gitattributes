@@ -1,0 +1,3 @@
+# Force LF in the repo and on checkout — Windows-side tooling kept flipping
+# working-tree files to CRLF, which reads as phantom modifications in WSL.
+* text=auto eol=lf

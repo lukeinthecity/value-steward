@@ -9,7 +9,7 @@ import { isTrainingModeAllowed } from "./trainingMode.js";
 const DEFAULT_SCORECARD_PATH = path.join(
   process.cwd(),
   "data",
-  "signal-scorecard.jsonl"
+  "signal-scorecard.jsonl",
 );
 
 export function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
@@ -30,19 +30,21 @@ export function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
 }
 
 function filterRecordsByActionTypes(records, actionTypes) {
-  const allowed = new Set((actionTypes ?? []).map((value) => String(value).toUpperCase()));
+  const allowed = new Set(
+    (actionTypes ?? []).map((value) => String(value).toUpperCase()),
+  );
   if (allowed.size === 0) return records.slice();
   return records.filter((record) =>
-    allowed.has(String(record?.action_type ?? "").toUpperCase())
+    allowed.has(String(record?.action_type ?? "").toUpperCase()),
   );
 }
 
 function filterRecordsForTraining(records, actionTypes, reasonPrefixes) {
   const allowedActions = new Set(
-    (actionTypes ?? []).map((value) => String(value).toUpperCase())
+    (actionTypes ?? []).map((value) => String(value).toUpperCase()),
   );
   const allowedPrefixes = (reasonPrefixes ?? []).map((value) =>
-    String(value).toUpperCase()
+    String(value).toUpperCase(),
   );
   if (allowedActions.size === 0 && allowedPrefixes.length === 0) {
     return records.slice();
@@ -119,9 +121,7 @@ function summarizeScorecard(records, horizons, limit) {
         ? values.reduce((total, value) => total + value, 0) / values.length
         : null;
     const rate = (values) =>
-      values.length
-        ? values.filter(Boolean).length / values.length
-        : null;
+      values.length ? values.filter(Boolean).length / values.length : null;
 
     summary.horizons[key] = {
       sampleCount: signed.length,
@@ -192,9 +192,7 @@ export function trainPolicyWithScorecard({
   if (lastScorecardAt && !force) {
     const minDaysBetween = Math.max(
       0,
-      Math.floor(
-        parseNumber(process.env.VS_SCORECARD_MIN_DAYS_BETWEEN, 1)
-      )
+      Math.floor(parseNumber(process.env.VS_SCORECARD_MIN_DAYS_BETWEEN, 1)),
     );
     const daysSince = daysBetweenExchangeDates(lastScorecardAt, new Date());
     if (daysSince < minDaysBetween) {
@@ -216,9 +214,13 @@ export function trainPolicyWithScorecard({
   }
 
   const summary = summarizeScorecard(
-    filterRecordsForTraining(records, trainingActionTypes, trainingReasonPrefixes),
+    filterRecordsForTraining(
+      records,
+      trainingActionTypes,
+      trainingReasonPrefixes,
+    ),
     horizons,
-    window
+    window,
   );
   const scorecardSummary = {
     training: summary,
@@ -226,18 +228,24 @@ export function trainPolicyWithScorecard({
     noAction: summarizeScorecard(
       filterRecordsByActionTypes(records, ["NO_ACTION"]),
       horizons,
-      window
+      window,
     ),
     buyBlockedCounterfactual: summarizeScorecard(
       filterRecordsForTraining(records, [], ["BUY_"]),
       horizons,
-      window
+      window,
     ),
     trainingActionTypes: Array.from(
-      new Set((trainingActionTypes ?? []).map((value) => String(value).toUpperCase()))
+      new Set(
+        (trainingActionTypes ?? []).map((value) => String(value).toUpperCase()),
+      ),
     ),
     trainingReasonPrefixes: Array.from(
-      new Set((trainingReasonPrefixes ?? []).map((value) => String(value).toUpperCase()))
+      new Set(
+        (trainingReasonPrefixes ?? []).map((value) =>
+          String(value).toUpperCase(),
+        ),
+      ),
     ),
   };
   const horizonStats = summary.horizons;
@@ -281,7 +289,8 @@ export function trainPolicyWithScorecard({
   }
 
   const direction = positive ? 1 : -1;
-  const oldRisk = typeof policy.risk_level === "number" ? policy.risk_level : 0.2;
+  const oldRisk =
+    typeof policy.risk_level === "number" ? policy.risk_level : 0.2;
   const oldBuffer =
     typeof policy.rebalance_buffer_pct === "number"
       ? policy.rebalance_buffer_pct
@@ -290,7 +299,7 @@ export function trainPolicyWithScorecard({
   const newBuffer = clamp(
     oldBuffer - direction * bufferStep,
     minBuffer,
-    maxBuffer
+    maxBuffer,
   );
 
   if (newRisk === oldRisk && newBuffer === oldBuffer) {

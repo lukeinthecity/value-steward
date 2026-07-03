@@ -1,0 +1,8 @@
+# Machine-written runtime artifacts — formatting them fights the live system
+# (the PostToolUse format hook honors this file too).
+data/
+logs/
+config/policy.json
+world/feeds.json
+package-lock.json
+.venv/

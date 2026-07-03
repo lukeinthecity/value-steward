@@ -24,6 +24,6 @@ test("every runnable script guards its main() invocation", () => {
   assert.deepEqual(
     offenders,
     [],
-    `scripts missing the isDirectExecution guard: ${offenders.join(", ")}`
+    `scripts missing the isDirectExecution guard: ${offenders.join(", ")}`,
   );
 });

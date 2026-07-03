@@ -78,7 +78,11 @@ export function trainPolicyWithMetrics({
   if (metrics.isUptrend && !metrics.isHighVol && !metrics.isOverconcentrated) {
     direction += 1;
   }
-  if (metrics.isDowntrend || metrics.isHighVol || (metrics.maxDrawdown ?? 0) > 0.1) {
+  if (
+    metrics.isDowntrend ||
+    metrics.isHighVol ||
+    (metrics.maxDrawdown ?? 0) > 0.1
+  ) {
     direction -= 1;
   }
   if (

@@ -11,7 +11,10 @@ import {
   loadPolicySnapshot,
   loadPortfolioLiveSnapshot,
 } from "../core/runtimeArtifacts.js";
-import { getPhase1StartDate, isWithinPhase1Window } from "../core/phase1Window.js";
+import {
+  getPhase1StartDate,
+  isWithinPhase1Window,
+} from "../core/phase1Window.js";
 import { loadStateSync } from "../core/stewardState.js";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { sendLessonEmail } from "../core/emailNotifications.js";
@@ -21,7 +24,11 @@ import { startSpinner } from "../world/spinner.js";
 import { buildDailyPromotionSnapshot } from "../core/promotionMetrics.js";
 import { fileURLToPath } from "url";
 
-const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
+const SCORECARD_PATH = path.join(
+  process.cwd(),
+  "data",
+  "signal-scorecard.jsonl",
+);
 
 function getTradingDays(state) {
   if (!fs.existsSync(SCORECARD_PATH)) return 0;
@@ -55,7 +62,9 @@ function requireCurrentExchangeDate(label, value) {
   const exchangeDate = getExchangeDateString(new Date());
   const candidate = value ? getExchangeDateString(new Date(value)) : null;
   if (!candidate || candidate !== exchangeDate) {
-    throw new Error(`${label} is missing or stale for exchange date ${exchangeDate}.`);
+    throw new Error(
+      `${label} is missing or stale for exchange date ${exchangeDate}.`,
+    );
   }
 }
 
@@ -74,12 +83,19 @@ function parseNumber(value) {
 
 function buildSnapshotResult({ portfolio, tickSnapshot, policy }) {
   const account = portfolio?.account ?? {};
-  const positions = Array.isArray(portfolio?.positions) ? portfolio.positions : [];
+  const positions = Array.isArray(portfolio?.positions)
+    ? portfolio.positions
+    : [];
   const grossExposure = positions.reduce((sum, position) => {
-    return sum + Math.abs(parseNumber(position.market_value ?? position.marketValue) ?? 0);
+    return (
+      sum +
+      Math.abs(parseNumber(position.market_value ?? position.marketValue) ?? 0)
+    );
   }, 0);
   const netExposure = positions.reduce((sum, position) => {
-    return sum + (parseNumber(position.market_value ?? position.marketValue) ?? 0);
+    return (
+      sum + (parseNumber(position.market_value ?? position.marketValue) ?? 0)
+    );
   }, 0);
   const equity =
     parseNumber(account.equity) ??
@@ -90,8 +106,12 @@ function buildSnapshotResult({ portfolio, tickSnapshot, policy }) {
   const netExposurePct = equity > 0 ? netExposure / equity : null;
 
   return {
-    ranAt: portfolio?.updated_at ?? tickSnapshot?.result?.ranAt ?? new Date().toISOString(),
-    marketOpen: portfolio?.clock?.is_open ?? tickSnapshot?.result?.marketOpen ?? false,
+    ranAt:
+      portfolio?.updated_at ??
+      tickSnapshot?.result?.ranAt ??
+      new Date().toISOString(),
+    marketOpen:
+      portfolio?.clock?.is_open ?? tickSnapshot?.result?.marketOpen ?? false,
     equity,
     buyingPower:
       parseNumber(account.buying_power) ??
@@ -140,7 +160,9 @@ function buildTrainingSummary(entry, policy) {
 function summarizeIntradayObservations(rows = []) {
   if (!rows.length) return null;
   const sorted = rows.slice().sort((left, right) => {
-    return String(left.observed_at ?? "").localeCompare(String(right.observed_at ?? ""));
+    return String(left.observed_at ?? "").localeCompare(
+      String(right.observed_at ?? ""),
+    );
   });
   const candidateCounts = new Map();
   let regimeShiftCount = 0;
@@ -162,7 +184,9 @@ function summarizeIntradayObservations(rows = []) {
   }
 
   const persistentCandidates = Array.from(candidateCounts.entries())
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    )
     .slice(0, 3)
     .map(([symbol, count]) => `${symbol}(${count})`);
 
@@ -194,7 +218,10 @@ async function main() {
   if (!portfolio) {
     throw new Error("Portfolio refresh artifact unavailable.");
   }
-  requireCurrentExchangeDate("Portfolio refresh artifact", portfolio.updated_at);
+  requireCurrentExchangeDate(
+    "Portfolio refresh artifact",
+    portfolio.updated_at,
+  );
 
   const latestTrainingEntry = loadLatestTrainingEntry();
   const trainingEntry =
@@ -210,14 +237,17 @@ async function main() {
     { label: "portfolio", payload: portfolio },
     { label: "world", payload: worldContext },
   ]);
-  const reportExchangeDate = resolveReportExchangeDate(tickSnapshot, worldContext);
+  const reportExchangeDate = resolveReportExchangeDate(
+    tickSnapshot,
+    worldContext,
+  );
   const tradingDays = getTradingDays(state);
-  
+
   stopSpinner.update(1);
 
   const result = buildSnapshotResult({ portfolio, tickSnapshot, policy });
   const intradaySummary = summarizeIntradayObservations(
-    loadIntradayObservations(reportExchangeDate)
+    loadIntradayObservations(reportExchangeDate),
   );
   const lastOrderToday = extractLatestOrderFromPortfolioSnapshot(portfolio, {
     exchangeDate: reportExchangeDate,
@@ -248,14 +278,16 @@ async function main() {
     intradaySummary,
     lastOrderToday,
     lastBrokerOrder,
-    tradingDays
+    tradingDays,
   });
   await markEodEmailSent();
-  
+
   stopSpinner.update(3);
   stopSpinner("complete");
 
-  console.log(`[ValueSteward] Real EOD report dispatched for ${result.equity.toFixed(2)} equity.`);
+  console.log(
+    `[ValueSteward] Real EOD report dispatched for ${result.equity.toFixed(2)} equity.`,
+  );
 }
 
 const isDirectExecution =

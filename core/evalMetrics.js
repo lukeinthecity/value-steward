@@ -20,8 +20,7 @@ export function evaluateHistoryMetrics(historyEntries) {
     returns.push((curr - prev) / prev);
   }
 
-  const equityVolatility =
-    returns.length >= 2 ? stdDev(returns) : null;
+  const equityVolatility = returns.length >= 2 ? stdDev(returns) : null;
 
   let maxDrawdown = null;
   if (equities.length >= 2) {
@@ -39,25 +38,31 @@ export function evaluateHistoryMetrics(historyEntries) {
 
   const avgCashUtilization = mean(
     entries
-      .map((h) => (typeof h.cashUtilization === "number" ? h.cashUtilization : null))
-      .filter((n) => n !== null)
+      .map((h) =>
+        typeof h.cashUtilization === "number" ? h.cashUtilization : null,
+      )
+      .filter((n) => n !== null),
   );
 
   const avgGrossExposureRatio = mean(
     entries
       .map((h) => {
-        const gross = typeof h.grossExposure === "number" ? h.grossExposure : null;
-        const pv = typeof h.portfolioValue === "number" ? h.portfolioValue : null;
+        const gross =
+          typeof h.grossExposure === "number" ? h.grossExposure : null;
+        const pv =
+          typeof h.portfolioValue === "number" ? h.portfolioValue : null;
         if (gross === null || pv === null || pv === 0) return null;
         return gross / pv;
       })
-      .filter((n) => n !== null)
+      .filter((n) => n !== null),
   );
 
   const avgMaxPositionWeight = mean(
     entries
-      .map((h) => (typeof h.maxPositionWeight === "number" ? h.maxPositionWeight : null))
-      .filter((n) => n !== null)
+      .map((h) =>
+        typeof h.maxPositionWeight === "number" ? h.maxPositionWeight : null,
+      )
+      .filter((n) => n !== null),
   );
 
   const isUptrend = equityReturn !== null ? equityReturn > 0 : false;

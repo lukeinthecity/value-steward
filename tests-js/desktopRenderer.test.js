@@ -7,7 +7,10 @@ import { JSDOM } from "jsdom";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const rendererSource = fs.readFileSync(path.join(repoRoot, "desktop", "renderer.js"), "utf8");
+const rendererSource = fs.readFileSync(
+  path.join(repoRoot, "desktop", "renderer.js"),
+  "utf8",
+);
 
 function buildDom() {
   return new JSDOM(
@@ -38,7 +41,7 @@ function buildDom() {
       <div class="topbar"></div>
       <div id="fullscreen-trigger"></div>
     </body>`,
-    { runScripts: "outside-only" }
+    { runScripts: "outside-only" },
   );
 }
 
@@ -70,8 +73,20 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
         generated_at: "2026-03-19T19:55:15.338804Z",
         result: {
           positions: [
-            { symbol: "CUB", marketValue: 5.0, side: "long", unrealizedPl: 0.01, unrealizedPlPc: 0.002 },
-            { symbol: "WMB", marketValue: 5.0, side: "long", unrealizedPl: -0.02, unrealizedPlPc: -0.004 },
+            {
+              symbol: "CUB",
+              marketValue: 5.0,
+              side: "long",
+              unrealizedPl: 0.01,
+              unrealizedPlPc: 0.002,
+            },
+            {
+              symbol: "WMB",
+              marketValue: 5.0,
+              side: "long",
+              unrealizedPl: -0.02,
+              unrealizedPlPc: -0.004,
+            },
           ],
         },
       },
@@ -94,7 +109,15 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
         equity: 100000,
         cash: 84000,
         grossExposure: 16000,
-        positions: [{ symbol: "SPY", marketValue: 1.5, side: "long", unrealizedPl: 0, unrealizedPlPc: 0 }],
+        positions: [
+          {
+            symbol: "SPY",
+            marketValue: 1.5,
+            side: "long",
+            unrealizedPl: 0,
+            unrealizedPlPc: 0,
+          },
+        ],
       },
       intents: [
         {
@@ -133,13 +156,19 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  const rendered = [...window.document.querySelectorAll("#portfolio-positions .position-card strong")].map(
-    (node) => node.textContent
-  );
-  const portfolioText = window.document.querySelector("#portfolio-positions").textContent;
+  const rendered = [
+    ...window.document.querySelectorAll(
+      "#portfolio-positions .position-card strong",
+    ),
+  ].map((node) => node.textContent);
+  const portfolioText = window.document.querySelector(
+    "#portfolio-positions",
+  ).textContent;
   const tickerText = window.document.querySelector("#news-ticker").textContent;
-  const worldSummaryText = window.document.querySelector("#world-summary").textContent;
-  const secretStatusText = window.document.querySelector("#secret-status").textContent;
+  const worldSummaryText =
+    window.document.querySelector("#world-summary").textContent;
+  const secretStatusText =
+    window.document.querySelector("#secret-status").textContent;
 
   assert.deepEqual(rendered, ["CUB", "WMB"]);
   assert.equal(portfolioText.includes("SPY"), false);
@@ -148,35 +177,60 @@ test("renderer prefers current portfolio artifacts and renders secret status wit
   assert.equal(portfolioText.includes("Held Since"), true);
   assert.equal(portfolioText.includes("3/18/2026"), true);
   assert.equal(portfolioText.includes("3/19/2026"), true);
-  assert.equal(window.document.querySelector("#hud-equity").textContent.includes("$99,976.00"), true);
+  assert.equal(
+    window.document
+      .querySelector("#hud-equity")
+      .textContent.includes("$99,976.00"),
+    true,
+  );
   assert.equal(worldSummaryText.includes("System Regime: STRESSED"), true);
   assert.equal(
     worldSummaryText.includes(
-      "System Logic: Deterministic CALM / Probabilistic STRESSED"
+      "System Logic: Deterministic CALM / Probabilistic STRESSED",
     ),
-    true
+    true,
   );
   assert.equal(worldSummaryText.includes("Agreement: Divergent"), true);
   assert.equal(worldSummaryText.includes("A cautious macro thesis."), true);
-  assert.equal(window.document.querySelector("#tick-meta").textContent.includes("03/20/2026"), true);
-  assert.equal(window.document.querySelector("#intent-feed").textContent.includes("[03/19/2026 03:40:12 PM]"), true);
+  assert.equal(
+    window.document
+      .querySelector("#tick-meta")
+      .textContent.includes("03/20/2026"),
+    true,
+  );
+  assert.equal(
+    window.document
+      .querySelector("#intent-feed")
+      .textContent.includes("[03/19/2026 03:40:12 PM]"),
+    true,
+  );
   assert.equal(tickerText.includes("Headline one"), true);
   assert.equal(tickerText.includes(" // "), true);
   assert.equal(secretStatusText.includes("Stored securely"), true);
   assert.equal(secretStatusText.includes("Using .env fallback"), true);
   assert.equal(secretStatusText.includes("Missing"), true);
   assert.equal(secretStatusText.includes("test-key"), false);
-  const clearButtons = [...window.document.querySelectorAll("#secret-status .secret-clear")];
+  const clearButtons = [
+    ...window.document.querySelectorAll("#secret-status .secret-clear"),
+  ];
   assert.equal(clearButtons[0].disabled, false);
   assert.equal(clearButtons[1].disabled, true);
   assert.equal(window.document.querySelector("#save-secrets").disabled, false);
-  assert.equal(typeof window.__VS_RENDERER_TEST__.computeTickerTravelWidth, "function");
-  assert.equal(window.__VS_RENDERER_TEST__.computeTickerTravelWidth({ scrollWidth: 960 }), 320);
+  assert.equal(
+    typeof window.__VS_RENDERER_TEST__.computeTickerTravelWidth,
+    "function",
+  );
+  assert.equal(
+    window.__VS_RENDERER_TEST__.computeTickerTravelWidth({ scrollWidth: 960 }),
+    320,
+  );
   assert.equal(window.__VS_RENDERER_TEST__.normalizeTickerOffset(-640, 320), 0);
 
   window.document.querySelector("#conf-alpaca-id").value = "abc";
   window.document.querySelector("#conf-gemini-key").value = "xyz";
-  const updates = JSON.parse(JSON.stringify(window.__VS_RENDERER_TEST__.collectSecretUpdates()));
+  const updates = JSON.parse(
+    JSON.stringify(window.__VS_RENDERER_TEST__.collectSecretUpdates()),
+  );
   assert.deepEqual(updates, {
     ALPACA_API_KEY_ID: "abc",
     GOOGLE_GENAI_API_KEY: "xyz",

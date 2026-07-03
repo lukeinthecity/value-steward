@@ -5,7 +5,10 @@ import "dotenv/config";
 import { getExchangeDateString } from "../core/timeUtils.js";
 import { readJsonl } from "../core/runtimeArtifacts.js";
 import { buildExecutionQualitySnapshot } from "../core/executionQualityReport.js";
-import { getGateCalibrationPath, runGateCalibration } from "../core/gateCalibration.js";
+import {
+  getGateCalibrationPath,
+  runGateCalibration,
+} from "../core/gateCalibration.js";
 import { getIntentOutcomesPath } from "../core/intentReconciliation.js";
 import { sendWeeklyReportEmail } from "../core/emailNotifications.js";
 import {
@@ -211,7 +214,7 @@ async function main() {
   try {
     const gateCal = runGateCalibration({ now });
     console.log(
-      `\nGate Calibration: ${gateCal.gates.length} gates over ${gateCal.total_blocked} blocked rows → ${getGateCalibrationPath()}`
+      `\nGate Calibration: ${gateCal.gates.length} gates over ${gateCal.total_blocked} blocked rows → ${getGateCalibrationPath()}`,
     );
   } catch (err) {
     console.warn("Gate calibration report failed:", err?.message ?? err);

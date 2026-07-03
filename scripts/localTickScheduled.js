@@ -14,19 +14,21 @@ import {
 
 export function parseExecutionSlots(
   value = process.env.VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE,
-  fallback = [30, 20, 10, 5]
+  fallback = [30, 20, 10, 5],
 ) {
   if (!value) return fallback;
   const parsed = String(value)
     .split(",")
     .map((part) => Number(part.trim()))
     .filter((part) => Number.isFinite(part) && part >= 0);
-  return parsed.length ? Array.from(new Set(parsed)).sort((a, b) => b - a) : fallback;
+  return parsed.length
+    ? Array.from(new Set(parsed)).sort((a, b) => b - a)
+    : fallback;
 }
 
 function shouldLogSkip() {
   return ["1", "true", "yes", "on"].includes(
-    String(process.env.VS_SCHEDULE_LOG_SKIPS ?? "false").toLowerCase()
+    String(process.env.VS_SCHEDULE_LOG_SKIPS ?? "false").toLowerCase(),
   );
 }
 
@@ -36,14 +38,22 @@ export function shouldRunScheduledLocalTick({
   slots = parseExecutionSlots(),
 } = {}) {
   if (force) {
-    return { run: true, reason: "forced", minutesUntilClose: minutesUntilClose(now) };
+    return {
+      run: true,
+      reason: "forced",
+      minutesUntilClose: minutesUntilClose(now),
+    };
   }
   if (!isTradingDay(now)) {
     return { run: false, reason: "non_trading_day", minutesUntilClose: null };
   }
   const minutes = minutesUntilClose(now);
   if (!isWithinMinutesBeforeCloseSlots(slots, now)) {
-    return { run: false, reason: "not_execution_slot", minutesUntilClose: minutes };
+    return {
+      run: false,
+      reason: "not_execution_slot",
+      minutesUntilClose: minutes,
+    };
   }
   return { run: true, reason: "execution_slot", minutesUntilClose: minutes };
 }
@@ -77,7 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
       console.log(
         `[tick:schedule] Skipping (${decision.reason}) minutesUntilClose=${
           decision.minutesUntilClose ?? "n/a"
-        }.`
+        }.`,
       );
     }
     process.exit(0);

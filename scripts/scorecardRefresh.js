@@ -20,15 +20,11 @@ async function main() {
   const stopSpinner = startSpinner("scorecard refresh", { total: 1 });
   const pythonCmd = resolvePythonCommand();
 
-  const child = spawn(
-    pythonCmd,
-    ["-m", "valuesteward.cli", "scorecard"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: "inherit",
-    }
-  );
+  const child = spawn(pythonCmd, ["-m", "valuesteward.cli", "scorecard"], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: "inherit",
+  });
 
   child.on("close", (code) => {
     stopSpinner.update(1);

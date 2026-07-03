@@ -22,7 +22,9 @@ export async function runValueSteward({
   const equityParsed = parseFloat(account.equity);
   const buyingPowerParsed = parseFloat(account.buying_power);
   const equityNum = Number.isNaN(equityParsed) ? null : equityParsed;
-  const buyingPowerNum = Number.isNaN(buyingPowerParsed) ? null : buyingPowerParsed;
+  const buyingPowerNum = Number.isNaN(buyingPowerParsed)
+    ? null
+    : buyingPowerParsed;
   const cashParsed = account.cash ? parseFloat(account.cash) : NaN;
   const cash = Number.isNaN(cashParsed) ? null : cashParsed;
   const portfolioParsed = account.portfolio_value
@@ -93,13 +95,11 @@ export async function runValueSteward({
   const grossExposure = longMarketValue + shortMarketValue;
   const netExposure = longMarketValue - shortMarketValue;
   const maxPositionWeight =
-    portfolioValue !== null &&
-    portfolioValue > 0 &&
-    positionsSummary.length > 0
+    portfolioValue !== null && portfolioValue > 0 && positionsSummary.length > 0
       ? Math.max(
-          ...positionsSummary.map((pos) =>
-            Math.abs(pos.marketValue) / portfolioValue
-          )
+          ...positionsSummary.map(
+            (pos) => Math.abs(pos.marketValue) / portfolioValue,
+          ),
         )
       : null;
   const result = {

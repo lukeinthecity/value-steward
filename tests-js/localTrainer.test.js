@@ -16,7 +16,7 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
@@ -27,13 +27,13 @@ function buildPositiveScorecardRecord(intentId, entryDate = "2026-03-13") {
     entry_date: entryDate,
     action_type: "BUY",
     horizons: {
-      "5": {
+      5: {
         signed_return: 0.02,
         benchmark_return: 0.01,
         excess_vs_benchmark: 0.01,
         excess_vs_cash: 0.02,
       },
-      "20": {
+      20: {
         signed_return: 0.04,
         benchmark_return: 0.01,
         excess_vs_benchmark: 0.03,
@@ -50,13 +50,13 @@ function buildBenchmarkLagScorecardRecord(intentId, entryDate = "2026-03-13") {
     entry_date: entryDate,
     action_type: "BUY",
     horizons: {
-      "5": {
+      5: {
         signed_return: 0.02,
         benchmark_return: 0.03,
         excess_vs_benchmark: -0.01,
         excess_vs_cash: 0.02,
       },
-      "20": {
+      20: {
         signed_return: 0.04,
         benchmark_return: 0.06,
         excess_vs_benchmark: -0.02,
@@ -78,14 +78,15 @@ function buildPositiveHistory() {
 }
 
 async function importLocalTrainer() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "core", "localTrainer.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "core", "localTrainer.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
 test("local trainer applies scorecard learning in rebalance mode", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-trainer-scorecard-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-trainer-scorecard-"),
+  );
   process.chdir(tmpDir);
 
   const envKeys = [
@@ -94,7 +95,9 @@ test("local trainer applies scorecard learning in rebalance mode", async (t) => 
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
   process.env.VS_TRAIN_ONCE_PER_DAY = "true";
@@ -127,7 +130,7 @@ test("local trainer applies scorecard learning in rebalance mode", async (t) => 
   assert.equal(result.source, "scorecard");
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.equal(savedPolicy.version, 2);
   assert.equal(savedPolicy.lastTrainingReason, "scorecard_update");
@@ -141,11 +144,10 @@ test("local trainer falls back to history and only attempts once per day", async
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-trainer-history-"));
   process.chdir(tmpDir);
 
-  const envKeys = [
-    "VS_SCORECARD_LEARN",
-    "VS_TRAIN_ONCE_PER_DAY",
-  ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const envKeys = ["VS_SCORECARD_LEARN", "VS_TRAIN_ONCE_PER_DAY"];
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "false";
   process.env.VS_TRAIN_ONCE_PER_DAY = "true";
 
@@ -178,14 +180,16 @@ test("local trainer falls back to history and only attempts once per day", async
   assert.equal(second.reason, "already_attempted_today");
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.equal(savedPolicy.version, 2);
 });
 
 test("local trainer allows same-day scorecard-only training after history attempt", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-trainer-source-split-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-trainer-source-split-"),
+  );
   process.chdir(tmpDir);
 
   const envKeys = [
@@ -193,7 +197,9 @@ test("local trainer allows same-day scorecard-only training after history attemp
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
   process.env.VS_TRAIN_ONCE_PER_DAY = "true";
@@ -237,7 +243,7 @@ test("local trainer allows same-day scorecard-only training after history attemp
   assert.equal(scorecardRun.updated, true);
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.equal(savedPolicy.version, 3);
 });
@@ -252,7 +258,9 @@ test("local trainer repairs null sandbox cap fields on save", async (t) => {
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
   process.env.VS_TRAIN_ONCE_PER_DAY = "false";
@@ -286,7 +294,7 @@ test("local trainer repairs null sandbox cap fields on save", async (t) => {
   assert.equal(result.updated, true);
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.equal(savedPolicy.max_effective_capital_dollars, 20);
   assert.equal(savedPolicy.max_trade_notional_dollars, 5);
@@ -295,7 +303,9 @@ test("local trainer repairs null sandbox cap fields on save", async (t) => {
 
 test("local trainer de-risks when scorecard returns lag the benchmark", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-trainer-benchmark-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-trainer-benchmark-"),
+  );
   process.chdir(tmpDir);
 
   const envKeys = [
@@ -304,7 +314,9 @@ test("local trainer de-risks when scorecard returns lag the benchmark", async (t
     "VS_TRAIN_ONCE_PER_DAY",
     "VS_SCORECARD_BENCHMARK_THRESHOLD",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
   process.env.VS_TRAIN_ONCE_PER_DAY = "false";
@@ -338,7 +350,7 @@ test("local trainer de-risks when scorecard returns lag the benchmark", async (t
   assert.ok(result.newRisk < result.oldRisk);
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.ok(savedPolicy.risk_level < 0.2);
 });
@@ -353,7 +365,9 @@ test("local trainer force bypasses scorecard cooldown guards", async (t) => {
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
   process.env.VS_TRAIN_ONCE_PER_DAY = "true";
@@ -387,7 +401,7 @@ test("local trainer force bypasses scorecard cooldown guards", async (t) => {
   assert.equal(result.source, "scorecard");
 
   const savedPolicy = JSON.parse(
-    fs.readFileSync(path.join("config", "policy.json"), "utf8")
+    fs.readFileSync(path.join("config", "policy.json"), "utf8"),
   );
   assert.equal(savedPolicy.version, 4);
 });
@@ -402,7 +416,9 @@ test("local trainer ignores scorecard records from before the phase1 start date"
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_PHASE1_START_DATE = "2026-03-16";
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "1";
@@ -445,7 +461,9 @@ test("local trainer avoids duplicate fallback history logs when history is empty
     "VS_SCORECARD_MIN_SAMPLES",
     "VS_TRAIN_ONCE_PER_DAY",
   ];
-  const oldEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const oldEnv = Object.fromEntries(
+    envKeys.map((key) => [key, process.env[key]]),
+  );
   process.env.VS_SCORECARD_LEARN = "true";
   process.env.VS_SCORECARD_MIN_SAMPLES = "20";
   process.env.VS_TRAIN_ONCE_PER_DAY = "false";

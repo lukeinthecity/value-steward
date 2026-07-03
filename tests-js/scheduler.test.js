@@ -1,15 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  shouldRunScheduledEod,
-} from "../scripts/eodRunScheduled.js";
-import {
-  shouldRunScheduledLocalTick,
-} from "../scripts/localTickScheduled.js";
-import {
-  shouldRunScheduledWorld,
-} from "../scripts/worldRunScheduled.js";
+import { shouldRunScheduledEod } from "../scripts/eodRunScheduled.js";
+import { shouldRunScheduledLocalTick } from "../scripts/localTickScheduled.js";
+import { shouldRunScheduledWorld } from "../scripts/worldRunScheduled.js";
 
 test("local tick scheduler follows early-close execution slots", () => {
   const earlyCloseOpen = new Date("2026-11-27T17:30:00Z"); // 12:30 ET, 30 min before 13:00 close

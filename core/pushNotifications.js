@@ -23,7 +23,7 @@ const DEFAULT_SERVER = "https://ntfy.sh";
 
 function loadPushConfig(label) {
   const enabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_PUSH_ENABLED ?? "true").toLowerCase()
+    String(process.env.VS_PUSH_ENABLED ?? "true").toLowerCase(),
   );
   if (!enabled) return null;
 
@@ -37,7 +37,12 @@ function loadPushConfig(label) {
     .trim()
     .replace(/\/+$/, "");
   const token = (process.env.VS_NTFY_TOKEN || "").trim();
-  return { server, topic, token, url: `${server}/${encodeURIComponent(topic)}` };
+  return {
+    server,
+    topic,
+    token,
+    url: `${server}/${encodeURIComponent(topic)}`,
+  };
 }
 
 function sleep(ms) {
@@ -75,7 +80,9 @@ export async function sendPush({
 
   if (typeof fetchImpl !== "function") {
     recordPushHealth({ label, ok: false, error: "fetch_unavailable" });
-    console.warn(`[push] no fetch implementation available; skipping ${label}.`);
+    console.warn(
+      `[push] no fetch implementation available; skipping ${label}.`,
+    );
     return { ok: false, skipped: false, error: "fetch_unavailable" };
   }
 
@@ -108,7 +115,7 @@ export async function sendPush({
   const errMsg = lastError?.message ?? String(lastError);
   recordPushHealth({ label, ok: false, error: errMsg });
   console.warn(
-    `[push] ${label} failed after ${retries + 1} attempt(s): ${errMsg}`
+    `[push] ${label} failed after ${retries + 1} attempt(s): ${errMsg}`,
   );
   return { ok: false, skipped: false, error: errMsg };
 }
@@ -117,7 +124,12 @@ export async function sendPush({
  * Market-open "VS is live for the day" push. Caller composes the one-line
  * status summary (decoupled from the runtime data shape).
  */
-export function sendInitializePush({ dateLabel, statusLine, clickUrl = null, ...opts }) {
+export function sendInitializePush({
+  dateLabel,
+  statusLine,
+  clickUrl = null,
+  ...opts
+}) {
   return sendPush({
     label: "initialize",
     title: `VS live · ${dateLabel}`,
@@ -154,7 +166,12 @@ export function sendOffPush({
 /**
  * Health-alert push. High priority; caller passes a short issue summary.
  */
-export function sendHealthAlertPush({ issueCount, summary, clickUrl = null, ...opts }) {
+export function sendHealthAlertPush({
+  issueCount,
+  summary,
+  clickUrl = null,
+  ...opts
+}) {
   return sendPush({
     label: "health_alert",
     title: `VS health alert (${issueCount} issue${issueCount === 1 ? "" : "s"})`,

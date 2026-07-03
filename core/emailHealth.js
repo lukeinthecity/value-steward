@@ -43,7 +43,11 @@ export function instrumentTransporter(transporter, label) {
       recordEmailHealth({ label, ok: true });
       return result;
     } catch (err) {
-      recordEmailHealth({ label, ok: false, error: err?.message ?? String(err) });
+      recordEmailHealth({
+        label,
+        ok: false,
+        error: err?.message ?? String(err),
+      });
       throw err;
     }
   };

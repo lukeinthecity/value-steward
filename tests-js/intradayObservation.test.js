@@ -8,10 +8,12 @@ import {
 } from "../scripts/intradayObservationScheduled.js";
 
 test("parseObservationTimes uses configured valid HH:MM values", () => {
-  assert.deepEqual(
-    parseObservationTimes("10:00,11:30,13:30,15:00"),
-    ["10:00", "11:30", "13:30", "15:00"]
-  );
+  assert.deepEqual(parseObservationTimes("10:00,11:30,13:30,15:00"), [
+    "10:00",
+    "11:30",
+    "13:30",
+    "15:00",
+  ]);
 });
 
 test("scheduled intraday observation runs only on configured slots", () => {
