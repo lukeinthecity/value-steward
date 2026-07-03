@@ -60,7 +60,8 @@
     "desktop": "node scripts/desktop.js"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "prettier": "^3.9.4"
   },
   "dependencies": {
     "@alpacahq/alpaca-trade-api": "^3.1.3",
