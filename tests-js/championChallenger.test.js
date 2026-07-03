@@ -70,7 +70,7 @@ test("evaluateChampionChallenger: promotes on sustained improvement", () => {
       drawdown: currentSignalWeights.drawdown,
     },
     oosMetrics: oosWith(0.5),
-    promoteMargin: 0.10,
+    promoteMargin: 0.1,
   });
   assert.equal(result.action, "promote");
   assert.equal(result.newChampion.momentum, 1.2);
@@ -94,7 +94,7 @@ test("evaluateChampionChallenger: holds in tolerance, decays deficit", () => {
     currentSignalWeights,
     currentWeights: baseWeights,
     oosMetrics: oosWith(0.48), // slightly worse but within margin
-    revertMargin: 0.10,
+    revertMargin: 0.1,
   });
   assert.equal(result.action, "hold");
   // Deficit cycle should decay by 1 since within tolerance.
@@ -118,7 +118,7 @@ test("evaluateChampionChallenger: increments deficit on underperformance, no rev
     currentSignalWeights,
     currentWeights: baseWeights,
     oosMetrics: oosWith(0.3),
-    revertMargin: 0.10,
+    revertMargin: 0.1,
     revertCycles: 3,
   });
   assert.equal(result.action, "hold");
@@ -147,7 +147,7 @@ test("evaluateChampionChallenger: reverts after revertCycles of underperformance
       drawdown: 0.6,
     },
     oosMetrics: oosWith(0.3),
-    revertMargin: 0.10,
+    revertMargin: 0.1,
     revertCycles: 3,
   });
   assert.equal(result.action, "revert");
@@ -177,8 +177,8 @@ test("evaluateChampionChallenger: asymmetric margins prevent flip-flop", () => {
     currentSignalWeights,
     currentWeights: baseWeights,
     oosMetrics: oosWith(0.45), // +0.05 above champion, below +0.10 promote margin
-    promoteMargin: 0.10,
-    revertMargin: 0.10,
+    promoteMargin: 0.1,
+    revertMargin: 0.1,
   });
   assert.equal(result.action, "hold");
 });

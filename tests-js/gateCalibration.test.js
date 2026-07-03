@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importModule() {
-  const moduleUrl = `${pathToFileURL(
-    path.join(repoRoot, "core", "gateCalibration.js")
-  ).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${
+    pathToFileURL(path.join(repoRoot, "core", "gateCalibration.js")).href
+  }?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -106,10 +106,10 @@ test("markdown render includes the observation-only header and verdicts", async 
     { id: "a", explanation: "Buy blocked: entry_quality rel60=-0.05<=0.00" },
   ];
   const records = Array.from({ length: 11 }, (_, i) =>
-    blockedRecord({ intentId: "a", excess: -0.01 - i * 0.001 })
+    blockedRecord({ intentId: "a", excess: -0.01 - i * 0.001 }),
   );
   const md = renderGateCalibrationMarkdown(
-    buildGateCalibration({ scorecardRecords: records, intents, horizon: 5 })
+    buildGateCalibration({ scorecardRecords: records, intents, horizon: 5 }),
   );
   assert.match(md, /Observation only — do not act mid-run/);
   assert.match(md, /rel_strength_60d/);
@@ -130,18 +130,18 @@ test("runGateCalibration writes the markdown atomically in cwd", async (t) => {
   fs.mkdirSync(path.join(tmpDir, "data"), { recursive: true });
   fs.writeFileSync(
     path.join(tmpDir, "logs", "intent_log.jsonl"),
-    `${JSON.stringify({ id: "a", explanation: "Buy blocked: entry_quality rel20=-0.01<=0.00" })}\n`
+    `${JSON.stringify({ id: "a", explanation: "Buy blocked: entry_quality rel20=-0.01<=0.00" })}\n`,
   );
   fs.writeFileSync(
     path.join(tmpDir, "data", "signal-scorecard.jsonl"),
-    `${JSON.stringify(blockedRecord({ intentId: "a", excess: 0.01 }))}\n`
+    `${JSON.stringify(blockedRecord({ intentId: "a", excess: 0.01 }))}\n`,
   );
 
   const result = runGateCalibration();
   assert.equal(result.gates.length, 1);
   const md = fs.readFileSync(
     path.join(tmpDir, "data", "gate-calibration.md"),
-    "utf8"
+    "utf8",
   );
   assert.match(md, /rel_strength_20d/);
 });

@@ -89,7 +89,7 @@ function getWorldSlot(now = new Date()) {
   const map = Object.fromEntries(
     parts
       .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value])
+      .map((part) => [part.type, part.value]),
   );
   const hour = Number(map.hour);
   if (Number.isNaN(hour)) return "unknown";
@@ -100,7 +100,7 @@ function getWorldSlot(now = new Date()) {
 
 function buildBaseContext({ entries, date }) {
   const sourcesUsed = Array.from(
-    new Set(entries.map((entry) => entry.source_id).filter(Boolean))
+    new Set(entries.map((entry) => entry.source_id).filter(Boolean)),
   );
 
   return {
@@ -136,7 +136,7 @@ function buildRuleSummary({ hydratedEntries, macroView }) {
       (entry) =>
         cleanSummaryText(entry.title) ||
         cleanSummaryText(entry.title_extracted) ||
-        cleanSummaryText(entry.summary)
+        cleanSummaryText(entry.summary),
     )
     .filter(Boolean);
 
@@ -145,7 +145,9 @@ function buildRuleSummary({ hydratedEntries, macroView }) {
 
   const top = unique.slice(0, 3);
   const hasMacroSignals = (macroView?.inputs_used ?? []).length > 0;
-  const macroLabel = hasMacroSignals ? macroView?.macro_label ?? "n/a" : "n/a";
+  const macroLabel = hasMacroSignals
+    ? (macroView?.macro_label ?? "n/a")
+    : "n/a";
   const summary = `macro=${macroLabel} | headlines: ${top.join(" | ")}`;
 
   if (summary.length <= 400) return summary;
@@ -161,7 +163,13 @@ async function main() {
   const slot = getWorldSlot();
 
   if (context.some((entry) => entry.date === date && entry.slot === slot)) {
-    console.log("[world] context already exists for", date, "slot", slot, "- continuing to build higher-resolution entry.");
+    console.log(
+      "[world] context already exists for",
+      date,
+      "slot",
+      slot,
+      "- continuing to build higher-resolution entry.",
+    );
   }
 
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -217,7 +225,7 @@ async function main() {
     const tagsValid =
       tags &&
       Object.values(tags).every(
-        (val) => val === null || (val >= 0 && val <= 1)
+        (val) => val === null || (val >= 0 && val <= 1),
       );
 
     let contextToUse = {
@@ -286,7 +294,7 @@ async function main() {
 
     if (!validateContext(contextToUse)) {
       console.error(
-        "[world] context validation failed; using rule-based base context"
+        "[world] context validation failed; using rule-based base context",
       );
       const fallback = {
         ...baseContext,
@@ -315,7 +323,7 @@ async function main() {
       appendContext(fallback);
       const logDate = fallback.date ?? date;
       console.log(
-        `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
+        `[world] context built date=${logDate} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`,
       );
       stopSpinner.update(1);
       stopSpinner(`saved ${logDate} ${slot}`);
@@ -327,7 +335,7 @@ async function main() {
 
     const tagSummary = Object.entries(contextToUse.tags || {})
       .map(([key, value]) =>
-        value === null ? `${key}=null` : `${key}=${value.toFixed(2)}`
+        value === null ? `${key}=null` : `${key}=${value.toFixed(2)}`,
       )
       .join(",");
     const tagsNote = tagSummary ? ` tags=${tagSummary}` : " tags=all null";
@@ -335,7 +343,7 @@ async function main() {
     const logDate = contextToUse.date ?? date;
 
     console.log(
-      `[world] context built date=${logDate} slot=${slot} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`
+      `[world] context built date=${logDate} slot=${slot} sources=${contextToUse.sources_used.length} raw=${contextToUse.raw_count} digest=${digest}${tagsNote}`,
     );
     stopSpinner.update(1);
     stopSpinner(`saved ${logDate} ${slot}`);
@@ -354,7 +362,7 @@ async function main() {
     appendContext(fallback);
     const logDate = fallback.date ?? date;
     console.log(
-      `[world] context built date=${logDate} slot=${slot} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`
+      `[world] context built date=${logDate} slot=${slot} sources=${fallback.sources_used.length} raw=${fallback.raw_count} digest=rule`,
     );
     stopSpinner.update(1);
     stopSpinner(`saved ${logDate} ${slot}`);

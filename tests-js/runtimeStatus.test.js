@@ -24,11 +24,11 @@ function setupTempEnv() {
       last_executed_at: "2026-05-20T19:50:13.000Z",
       daily_starting_equity: 99976.22,
       phase1_start_date: "2026-05-18",
-    })
+    }),
   );
   fs.writeFileSync(
     path.join(dir, "config", "policy.json"),
-    JSON.stringify({ version: 77 })
+    JSON.stringify({ version: 77 }),
   );
   fs.writeFileSync(
     path.join(dir, "data", "training-log.jsonl"),
@@ -45,7 +45,7 @@ function setupTempEnv() {
         decision: "no_update",
         reason: "insufficient_samples",
       }),
-    ].join("\n") + "\n"
+    ].join("\n") + "\n",
   );
   return dir;
 }
@@ -69,15 +69,15 @@ function setupHolidayEnv() {
       current_mode: "LIVE",
       trading_enabled: true,
       phase1_start_date: "2026-05-22",
-    })
+    }),
   );
   fs.writeFileSync(
     path.join(dir, "config", "policy.json"),
-    JSON.stringify({ version: 1 })
+    JSON.stringify({ version: 1 }),
   );
   fs.writeFileSync(
     path.join(dir, "data", "market-holidays.json"),
-    JSON.stringify({ holidays: ["2026-05-25"] })
+    JSON.stringify({ holidays: ["2026-05-25"] }),
   );
   fs.writeFileSync(
     path.join(dir, "data", "training-log.jsonl"),
@@ -86,7 +86,7 @@ function setupHolidayEnv() {
       source: "scorecard",
       decision: "no_update",
       reason: "x",
-    }) + "\n"
+    }) + "\n",
   );
   return dir;
 }
@@ -123,10 +123,7 @@ test("runtimeStatus: jsonl --append writes a single line to runtime.log", (t) =>
 
   const logPath = path.join(dir, "data", "runtime.log");
   assert.equal(fs.existsSync(logPath), true);
-  const lines = fs
-    .readFileSync(logPath, "utf8")
-    .split("\n")
-    .filter(Boolean);
+  const lines = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
   assert.equal(lines.length, 2);
   for (const line of lines) {
     const parsed = JSON.parse(line);
@@ -145,10 +142,7 @@ test("runtimeStatus: jsonl without --append goes to stdout, not file", (t) => {
   const parsed = JSON.parse(trimmed);
   assert.equal(parsed.operational.mode, "LIVE");
   // File should not have been created.
-  assert.equal(
-    fs.existsSync(path.join(dir, "data", "runtime.log")),
-    false
-  );
+  assert.equal(fs.existsSync(path.join(dir, "data", "runtime.log")), false);
 });
 
 test("runtimeStatus: missedDays surfaces gaps in training-log", (t) => {
@@ -184,13 +178,13 @@ test("runtimeStatus: REGRESSION — market holidays excluded from missedDays", (
   // as a missed day even though it's a weekday with no training entry.
   assert.ok(
     !parsed.missedDays.includes("2026-05-25"),
-    `holiday 2026-05-25 should be excluded, got: ${parsed.missedDays}`
+    `holiday 2026-05-25 should be excluded, got: ${parsed.missedDays}`,
   );
   // 2026-05-26 (Tue) is a real trading day with no training entry — the
   // gap-detection logic must still flag it (proves we didn't over-suppress).
   assert.ok(
     parsed.missedDays.includes("2026-05-26"),
-    `real trading-day gap 2026-05-26 should be flagged, got: ${parsed.missedDays}`
+    `real trading-day gap 2026-05-26 should be flagged, got: ${parsed.missedDays}`,
   );
 });
 

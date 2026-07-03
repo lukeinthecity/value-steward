@@ -16,7 +16,7 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
@@ -34,13 +34,13 @@ function buildScorecardRecord({
     action_type: actionType,
     reason_code: reasonCode,
     horizons: {
-      "5": {
+      5: {
         signed_return: 0.02,
         benchmark_return: 0.01,
         excess_vs_benchmark: excess5,
         excess_vs_cash: 0.02,
       },
-      "20": {
+      20: {
         signed_return: 0.03,
         benchmark_return: 0.01,
         excess_vs_benchmark: excess20,
@@ -51,14 +51,15 @@ function buildScorecardRecord({
 }
 
 async function importScorecardTrainer() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "core", "scorecardTrainer.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "core", "scorecardTrainer.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
 test("scorecard trainer updates from buy rows without dilution from no-action rows", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-trainer-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-trainer-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -101,12 +102,17 @@ test("scorecard trainer updates from buy rows without dilution from no-action ro
   assert.equal(result.reason, "scorecard_update");
   assert.equal(result.scorecardSummary.training.sampleCount, 1);
   assert.equal(result.scorecardSummary.noAction.sampleCount, 1);
-  assert.equal(result.scorecardSummary.training.horizons["5"].avgExcessBenchmark, 0.02);
+  assert.equal(
+    result.scorecardSummary.training.horizons["5"].avgExcessBenchmark,
+    0.02,
+  );
 });
 
 test("scorecard trainer ignores no-action rows that lack a trainable reason_code", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-buy-samples-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-buy-samples-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -155,7 +161,9 @@ test("scorecard trainer ignores no-action rows that lack a trainable reason_code
 
 test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-counterfactual-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-counterfactual-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -203,22 +211,26 @@ test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async
     force: true,
   });
 
-  assert.equal(result.updated, true, "counterfactuals should drive a policy update");
+  assert.equal(
+    result.updated,
+    true,
+    "counterfactuals should drive a policy update",
+  );
   assert.equal(result.reason, "scorecard_update");
   assert.equal(
     result.scorecardSummary.training.sampleCount,
     2,
-    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row"
+    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row",
   );
   assert.equal(
     result.scorecardSummary.buyBlockedCounterfactual.sampleCount,
     2,
-    "buyBlockedCounterfactual summary should show 2 rows"
+    "buyBlockedCounterfactual summary should show 2 rows",
   );
   // Positive avgExcessBenchmark on counterfactuals → trainer raises risk
   assert.ok(
     result.newRisk > result.oldRisk,
-    "positive counterfactual excess return should raise risk_level"
+    "positive counterfactual excess return should raise risk_level",
   );
 });
 

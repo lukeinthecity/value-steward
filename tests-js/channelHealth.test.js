@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importModule() {
-  const moduleUrl = `${pathToFileURL(
-    path.join(repoRoot, "core", "channelHealth.js")
-  ).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${
+    pathToFileURL(path.join(repoRoot, "core", "channelHealth.js")).href
+  }?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 

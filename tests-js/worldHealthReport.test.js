@@ -43,7 +43,7 @@ test("summarizeInbox does not emit negative ages for forward-looking feeds", () 
           enabled: true,
           stale_hours: 24,
         },
-      ]
+      ],
     );
 
     assert.equal(rows.length, 1);
@@ -77,18 +77,18 @@ test("updateHealthState persists normalized last_seen for forward-looking feeds"
           enabled: true,
           stale_hours: 24,
         },
-      ]
+      ],
     );
 
     const state = updateHealthState(rows, { last_checked: null, sources: {} });
 
     assert.equal(
       state.sources["economic-calendar"].last_seen,
-      "2026-04-04T10:05:01.602Z"
+      "2026-04-04T10:05:01.602Z",
     );
     assert.equal(
       state.sources["economic-calendar"].last_published,
-      "2026-04-04T16:00:00.000Z"
+      "2026-04-04T16:00:00.000Z",
     );
   } finally {
     Date.now = now;

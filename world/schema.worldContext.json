@@ -33,11 +33,31 @@
         "recession_fear"
       ],
       "properties": {
-        "macro_risk": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "rate_hawkishness": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "geopolitical_tension": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "energy_shock_risk": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "recession_fear": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        "macro_risk": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rate_hawkishness": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "geopolitical_tension": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "energy_shock_risk": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "recession_fear": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
       },
       "additionalProperties": false
     },

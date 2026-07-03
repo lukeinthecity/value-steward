@@ -5,7 +5,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Parser from "rss-parser";
 
-import { readJson, readJsonl, writeJsonlAtomic } from "../core/runtimeArtifacts.js";
+import {
+  readJson,
+  readJsonl,
+  writeJsonlAtomic,
+} from "../core/runtimeArtifacts.js";
 import { startSpinner } from "./spinner.js";
 
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
@@ -37,7 +41,7 @@ function loadFeeds() {
   const feeds = readJson(FEEDS_PATH);
   if (!feeds || typeof feeds !== "object") {
     console.error(
-      `[world] feeds.json missing or unreadable at ${FEEDS_PATH}; no sources fetched this run.`
+      `[world] feeds.json missing or unreadable at ${FEEDS_PATH}; no sources fetched this run.`,
     );
     return { sources: [] };
   }
@@ -97,7 +101,7 @@ function normalizeCalendarItem({ sourceId, item }) {
   const country = item.country ?? item.currency ?? "";
   const title = [country, rawTitle].filter(Boolean).join(" ").trim();
   const published = parseCalendarDate(
-    item.date ?? item.datetime ?? item.time ?? item.timestamp
+    item.date ?? item.datetime ?? item.time ?? item.timestamp,
   );
   const summary = buildCalendarSummary({
     title: title || rawTitle || "calendar event",
@@ -146,18 +150,22 @@ async function fetchTextWithTimeout(url, { timeoutMs, headers }) {
 
 async function main() {
   const feeds = loadFeeds();
-  const enabledSources = (feeds.sources ?? []).filter((source) => source.enabled);
-  const stopSpinner = startSpinner("fetch rss", { total: enabledSources.length });
+  const enabledSources = (feeds.sources ?? []).filter(
+    (source) => source.enabled,
+  );
+  const stopSpinner = startSpinner("fetch rss", {
+    total: enabledSources.length,
+  });
   const userAgent =
     process.env.WORLD_RSS_USER_AGENT?.trim() ||
     "ValueSteward/1.0 (contact: local)";
   const usesDefaultAgent = userAgent.includes("contact: local");
   const hasSecFeed = (feeds.sources ?? []).some(
-    (source) => source.enabled && String(source.id || "").startsWith("sec")
+    (source) => source.enabled && String(source.id || "").startsWith("sec"),
   );
   if (usesDefaultAgent && hasSecFeed) {
     console.warn(
-      "[world] SEC feeds may return 403 without a real contact in WORLD_RSS_USER_AGENT."
+      "[world] SEC feeds may return 403 without a real contact in WORLD_RSS_USER_AGENT.",
     );
   }
   const parser = new Parser();
@@ -205,11 +213,11 @@ async function main() {
             Accept: "application/rss+xml, application/xml, text/xml, */*",
           },
         });
-        
+
         // Elite Quant: Clean raw XML before parsing to handle BOM or leading whitespace
         const cleanedText = rawText.trim();
         const feed = await parser.parseString(cleanedText);
-        
+
         for (const item of feed.items ?? []) {
           if (isPaywalled({ sourceId: source.id, item })) continue;
           const normalized = normalizeItem({ sourceId: source.id, item });
@@ -221,7 +229,10 @@ async function main() {
         }
       }
     } catch (err) {
-      console.error(`[world] fetch failed for ${source.id}:`, err?.message ?? err);
+      console.error(
+        `[world] fetch failed for ${source.id}:`,
+        err?.message ?? err,
+      );
     } finally {
       processed += 1;
       stopSpinner.update(processed);
@@ -232,10 +243,10 @@ async function main() {
   saveInbox(pruned);
 
   stopSpinner(
-    `sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`
+    `sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`,
   );
   console.log(
-    `[world] fetched sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`
+    `[world] fetched sources=${feeds.sources?.length ?? 0} added=${added} kept=${pruned.length}`,
   );
 }
 

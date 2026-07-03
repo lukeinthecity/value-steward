@@ -11,7 +11,7 @@ function buildRow({ policyVersion, excess5, intentId }) {
     timestamp: "2026-05-01T20:00:00.000Z",
     policy_version: policyVersion,
     horizons: {
-      "5": { excess_vs_benchmark: excess5 },
+      5: { excess_vs_benchmark: excess5 },
     },
   };
 }
@@ -68,7 +68,7 @@ test("evaluateOos: rolling block ignores policy_version, uses recency", () => {
       policyVersion: i,
       excess5: i * 0.001,
       intentId: `r${i}`,
-    })
+    }),
   );
   const oos = evaluateOos({
     records,
@@ -98,7 +98,9 @@ test("evaluateOos: missing horizon values are skipped silently", () => {
 });
 
 test("evaluateOos: minSamples flag marks insufficient blocks", () => {
-  const records = [buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" })];
+  const records = [
+    buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" }),
+  ];
   const oos = evaluateOos({
     records,
     currentPolicyVersion: 1,
@@ -109,7 +111,9 @@ test("evaluateOos: minSamples flag marks insufficient blocks", () => {
 });
 
 test("evaluateOos: handles null currentPolicyVersion gracefully", () => {
-  const records = [buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" })];
+  const records = [
+    buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" }),
+  ];
   const oos = evaluateOos({ records, currentPolicyVersion: null });
   assert.equal(oos.strict.sampleCount, 0);
   // Rolling still works.

@@ -53,7 +53,7 @@ function buildRuntimeExpectations() {
     VS_EXPECTED_GIT_DIRTY: gitDirty,
     VS_EXPECTED_SHA_CLI_PY: sha256File("src/valuesteward/cli.py"),
     VS_EXPECTED_SHA_EXECUTION_ENGINE_PY: sha256File(
-      "src/valuesteward/core/execution_engine.py"
+      "src/valuesteward/core/execution_engine.py",
     ),
     VS_EXPECTED_SHA_CONFIG_PY: sha256File("src/valuesteward/config.py"),
     VS_EXPECTED_SHA_POLICY_PY: sha256File("src/valuesteward/policy.py"),
@@ -120,7 +120,7 @@ export function buildFallbackTickResult({
 export async function runTick({ alpacaConfig, marketOpen, clock }) {
   const now = new Date().toISOString();
   let state = await loadState();
-  
+
   // 1. Sync Infrastructure (GPIO/Mode)
   const gpioApply = applyGpioStateToControl();
   if (gpioApply.updated) {
@@ -130,11 +130,14 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   // 2. Determine Mode
   const lastRun = state.last_run_at ? Date.parse(state.last_run_at) : null;
   const todayExchange = getExchangeDateString(new Date());
-  const lastRunExchange = lastRun ? getExchangeDateString(new Date(lastRun)) : null;
+  const lastRunExchange = lastRun
+    ? getExchangeDateString(new Date(lastRun))
+    : null;
 
   let nextMode = state.current_mode;
   if (!state.last_run_at) nextMode = MODES.INACTIVE;
-  else if (lastRunExchange && lastRunExchange !== todayExchange) nextMode = MODES.CATCHUP;
+  else if (lastRunExchange && lastRunExchange !== todayExchange)
+    nextMode = MODES.CATCHUP;
   else nextMode = MODES.LIVE;
 
   state = await updateState((draft) => {
@@ -145,12 +148,12 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   // 3. THE HANDOVER: Spawn the Python Brain
   // This is the CRITICAL STEP to ensure logging and DB sync happen in Python.
   console.log(`[VS] tick @ ${now} - Handing over to Python Brain...`);
-  
+
   const pythonTick = () => {
     const venvPython = path.join(process.cwd(), ".venv", "bin", "python3");
     const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python3";
     const runtimeExpectations = buildRuntimeExpectations();
-    
+
     return new Promise((resolve) => {
       const child = spawn(pythonCmd, ["-m", "valuesteward.cli", "tick"], {
         cwd: process.cwd(),
@@ -159,7 +162,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
           ...runtimeExpectations,
           PYTHONPATH: "./src",
         },
-        stdio: "inherit" 
+        stdio: "inherit",
       });
       child.on("error", (err) => {
         console.error(`[VS] Failed to start Python process: ${err.message}`);
@@ -277,7 +280,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
       },
     });
     console.warn(
-      `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`
+      `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`,
     );
   }
 
@@ -289,13 +292,15 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
         cycleId,
         policy,
         result: finalResult,
-      })
+      }),
     );
   } catch (err) {
     console.warn(`[VS] Failed to append history entry: ${err?.message ?? err}`);
   }
 
-  console.log(`[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`);
+  console.log(
+    `[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`,
+  );
 
   return { policy, result: finalResult };
 }

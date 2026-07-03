@@ -99,7 +99,12 @@ export function buildScoreGatePosteriors({
       continue;
     }
     if (!posteriors[symbol]) {
-      posteriors[symbol] = { alpha: 0, beta: 0, sample_count: 0, sum_excess: 0 };
+      posteriors[symbol] = {
+        alpha: 0,
+        beta: 0,
+        sample_count: 0,
+        sum_excess: 0,
+      };
     }
     const slot = posteriors[symbol];
     if (targetValue > 0) {

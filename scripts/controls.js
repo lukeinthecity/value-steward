@@ -46,7 +46,7 @@ async function main() {
     console.log(`  reason:          ${state.control_reason}`);
   } else {
     console.log(
-      "Usage: node scripts/controls.js [enable|disable|halt|resume|force-no-trade|clear|status]"
+      "Usage: node scripts/controls.js [enable|disable|halt|resume|force-no-trade|clear|status]",
     );
   }
 }

@@ -6,8 +6,7 @@ import path from "node:path";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importMassiveMacro() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "world", "massiveMacro.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "world", "massiveMacro.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -21,7 +20,7 @@ test("fetchMassiveMacroContext returns unavailable without an API key", async ()
   assert.equal(macro.reason, "missing_api_key");
   assert.equal(
     summarizeMassiveMacroContext(macro),
-    "Massive macro unavailable (missing_api_key)"
+    "Massive macro unavailable (missing_api_key)",
   );
 });
 
@@ -53,7 +52,7 @@ test("fetchMassiveMacroContext returns unavailable when provider returns no rows
   assert.equal(macro.reason, "no_data");
   assert.equal(
     summarizeMassiveMacroContext(macro),
-    "Massive macro unavailable (no_data)"
+    "Massive macro unavailable (no_data)",
   );
 });
 
@@ -125,16 +124,11 @@ test("fetchMassiveMacroContext normalizes latest economic series", async () => {
   assert.equal(macro.treasury_yields.date, "2026-03-19");
   assert.equal(macro.treasury_yields.yield_2_year, 4.1);
   assert.equal(macro.treasury_yields.yield_10_year, 3.95);
-  assert.ok(
-    Math.abs(macro.treasury_yields.curve_10y_2y_bps + 15) < 0.001
-  );
+  assert.ok(Math.abs(macro.treasury_yields.curve_10y_2y_bps + 15) < 0.001);
   assert.equal(macro.inflation.cpi_year_over_year, 3.2);
   assert.equal(macro.inflation_expectations.market_5_year, 2.4);
   assert.equal(macro.labor_market.unemployment_rate, 4.1);
-  assert.match(
-    summarizeMassiveMacroContext(macro),
-    /UST 2Y=4.10 10Y=3.95/
-  );
+  assert.match(summarizeMassiveMacroContext(macro), /UST 2Y=4.10 10Y=3.95/);
 });
 
 test("fetchMassiveMacroContext returns soft error on client failure", async () => {
@@ -166,6 +160,6 @@ test("fetchMassiveMacroContext returns soft error on client failure", async () =
   assert.match(String(macro.error), /403 Forbidden/);
   assert.equal(
     summarizeMassiveMacroContext(macro),
-    "Massive macro unavailable (request_failed)"
+    "Massive macro unavailable (request_failed)",
   );
 });

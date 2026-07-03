@@ -16,13 +16,12 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
 async function importPromotionMetrics() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "core", "promotionMetrics.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "core", "promotionMetrics.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -100,7 +99,10 @@ test("daily promotion snapshot flags cap breaches and reconciliation mismatches"
   assert.equal(snapshot.cap_compliance.oversized_count, 1);
   assert.equal(snapshot.reconciliation.pass, false);
   assert.match(snapshot.blockers.join(","), /cap_breach/);
-  assert.match(snapshot.blockers.join(","), /position_count_mismatch|equity_mismatch/);
+  assert.match(
+    snapshot.blockers.join(","),
+    /position_count_mismatch|equity_mismatch/,
+  );
   assert.equal(snapshot.verdict, "not_eligible");
 });
 
@@ -231,7 +233,7 @@ test("weekly promotion summary uses weekly blockers and keeps current blockers s
     timestamp: `2026-04-${String(index + 1).padStart(2, "0")}T19:55:00.000Z`,
     action_type: "BUY",
     horizons: {
-      "1": {
+      1: {
         excess_vs_benchmark: 0.002,
         excess_vs_cash: 0.003,
         directional_correct: true,

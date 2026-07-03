@@ -9,7 +9,10 @@ test("scout prompt includes apprenticeship-phase and anti-gaming guidance", () =
   });
 
   assert.match(prompt, /small-capital apprenticeship phase/i);
-  assert.match(prompt, /operational integrity, truthful reporting, and bounded risk/i);
+  assert.match(
+    prompt,
+    /operational integrity, truthful reporting, and bounded risk/i,
+  );
   assert.match(prompt, /do not game metrics/i);
   assert.match(prompt, /advisory macro scout/i);
 });

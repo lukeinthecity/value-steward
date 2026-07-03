@@ -15,7 +15,7 @@ async function main() {
   const training = trainPolicyFromHistoryLocal({
     minHistory: 10,
     equityDeltaThreshold: Number(
-      process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD ?? 0
+      process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD ?? 0,
     ),
     maxStep: 0.01,
     minRisk: 0.1,

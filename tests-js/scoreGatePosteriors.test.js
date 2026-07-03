@@ -16,7 +16,7 @@ function buildRecord({
     symbol,
     action_type: actionType,
     horizons: {
-      "5": {
+      5: {
         signed_return: signed5,
         excess_vs_benchmark: excess5,
       },
@@ -86,7 +86,12 @@ test("buildScoreGatePosteriors: normalizes symbol case", () => {
 
 test("buildScoreGatePosteriors: honors target=signed_return", () => {
   const records = [
-    buildRecord({ symbol: "AAPL", signed5: 0.01, excess5: -0.05, intentId: "1" }),
+    buildRecord({
+      symbol: "AAPL",
+      signed5: 0.01,
+      excess5: -0.05,
+      intentId: "1",
+    }),
   ];
   const result = buildScoreGatePosteriors({ records, target: "signed_return" });
   assert.equal(result.posteriors.AAPL.alpha, 1);
@@ -105,7 +110,12 @@ test("buildScoreGatePosteriors: produces idempotent output on repeated calls", (
 
 test("buildScoreGatePosteriors: falls back to excess_vs_benchmark on invalid target", () => {
   const records = [
-    buildRecord({ symbol: "AAPL", excess5: 0.01, signed5: -0.99, intentId: "1" }),
+    buildRecord({
+      symbol: "AAPL",
+      excess5: 0.01,
+      signed5: -0.99,
+      intentId: "1",
+    }),
   ];
   // Invalid target — should fall back to default (excess_vs_benchmark)
   // rather than silently reading undefined and skipping every row.
@@ -131,14 +141,19 @@ function buildTypedRecord({
     action_type: actionType,
     reason_code: reasonCode,
     horizons: {
-      "5": { excess_vs_benchmark: excess5 },
+      5: { excess_vs_benchmark: excess5 },
     },
   };
 }
 
 test("buildScoreGatePosteriors: counts real BUY rows", () => {
   const records = [
-    buildTypedRecord({ symbol: "AAPL", actionType: "BUY", excess5: 0.02, intentId: "1" }),
+    buildTypedRecord({
+      symbol: "AAPL",
+      actionType: "BUY",
+      excess5: 0.02,
+      intentId: "1",
+    }),
   ];
   const r = buildScoreGatePosteriors({ records });
   assert.equal(r.posteriors.AAPL.alpha, 1);
@@ -211,8 +226,18 @@ test("buildScoreGatePosteriors: REGRESSION — skips VOL_STOP rows", () => {
 test("buildScoreGatePosteriors: mixed rows — only BUY-related count", () => {
   const records = [
     // Two BUYs that beat the benchmark
-    buildTypedRecord({ symbol: "AAPL", actionType: "BUY", excess5: 0.01, intentId: "1" }),
-    buildTypedRecord({ symbol: "AAPL", actionType: "BUY", excess5: 0.02, intentId: "2" }),
+    buildTypedRecord({
+      symbol: "AAPL",
+      actionType: "BUY",
+      excess5: 0.01,
+      intentId: "1",
+    }),
+    buildTypedRecord({
+      symbol: "AAPL",
+      actionType: "BUY",
+      excess5: 0.02,
+      intentId: "2",
+    }),
     // A BUY_BLOCKED counterfactual that lost
     buildTypedRecord({
       symbol: "AAPL",

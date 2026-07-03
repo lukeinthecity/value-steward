@@ -37,8 +37,8 @@ function buildRecord({
     signal_vol_rank: vol,
     signal_drawdown_rank: drawdown,
     horizons: {
-      "5": { signed_return: signed5, excess_vs_benchmark: e5 },
-      "20": { signed_return: signed20, excess_vs_benchmark: e20 },
+      5: { signed_return: signed5, excess_vs_benchmark: e5 },
+      20: { signed_return: signed20, excess_vs_benchmark: e20 },
     },
   };
 }
@@ -172,7 +172,7 @@ test("ridgeOls3: t-stats are large on strong signal, near zero on noise", () => 
   assert.ok(Math.abs(result.tStats[0]) > 5, `x1 t=${result.tStats[0]}`);
   assert.ok(
     Math.abs(result.tStats[1]) < Math.abs(result.tStats[0]),
-    `x2 t=${result.tStats[1]} not weaker than x1`
+    `x2 t=${result.tStats[1]} not weaker than x1`,
   );
 });
 
@@ -200,7 +200,7 @@ test("trainSignalWeights: insufficient_samples below minSamples", () => {
       drawdown: 0.5,
       signed5: 0.01,
       intentId: `r${i}`,
-    })
+    }),
   );
   const result = trainSignalWeights({ records, minSamples: 8 });
   assert.equal(result.updated, false);
@@ -246,7 +246,7 @@ test("trainSignalWeights: positive OLS coefficient raises corresponding weight",
   assert.ok(result.coefficients.momentum > 0);
   assert.ok(
     result.newWeights.momentum > result.oldWeights.momentum,
-    "momentum should increase given positive OLS coefficient"
+    "momentum should increase given positive OLS coefficient",
   );
 });
 
@@ -273,7 +273,7 @@ test("trainSignalWeights: negative OLS coefficient lowers corresponding weight",
   assert.ok(result.coefficients.vol < 0);
   assert.ok(
     result.newWeights.vol < result.oldWeights.vol,
-    "vol should decrease given negative OLS coefficient"
+    "vol should decrease given negative OLS coefficient",
   );
 });
 
@@ -302,7 +302,7 @@ test("trainSignalWeights: stepSize caps maximum delta on any weight", () => {
     const delta = Math.abs(result.newWeights[key] - result.oldWeights[key]);
     assert.ok(
       delta <= 0.05 + 1e-9,
-      `${key} delta=${delta} exceeded stepSize=0.05`
+      `${key} delta=${delta} exceeded stepSize=0.05`,
     );
   }
 });
@@ -353,7 +353,7 @@ test("trainSignalWeights: default target is excess_vs_benchmark (alpha)", () => 
   // Excess coefficient is negative → momentum weight DECREASES.
   assert.ok(
     result.newWeights.momentum < result.oldWeights.momentum,
-    `momentum should decrease (got ${result.newWeights.momentum} vs ${result.oldWeights.momentum})`
+    `momentum should decrease (got ${result.newWeights.momentum} vs ${result.oldWeights.momentum})`,
   );
 });
 
@@ -380,7 +380,7 @@ test("trainSignalWeights: honors target=signed_return override", () => {
   // Signed coefficient is positive → momentum weight INCREASES.
   assert.ok(
     result.newWeights.momentum > result.oldWeights.momentum,
-    "momentum should increase when signed_return target gives positive coef"
+    "momentum should increase when signed_return target gives positive coef",
   );
 });
 
@@ -424,7 +424,7 @@ function buildRegimeRecord({
     signal_vol_rank: vol,
     signal_drawdown_rank: drawdown,
     horizons: {
-      "5": { signed_return: excess5, excess_vs_benchmark: excess5 },
+      5: { signed_return: excess5, excess_vs_benchmark: excess5 },
     },
   };
 }
@@ -443,7 +443,7 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
         drawdown: 0.5,
         excess5: m * 0.02,
         intentId: `calm-${i}`,
-      })
+      }),
     );
     records.push(
       buildRegimeRecord({
@@ -453,7 +453,7 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
         drawdown: 0.5,
         excess5: -m * 0.02,
         intentId: `watchful-${i}`,
-      })
+      }),
     );
   }
   const result = trainSignalWeightsByRegime({
@@ -465,17 +465,26 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
   assert.equal(result.regimeOrder.includes("calm"), true);
   assert.equal(result.regimeOrder.includes("watchful"), true);
   // calm: momentum should INCREASE (positive coef)
-  assert.ok(result.byRegime.calm.newWeights.momentum > result.byRegime.calm.oldWeights.momentum);
+  assert.ok(
+    result.byRegime.calm.newWeights.momentum >
+      result.byRegime.calm.oldWeights.momentum,
+  );
   // watchful: momentum should DECREASE (negative coef)
-  assert.ok(result.byRegime.watchful.newWeights.momentum < result.byRegime.watchful.oldWeights.momentum);
+  assert.ok(
+    result.byRegime.watchful.newWeights.momentum <
+      result.byRegime.watchful.oldWeights.momentum,
+  );
 });
 
 test("trainSignalWeightsByRegime: skips regimes below minSamples", () => {
   const records = [
     buildRegimeRecord({
       regime: "calm",
-      momentum: 0.5, vol: 0.5, drawdown: 0.5,
-      excess5: 0.01, intentId: "1",
+      momentum: 0.5,
+      vol: 0.5,
+      drawdown: 0.5,
+      excess5: 0.01,
+      intentId: "1",
     }),
   ];
   const result = trainSignalWeightsByRegime({
@@ -496,7 +505,7 @@ test("trainSignalWeightsByRegime: uses existing regime weights as starting point
       drawdown: 0.5,
       excess5: (0.1 + i * 0.075) * 0.02,
       intentId: `r${i}`,
-    })
+    }),
   );
   const result = trainSignalWeightsByRegime({
     records,
@@ -525,7 +534,7 @@ test("trainSignalWeightsByRegime: respects the regimes whitelist parameter", () 
         drawdown: 0.5,
         excess5: 0.01,
         intentId: `c${i}`,
-      })
+      }),
     ),
     ...Array.from({ length: 10 }, (_, i) =>
       buildRegimeRecord({
@@ -535,7 +544,7 @@ test("trainSignalWeightsByRegime: respects the regimes whitelist parameter", () 
         drawdown: 0.5,
         excess5: 0.01,
         intentId: `s${i}`,
-      })
+      }),
     ),
   ];
   const result = trainSignalWeightsByRegime({
@@ -563,7 +572,7 @@ test("trainSignalWeights: minTStat blocks weight updates on insignificant signal
       signed5: (rand() - 0.5) * 0.001, // pure noise target
       excess5: (rand() - 0.5) * 0.001,
       intentId: `r${i}`,
-    })
+    }),
   );
   const result = trainSignalWeights({
     records,
@@ -577,7 +586,7 @@ test("trainSignalWeights: minTStat blocks weight updates on insignificant signal
   assert.ok(
     result.reason === "no_significant_t_stat" ||
       result.reason === "no_significant_signal",
-    `unexpected reason ${result.reason}`
+    `unexpected reason ${result.reason}`,
   );
   assert.ok(result.tStats !== null);
 });
@@ -598,7 +607,7 @@ test("trainSignalWeights: minTStat=0 disables significance gating", () => {
       signed5: (rand() - 0.5) * 0.001,
       excess5: (rand() - 0.5) * 0.001,
       intentId: `r${i}`,
-    })
+    }),
   );
   const result = trainSignalWeights({
     records,

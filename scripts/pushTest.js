@@ -18,7 +18,7 @@ async function main() {
   if (res.skipped) {
     stop("skipped");
     console.log(
-      "[push] Skipped — set VS_NTFY_TOPIC in .env and subscribe to that topic in the ntfy app."
+      "[push] Skipped — set VS_NTFY_TOPIC in .env and subscribe to that topic in the ntfy app.",
     );
     return;
   }

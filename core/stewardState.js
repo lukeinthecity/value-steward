@@ -15,7 +15,11 @@ import { getExchangeDateString } from "./timeUtils.js";
 
 const STATE_PATH = path.join(process.cwd(), "data", "steward-state.json");
 const STATE_LOCK_PATH = `${STATE_PATH}.lock`;
-const LEGACY_AGENT_STATE_PATH = path.join(process.cwd(), "data", "agent-state.json");
+const LEGACY_AGENT_STATE_PATH = path.join(
+  process.cwd(),
+  "data",
+  "agent-state.json",
+);
 const LOCK_TIMEOUT_MS = Number(process.env.VS_STATE_LOCK_TIMEOUT_MS ?? 5000);
 const LOCK_STALE_MS = Number(process.env.VS_STATE_LOCK_STALE_MS ?? 15000);
 const LOCK_RETRY_MS = Number(process.env.VS_STATE_LOCK_RETRY_MS ?? 25);
@@ -90,7 +94,10 @@ function normalizeState(data = {}) {
     if (!("last_health_email_at" in source) && legacy.last_health_email_at) {
       next.last_health_email_at = legacy.last_health_email_at;
     }
-    if (!("last_health_email_date" in source) && legacy.last_health_email_date) {
+    if (
+      !("last_health_email_date" in source) &&
+      legacy.last_health_email_date
+    ) {
       next.last_health_email_date = legacy.last_health_email_date;
     }
     if (!("last_eod_email_date" in source) && legacy.last_eod_email_date) {
@@ -102,21 +109,27 @@ function normalizeState(data = {}) {
     ) {
       next.phase1_milestones_sent = legacy.phase1_milestones_sent;
     }
-    if (!("phase1_ready_notified" in source) && legacy.phase1_ready_notified === true) {
+    if (
+      !("phase1_ready_notified" in source) &&
+      legacy.phase1_ready_notified === true
+    ) {
       next.phase1_ready_notified = true;
     }
   }
 
-  if (next.phase1_start_date !== null && typeof next.phase1_start_date !== "string") {
+  if (
+    next.phase1_start_date !== null &&
+    typeof next.phase1_start_date !== "string"
+  ) {
     next.phase1_start_date = null;
   }
   next.phase1_milestones_sent = Array.isArray(next.phase1_milestones_sent)
     ? Array.from(
         new Set(
           next.phase1_milestones_sent.filter(
-            (value) => Number.isFinite(value) && value > 0
-          )
-        )
+            (value) => Number.isFinite(value) && value > 0,
+          ),
+        ),
       ).sort((a, b) => a - b)
     : [];
   next.phase1_ready_notified = next.phase1_ready_notified === true;
@@ -174,7 +187,7 @@ async function acquireLock() {
           try {
             const pid = parseInt(
               (await fs.readFile(LOCK_PID_FILE, "utf8")).trim(),
-              10
+              10,
             );
             ownerAlive = isPidAlive(pid);
           } catch {
@@ -218,7 +231,10 @@ function acquireLockSync() {
           // Only evict a stale-looking lock if its owner is gone.
           let ownerAlive = false;
           try {
-            const pid = parseInt(readFileSync(LOCK_PID_FILE, "utf8").trim(), 10);
+            const pid = parseInt(
+              readFileSync(LOCK_PID_FILE, "utf8").trim(),
+              10,
+            );
             ownerAlive = isPidAlive(pid);
           } catch {
             ownerAlive = false;
@@ -333,7 +349,10 @@ export function loadStateSync() {
  */
 export async function saveState(state) {
   return withStateLock(async () => {
-    const payload = { ...normalizeState(state), updated_at: new Date().toISOString() };
+    const payload = {
+      ...normalizeState(state),
+      updated_at: new Date().toISOString(),
+    };
     await writeStateFile(payload);
     return payload;
   });
@@ -341,7 +360,10 @@ export async function saveState(state) {
 
 export function saveStateSync(state) {
   return withStateLockSync(() => {
-    const payload = { ...normalizeState(state), updated_at: new Date().toISOString() };
+    const payload = {
+      ...normalizeState(state),
+      updated_at: new Date().toISOString(),
+    };
     writeStateFileSync(payload);
     return payload;
   });
@@ -349,10 +371,15 @@ export function saveStateSync(state) {
 
 export async function updateState(mutator) {
   return withStateLock(async () => {
-    const current = existsSync(STATE_PATH) ? normalizeState(await readStateFile()) : normalizeState({});
+    const current = existsSync(STATE_PATH)
+      ? normalizeState(await readStateFile())
+      : normalizeState({});
     const draft = structuredClone(current);
     const nextState = (await mutator(draft)) ?? draft;
-    const payload = { ...normalizeState(nextState), updated_at: new Date().toISOString() };
+    const payload = {
+      ...normalizeState(nextState),
+      updated_at: new Date().toISOString(),
+    };
     await writeStateFile(payload);
     return payload;
   });
@@ -360,10 +387,15 @@ export async function updateState(mutator) {
 
 export function updateStateSync(mutator) {
   return withStateLockSync(() => {
-    const current = existsSync(STATE_PATH) ? normalizeState(readStateFileSync()) : normalizeState({});
+    const current = existsSync(STATE_PATH)
+      ? normalizeState(readStateFileSync())
+      : normalizeState({});
     const draft = structuredClone(current);
     const nextState = mutator(draft) ?? draft;
-    const payload = { ...normalizeState(nextState), updated_at: new Date().toISOString() };
+    const payload = {
+      ...normalizeState(nextState),
+      updated_at: new Date().toISOString(),
+    };
     writeStateFileSync(payload);
     return payload;
   });
@@ -378,7 +410,10 @@ export async function markHealthEmailSent(sentAt = new Date()) {
   });
 }
 
-export async function markPhaseEmailSent({ milestones = [], ready = false } = {}) {
+export async function markPhaseEmailSent({
+  milestones = [],
+  ready = false,
+} = {}) {
   return updateState((state) => {
     const sent = new Set(state.phase1_milestones_sent ?? []);
     for (const milestone of milestones) {

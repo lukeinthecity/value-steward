@@ -11,7 +11,7 @@ async function main() {
   console.log(
     `[intent:reconcile] appended=${result.appended} ` +
       `today: ${result.fills_today}/${result.attempts_today} filled ` +
-      `(${result.outcomes_path})`
+      `(${result.outcomes_path})`,
   );
 }
 

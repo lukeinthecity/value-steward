@@ -16,13 +16,12 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
 async function importShadowObserver() {
-  const moduleUrl =
-    `${pathToFileURL(path.join(repoRoot, "world", "shadowObserver.js")).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${pathToFileURL(path.join(repoRoot, "world", "shadowObserver.js")).href}?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -73,7 +72,7 @@ test("scout audit packet includes recent decisions, scorecard, training, pattern
       entry_date: "2026-03-20",
       action_type: "BUY",
       horizons: {
-        "1": {
+        1: {
           excess_vs_benchmark: 0.01,
           excess_vs_cash: 0.01,
         },

@@ -36,7 +36,7 @@ function loadActiveFeedIds() {
     sources
       .filter((source) => source && source.enabled !== false)
       .map((source) => source.id)
-      .filter((id) => typeof id === "string")
+      .filter((id) => typeof id === "string"),
   );
 }
 
@@ -69,13 +69,13 @@ function hoursSinceFileMtime(filePath) {
 
 function artifactTimestamp(...values) {
   const candidate = values.find(
-    (value) => typeof value === "string" && value.trim().length > 0
+    (value) => typeof value === "string" && value.trim().length > 0,
   );
   return candidate ?? null;
 }
 
 function parseExecutionSlots(
-  value = process.env.VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE
+  value = process.env.VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE,
 ) {
   const fallback = [30, 20, 10, 5];
   if (!value) return fallback;
@@ -117,7 +117,11 @@ function parseMilestones(value) {
   return cleaned.length ? cleaned : [15, 30, 45, 60];
 }
 
-export async function buildHealthSnapshot({ agentState, policy, worldContext } = {}) {
+export async function buildHealthSnapshot({
+  agentState,
+  policy,
+  worldContext,
+} = {}) {
   const now = new Date();
   const generatedAt = now.toISOString();
   const exchangeDate = getExchangeDateString(now);
@@ -129,7 +133,8 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const phase1StartDate = getPhase1StartDate({ state });
   const rawScorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
   const scorecardSummary =
-    !phase1StartDate || rawScorecardSummary?.phase1_start_date === phase1StartDate
+    !phase1StartDate ||
+    rawScorecardSummary?.phase1_start_date === phase1StartDate
       ? rawScorecardSummary
       : null;
   const scorecardRecords = filterPhase1Records(readJsonl(SCORECARD_PATH), {
@@ -152,7 +157,7 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const worldHealthAgeHours = hoursSince(healthState.last_checked);
   const tickArtifactAt = artifactTimestamp(
     latestTick?.generated_at,
-    latestTick?.result?.ranAt
+    latestTick?.result?.ranAt,
   );
   const tickArtifactAgeHours = hoursSince(tickArtifactAt);
   const tickArtifactExchangeDate =
@@ -160,7 +165,7 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
     (tickArtifactAt ? getExchangeDateString(new Date(tickArtifactAt)) : null);
   const portfolioArtifactAt = artifactTimestamp(
     portfolio?.updated_at,
-    portfolio?.snapshot?.timestamp
+    portfolio?.snapshot?.timestamp,
   );
   const portfolioArtifactAgeHours = hoursSince(portfolioArtifactAt);
   const portfolioArtifactExchangeDate = portfolioArtifactAt
@@ -179,22 +184,35 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   const tradingDays = new Set(
     scorecardRecords
       .map((record) => record.entry_date)
-      .filter((date) => typeof date === "string" && date.length > 0)
+      .filter((date) => typeof date === "string" && date.length > 0),
   ).size;
 
   const issues = [];
   const tickMaxHours = Number(process.env.VS_HEALTH_TICK_MAX_HOURS ?? 2);
-  const portfolioMaxOpen = Number(process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_OPEN ?? 36);
-  const portfolioMaxClosed = Number(process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_CLOSED ?? 72);
+  const portfolioMaxOpen = Number(
+    process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_OPEN ?? 36,
+  );
+  const portfolioMaxClosed = Number(
+    process.env.VS_HEALTH_PORTFOLIO_MAX_HOURS_CLOSED ?? 72,
+  );
   const worldMaxOpen = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_OPEN ?? 6);
-  const worldMaxClosed = Number(process.env.VS_HEALTH_WORLD_MAX_HOURS_CLOSED ?? 36);
-  const worldHealthMax = Number(process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24);
-  const scorecardMaxDays = Number(process.env.VS_HEALTH_SCORECARD_MAX_DAYS ?? 7);
+  const worldMaxClosed = Number(
+    process.env.VS_HEALTH_WORLD_MAX_HOURS_CLOSED ?? 36,
+  );
+  const worldHealthMax = Number(
+    process.env.VS_HEALTH_WORLD_HEALTH_MAX_HOURS ?? 24,
+  );
+  const scorecardMaxDays = Number(
+    process.env.VS_HEALTH_SCORECARD_MAX_DAYS ?? 7,
+  );
   const tickMeetsDateExpectation =
     tickLastRunExchangeDate !== null &&
     tickLastRunExchangeDate === tickExpectedExchangeDate;
 
-  if (!tickMeetsDateExpectation && (tickAgeHours === null || tickAgeHours > tickMaxHours)) {
+  if (
+    !tickMeetsDateExpectation &&
+    (tickAgeHours === null || tickAgeHours > tickMaxHours)
+  ) {
     if (tickLastRunExchangeDate === null) {
       // No last_run_at — the state read returned empty (e.g. a transient read
       // miss that fell back to defaults), which is not evidence of staleness.
@@ -280,7 +298,11 @@ export async function buildHealthSnapshot({ agentState, policy, worldContext } =
   }
 
   const scorecardAgeDays = daysSince(scorecardSummary?.generated_at);
-  if (scorecardSummary && scorecardAgeDays !== null && scorecardAgeDays > scorecardMaxDays) {
+  if (
+    scorecardSummary &&
+    scorecardAgeDays !== null &&
+    scorecardAgeDays > scorecardMaxDays
+  ) {
     issues.push({
       level: "warn",
       code: "scorecard_stale",
@@ -363,13 +385,14 @@ export function buildPhase1Status({ agentState } = {}) {
   });
   const rawScorecardSummary = readJson(SCORECARD_SUMMARY_PATH);
   const scorecardSummary =
-    !phase1StartDate || rawScorecardSummary?.phase1_start_date === phase1StartDate
+    !phase1StartDate ||
+    rawScorecardSummary?.phase1_start_date === phase1StartDate
       ? rawScorecardSummary
       : null;
   const tradingDays = new Set(
     scorecardRecords
       .map((record) => record.entry_date)
-      .filter((date) => typeof date === "string" && date.length > 0)
+      .filter((date) => typeof date === "string" && date.length > 0),
   ).size;
   const milestones = parseMilestones(process.env.VS_PHASE1_MILESTONES);
 
@@ -399,13 +422,13 @@ export function buildPhase1Status({ agentState } = {}) {
 export function shouldSendHealthEmail({ agentState, snapshot }) {
   const state = agentState ?? loadStateSync();
   const enabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_EMAIL_HEALTH ?? "true").toLowerCase()
+    String(process.env.VS_EMAIL_HEALTH ?? "true").toLowerCase(),
   );
   if (!enabled) return { send: false, reason: "disabled" };
 
   const minHours = Number(process.env.VS_HEALTH_EMAIL_MIN_HOURS ?? 6);
   const criticalMinHours = Number(
-    process.env.VS_HEALTH_EMAIL_CRITICAL_MIN_HOURS ?? minHours
+    process.env.VS_HEALTH_EMAIL_CRITICAL_MIN_HOURS ?? minHours,
   );
 
   const lastSent = state.last_health_email_at
@@ -432,12 +455,12 @@ export function shouldSendHealthEmail({ agentState, snapshot }) {
 export function shouldSendPhaseEmail({ agentState, phase, isFinalDecision }) {
   const state = agentState ?? loadStateSync();
   const enabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_EMAIL_PHASE ?? "true").toLowerCase()
+    String(process.env.VS_EMAIL_PHASE ?? "true").toLowerCase(),
   );
   if (!enabled) return { send: false, reason: "disabled" };
 
   const eodOnly = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_PHASE_EMAIL_EOD_ONLY ?? "true").toLowerCase()
+    String(process.env.VS_PHASE_EMAIL_EOD_ONLY ?? "true").toLowerCase(),
   );
   if (eodOnly && !isFinalDecision) {
     return { send: false, reason: "eod_only" };
@@ -445,7 +468,7 @@ export function shouldSendPhaseEmail({ agentState, phase, isFinalDecision }) {
 
   const sent = new Set(state.phase1_milestones_sent ?? []);
   const reached = phase.milestones.filter(
-    (milestone) => phase.trading_days >= milestone && !sent.has(milestone)
+    (milestone) => phase.trading_days >= milestone && !sent.has(milestone),
   );
 
   if (reached.length) {

@@ -5,12 +5,16 @@ import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { getExchangeDateString, getExchangeTimeParts, isTradingDay } from "../core/timeUtils.js";
+import {
+  getExchangeDateString,
+  getExchangeTimeParts,
+  isTradingDay,
+} from "../core/timeUtils.js";
 import { readLatestJsonl } from "../core/runtimeArtifacts.js";
 
 export function parseObservationTimes(
   value = process.env.VS_INTRADAY_OBSERVATION_TIMES,
-  fallback = ["10:00", "11:30", "13:30", "15:00"]
+  fallback = ["10:00", "11:30", "13:30", "15:00"],
 ) {
   if (!value) return fallback;
   const times = String(value)
@@ -41,7 +45,12 @@ export function shouldRunScheduledIntradayObservation({
     return { run: false, reason: "non_trading_day", exchangeDate, timeKey };
   }
   if (!times.includes(timeKey)) {
-    return { run: false, reason: "not_observation_slot", exchangeDate, timeKey };
+    return {
+      run: false,
+      reason: "not_observation_slot",
+      exchangeDate,
+      timeKey,
+    };
   }
   if (
     latest?.exchange_date === exchangeDate &&
@@ -61,7 +70,10 @@ function runCommand(label, cmd, args) {
     });
     child.on("close", (code) => resolve({ label, ok: code === 0, code }));
     child.on("error", (err) => {
-      console.error(`[intraday:schedule] ${label} failed:`, err?.message ?? err);
+      console.error(
+        `[intraday:schedule] ${label} failed:`,
+        err?.message ?? err,
+      );
       resolve({ label, ok: false, code: 1 });
     });
   });
@@ -69,7 +81,9 @@ function runCommand(label, cmd, args) {
 
 export async function main(argv = process.argv.slice(2)) {
   const force = argv.includes("--force");
-  const latest = readLatestJsonl(path.join(process.cwd(), "data", "intraday-observations.jsonl"));
+  const latest = readLatestJsonl(
+    path.join(process.cwd(), "data", "intraday-observations.jsonl"),
+  );
   const decision = shouldRunScheduledIntradayObservation({
     now: new Date(),
     force,

@@ -21,14 +21,15 @@ const DYNAMIC_STALE =
   "true";
 const DYNAMIC_WINDOW = Number(process.env.WORLD_FEED_DYNAMIC_WINDOW ?? 12);
 const DYNAMIC_MULTIPLIER = Number(
-  process.env.WORLD_FEED_DYNAMIC_MULTIPLIER ?? 3
+  process.env.WORLD_FEED_DYNAMIC_MULTIPLIER ?? 3,
 );
 const DYNAMIC_MIN_HOURS = Number(process.env.WORLD_FEED_DYNAMIC_MIN_HOURS ?? 6);
 const DYNAMIC_MAX_HOURS = Number(
-  process.env.WORLD_FEED_DYNAMIC_MAX_HOURS ?? 720
+  process.env.WORLD_FEED_DYNAMIC_MAX_HOURS ?? 720,
 );
 const AUTO_DISABLE =
-  String(process.env.WORLD_FEED_AUTO_DISABLE ?? "true").toLowerCase() === "true";
+  String(process.env.WORLD_FEED_AUTO_DISABLE ?? "true").toLowerCase() ===
+  "true";
 
 const execAsync = promisify(exec);
 
@@ -94,7 +95,10 @@ export function summarizeInbox(entries, sources) {
       published_list: [],
     };
     current.count += 1;
-    if (!current.last_ts || Date.parse(entry.ts) > Date.parse(current.last_ts)) {
+    if (
+      !current.last_ts ||
+      Date.parse(entry.ts) > Date.parse(current.last_ts)
+    ) {
       current.last_ts = entry.ts ?? current.last_ts;
     }
     if (
@@ -126,7 +130,7 @@ export function summarizeInbox(entries, sources) {
       const dynamicClamped = clamp(
         dynamicThreshold,
         DYNAMIC_MIN_HOURS,
-        DYNAMIC_MAX_HOURS
+        DYNAMIC_MAX_HOURS,
       );
       effectiveThreshold = Math.max(thresholdHours, dynamicClamped);
     }
@@ -174,9 +178,7 @@ function computeDynamicThreshold(publishedList) {
   recent.sort((a, b) => a - b);
   const mid = Math.floor(recent.length / 2);
   const median =
-    recent.length % 2 === 0
-      ? (recent[mid - 1] + recent[mid]) / 2
-      : recent[mid];
+    recent.length % 2 === 0 ? (recent[mid - 1] + recent[mid]) / 2 : recent[mid];
   if (!Number.isFinite(median)) return null;
   return median * DYNAMIC_MULTIPLIER;
 }
@@ -185,7 +187,10 @@ function summarizeHydration(entries) {
   const total = entries.length;
   const ok = entries.filter((entry) => entry.ok === true).length;
   const failed = entries.filter((entry) => entry.ok === false).length;
-  const last = entries.slice().sort((a, b) => sortByTimestamp(a, b, "ts")).at(-1);
+  const last = entries
+    .slice()
+    .sort((a, b) => sortByTimestamp(a, b, "ts"))
+    .at(-1);
   return {
     total,
     ok,
@@ -196,18 +201,19 @@ function summarizeHydration(entries) {
 
 function summarizeContext(entries) {
   if (!entries.length) return null;
-  const sorted = entries
-    .slice()
-    .sort((a, b) => {
-      if (a.date !== b.date) return String(a.date).localeCompare(String(b.date));
-      return sortByTimestamp(a, b, "generated_at");
-    });
+  const sorted = entries.slice().sort((a, b) => {
+    if (a.date !== b.date) return String(a.date).localeCompare(String(b.date));
+    return sortByTimestamp(a, b, "generated_at");
+  });
   const latest = sorted.at(-1);
   const bySlot = new Map();
   for (const entry of sorted) {
     const key = entry.slot ?? "unknown";
     const existing = bySlot.get(key);
-    if (!existing || Date.parse(entry.generated_at) > Date.parse(existing.generated_at)) {
+    if (
+      !existing ||
+      Date.parse(entry.generated_at) > Date.parse(existing.generated_at)
+    ) {
       bySlot.set(key, entry);
     }
   }
@@ -278,8 +284,7 @@ function loadState() {
   const inbox = loadJsonl(INBOX_PATH);
   const hydrated = loadJsonl(HYDRATED_PATH);
   const context = loadJsonl(CONTEXT_PATH);
-  const health =
-    loadJson(STATE_PATH) ?? { last_checked: null, sources: {} };
+  const health = loadJson(STATE_PATH) ?? { last_checked: null, sources: {} };
   return { feeds, inbox, hydrated, context, health };
 }
 
@@ -381,7 +386,7 @@ async function main() {
     inboxSummary = summarizeInbox(inbox, disableResult.feeds.sources ?? []);
     staleSources = inboxSummary.filter((row) => row.stale);
     console.log(
-      `[world:health] auto-disabled feeds: ${disableResult.disabled.join(", ")}`
+      `[world:health] auto-disabled feeds: ${disableResult.disabled.join(", ")}`,
     );
   }
   saveHealthState(health);
@@ -410,10 +415,10 @@ async function main() {
         : yellow("DISABLED");
     console.log(
       `- ${row.id} (${row.label}): ${status} count=${row.count} last_ts=${formatDate(
-        row.last_ts
+        row.last_ts,
       )} last_published=${formatDate(row.last_published)} age_h=${formatAge(
-        row.age_hours
-      )} threshold_h=${formatAge(row.threshold_hours)} streak=${streak} enabled=${row.enabled}`
+        row.age_hours,
+      )} threshold_h=${formatAge(row.threshold_hours)} streak=${streak} enabled=${row.enabled}`,
     );
   });
 
@@ -422,8 +427,8 @@ async function main() {
   console.log("[world:health] Hydration");
   console.log(
     `- total=${hydration.total} ok=${hydration.ok} failed=${hydration.failed} last_ts=${formatDate(
-      hydration.last_ts
-    )}`
+      hydration.last_ts,
+    )}`,
   );
 
   console.log("");
@@ -436,12 +441,12 @@ async function main() {
   console.log(
     `- date=${contextSummary.latest?.date ?? "n/a"} slot=${
       contextSummary.latest?.slot ?? "n/a"
-    } generated_at=${formatDate(contextSummary.latest?.generated_at)}`
+    } generated_at=${formatDate(contextSummary.latest?.generated_at)}`,
   );
   console.log(
     `- sources_used=${contextSummary.latest?.sources_used?.length ?? 0} raw_count=${
       contextSummary.latest?.raw_count ?? 0
-    }`
+    }`,
   );
 
   console.log("");
@@ -449,10 +454,10 @@ async function main() {
   for (const [slot, entry] of contextSummary.bySlot.entries()) {
     console.log(
       `- ${slot}: date=${entry.date ?? "n/a"} generated_at=${formatDate(
-        entry.generated_at
+        entry.generated_at,
       )} sources_used=${entry.sources_used?.length ?? 0} raw_count=${
         entry.raw_count ?? 0
-      }`
+      }`,
     );
   }
 }

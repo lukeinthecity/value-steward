@@ -94,9 +94,21 @@ function invert3x3(m, epsilon = 1e-12) {
   if (!Number.isFinite(det) || Math.abs(det) < epsilon) return null;
   const invDet = 1 / det;
   return [
-    [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
-    [(f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet],
-    [(d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet],
+    [
+      (e * i - f * h) * invDet,
+      (c * h - b * i) * invDet,
+      (b * f - c * e) * invDet,
+    ],
+    [
+      (f * g - d * i) * invDet,
+      (a * i - c * g) * invDet,
+      (c * d - a * f) * invDet,
+    ],
+    [
+      (d * h - e * g) * invDet,
+      (b * g - a * h) * invDet,
+      (a * e - b * d) * invDet,
+    ],
   ];
 }
 
@@ -296,10 +308,13 @@ export function trainSignalWeights({
   target = "excess_vs_benchmark",
 } = {}) {
   const oldWeights = resolveCurrentWeights(currentSignalWeights);
-  const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
-  const lambda = isFiniteNumber(ridgeLambda) && ridgeLambda >= 0
-    ? ridgeLambda
-    : DEFAULT_RIDGE_LAMBDA;
+  const resolvedTarget = VALID_TARGETS.has(target)
+    ? target
+    : "excess_vs_benchmark";
+  const lambda =
+    isFiniteNumber(ridgeLambda) && ridgeLambda >= 0
+      ? ridgeLambda
+      : DEFAULT_RIDGE_LAMBDA;
 
   if (!Array.isArray(records) || records.length === 0) {
     return {
@@ -437,7 +452,11 @@ export function trainSignalWeights({
       return;
     }
     const delta = stepSize * normalized[idx];
-    const updated = clamp(oldWeights[policyKey] + delta, WEIGHT_MIN, WEIGHT_MAX);
+    const updated = clamp(
+      oldWeights[policyKey] + delta,
+      WEIGHT_MIN,
+      WEIGHT_MAX,
+    );
     if (updated !== oldWeights[policyKey]) {
       newWeights[policyKey] = updated;
       anyUpdate = true;
@@ -534,9 +553,10 @@ export function trainSignalWeightsByRegime({
     currentSignalWeights && typeof currentSignalWeights.by_regime === "object"
       ? currentSignalWeights.by_regime
       : {};
-  const allowedRegimes = Array.isArray(regimes) && regimes.length
-    ? new Set(regimes.map((r) => r.trim()).filter(Boolean))
-    : null;
+  const allowedRegimes =
+    Array.isArray(regimes) && regimes.length
+      ? new Set(regimes.map((r) => r.trim()).filter(Boolean))
+      : null;
 
   const byRegime = {};
   const regimeSampleCounts = {};

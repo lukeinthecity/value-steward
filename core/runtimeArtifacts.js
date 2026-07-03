@@ -123,7 +123,9 @@ export function buildArtifactCycleId({
   if (!exchangeDate || !worldContextGeneratedAt) return null;
   const normalizedDate = String(exchangeDate).trim();
   const normalizedTs = String(worldContextGeneratedAt).trim();
-  const normalizedSlot = worldContextSlot ? String(worldContextSlot).trim() : "";
+  const normalizedSlot = worldContextSlot
+    ? String(worldContextSlot).trim()
+    : "";
   return normalizedSlot
     ? `${normalizedDate}:${normalizedSlot}:${normalizedTs}`
     : `${normalizedDate}:${normalizedTs}`;
@@ -155,7 +157,7 @@ export function assertMatchingCycleIds(entries) {
     throw new Error(
       `Artifact cycle provenance missing for: ${missing
         .map((entry) => entry.label)
-        .join(", ")}.`
+        .join(", ")}.`,
     );
   }
 
@@ -165,7 +167,7 @@ export function assertMatchingCycleIds(entries) {
     throw new Error(
       `Artifact cycle mismatch: expected ${expected}, got ${mismatches
         .map((entry) => `${entry.label}=${entry.cycleId}`)
-        .join(", ")}.`
+        .join(", ")}.`,
     );
   }
 
@@ -198,8 +200,7 @@ function normalizeHistoryPosition(position) {
     qty: position?.qty ?? position?.quantity ?? null,
     side: position?.side ?? null,
     marketValue: position?.marketValue ?? position?.market_value ?? null,
-    avgEntryPrice:
-      position?.avgEntryPrice ?? position?.avg_entry_price ?? null,
+    avgEntryPrice: position?.avgEntryPrice ?? position?.avg_entry_price ?? null,
     unrealizedPl: position?.unrealizedPl ?? position?.unrealized_pl ?? null,
     unrealizedPlPc:
       position?.unrealizedPlPc ?? position?.unrealized_plpc ?? null,
@@ -297,7 +298,7 @@ function isExecutedOrder(order) {
 
 export function extractLatestOrderFromPortfolioSnapshot(
   portfolio,
-  { exchangeDate = null, requireExecuted = true } = {}
+  { exchangeDate = null, requireExecuted = true } = {},
 ) {
   const directLastOrder = portfolio?.last_order ? [portfolio.last_order] : [];
   const recentOrders = Array.isArray(portfolio?.recent_orders)
@@ -318,7 +319,7 @@ export function extractLatestOrderFromPortfolioSnapshot(
     .filter((order) => order._sortTimestamp !== null)
     .filter((order) => (requireExecuted ? isExecutedOrder(order) : true))
     .filter((order) =>
-      exchangeDate ? order._exchangeDate === exchangeDate : true
+      exchangeDate ? order._exchangeDate === exchangeDate : true,
     )
     .sort((a, b) => b._sortTimestamp - a._sortTimestamp);
 

@@ -102,11 +102,11 @@ export async function main(argv = process.argv.slice(2)) {
   const now = new Date();
   const windowOpen = parseNumber(
     process.env.VS_WORLD_WINDOW_MINUTES_BEFORE_OPEN,
-    30
+    30,
   );
   const windowClose = parseNumber(
     process.env.VS_WORLD_WINDOW_MINUTES_BEFORE_CLOSE,
-    30
+    30,
   );
   const force = shouldForce(args);
   const latest = await loadLatestWorldContext().catch(() => null);
@@ -121,7 +121,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!decision.run) {
     if (decision.reason === "already_generated") {
       console.log(
-        `[world:schedule] Latest context already generated for ${decision.exchangeDate} (${decision.slot}); skipping.`
+        `[world:schedule] Latest context already generated for ${decision.exchangeDate} (${decision.slot}); skipping.`,
       );
     } else {
       console.log("[world:schedule] Not in pre-open/close window; skipping.");

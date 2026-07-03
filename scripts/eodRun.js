@@ -99,7 +99,9 @@ async function main() {
       // Continue through failures so a broken early step never suppresses the
       // EOD email (the last step). Surface a non-zero exit at the end so a
       // genuine failure still trips the health alert.
-      console.error(`[eod] step failed: ${step.label} (code=${result.code ?? 1})`);
+      console.error(
+        `[eod] step failed: ${step.label} (code=${result.code ?? 1})`,
+      );
       exitCode = result.code ?? 1;
     }
   }

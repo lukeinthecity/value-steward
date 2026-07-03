@@ -28,7 +28,10 @@ function increment(map, key) {
 
 function topEntries(counter, limit = 3) {
   return [...counter.entries()]
-    .sort((left, right) => right[1] - left[1] || String(left[0]).localeCompare(String(right[0])))
+    .sort(
+      (left, right) =>
+        right[1] - left[1] || String(left[0]).localeCompare(String(right[0])),
+    )
     .slice(0, limit)
     .map(([label, count]) => ({ label, count }));
 }
@@ -40,17 +43,16 @@ function normalizeOrderStatus(status) {
 }
 
 function orderTimestamp(order) {
-  return (
-    order?.filled_at ??
-    order?.submitted_at ??
-    order?.created_at ??
-    null
-  );
+  return order?.filled_at ?? order?.submitted_at ?? order?.created_at ?? null;
 }
 
 function isFilledOrder(order) {
   const status = normalizeOrderStatus(order?.status);
-  return status === "filled" || status === "partially_filled" || Boolean(order?.filled_at);
+  return (
+    status === "filled" ||
+    status === "partially_filled" ||
+    Boolean(order?.filled_at)
+  );
 }
 
 function buildOrderActivity(portfolio = null, exchangeDate = null) {
@@ -67,18 +69,23 @@ function buildOrderActivity(portfolio = null, exchangeDate = null) {
   ];
 
   for (const order of candidates) {
-    const key = order?.id ?? [
-      order?.symbol ?? "",
-      order?.side ?? "",
-      order?.status ?? "",
-      order?.submitted_at ?? "",
-      order?.filled_at ?? "",
-    ].join("|");
+    const key =
+      order?.id ??
+      [
+        order?.symbol ?? "",
+        order?.side ?? "",
+        order?.status ?? "",
+        order?.submitted_at ?? "",
+        order?.filled_at ?? "",
+      ].join("|");
     if (!key || seen.has(key)) continue;
     seen.add(key);
     const timestamp = orderTimestamp(order);
     if (!timestamp) continue;
-    if (exchangeDate && getExchangeDateString(new Date(timestamp)) !== exchangeDate) {
+    if (
+      exchangeDate &&
+      getExchangeDateString(new Date(timestamp)) !== exchangeDate
+    ) {
       continue;
     }
     orders.push(order);
@@ -105,7 +112,10 @@ export function loadIntentLog() {
   return readJsonl(INTENT_LOG_PATH);
 }
 
-export function summarizeDecisionReview(intents = [], { portfolio = null, exchangeDate = null } = {}) {
+export function summarizeDecisionReview(
+  intents = [],
+  { portfolio = null, exchangeDate = null } = {},
+) {
   const actions = new Map();
   const reasons = new Map();
   const symbols = new Map();
@@ -208,7 +218,11 @@ export function summarizeDecisionReview(intents = [], { portfolio = null, exchan
   };
 }
 
-export function summarizeDecisionsForExchangeDate(intents = [], exchangeDate, options = {}) {
+export function summarizeDecisionsForExchangeDate(
+  intents = [],
+  exchangeDate,
+  options = {},
+) {
   const filtered = intents.filter((intent) => {
     if (!intent?.timestamp) return false;
     return getExchangeDateString(new Date(intent.timestamp)) === exchangeDate;

@@ -80,9 +80,9 @@ function calculateDecayWeight(entryTs, nowMs, maxAge) {
   const ts = Date.parse(entryTs);
   if (Number.isNaN(ts)) return 0;
   const ageHours = (nowMs - ts) / (1000 * 60 * 60);
-  
+
   if (ageHours > maxAge) return 0;
-  
+
   if (ageHours <= 6) return 1.0;
   if (ageHours <= 24) return 0.5;
   if (ageHours <= maxAge) return 0.25;
@@ -99,21 +99,22 @@ export function scoreWorldTags({ hydratedEntries, now = new Date() }) {
     }
 
     const nowMs = now instanceof Date ? now.getTime() : Date.now();
-    const isMonday = (now instanceof Date ? now : new Date(nowMs)).getDay() === 1;
+    const isMonday =
+      (now instanceof Date ? now : new Date(nowMs)).getDay() === 1;
     // Elite Quant: Expand window to 72h on Mondays to capture Friday's close data.
     const maxAge = isMonday ? 72 : 48;
-    
+
     const docsWithWeights = [];
     for (const entry of hydratedEntries) {
-        const weight = calculateDecayWeight(entry.ts, nowMs, maxAge);
-        if (weight > 0) {
-            const title = entry.title ?? "";
-            const text = entry.content_text ?? "";
-            docsWithWeights.push({
-                text: `${title} ${text}`.toLowerCase(),
-                weight
-            });
-        }
+      const weight = calculateDecayWeight(entry.ts, nowMs, maxAge);
+      if (weight > 0) {
+        const title = entry.title ?? "";
+        const text = entry.content_text ?? "";
+        docsWithWeights.push({
+          text: `${title} ${text}`.toLowerCase(),
+          weight,
+        });
+      }
     }
 
     if (!docsWithWeights.length) {
@@ -125,27 +126,31 @@ export function scoreWorldTags({ hydratedEntries, now = new Date() }) {
 
     let weightedHawk = 0;
     let weightedDove = 0;
-    
+
     // For ratio tags (Hawk/Dove)
     for (const doc of docsWithWeights) {
       const hasHawk = containsAny(doc.text, KEYWORDS.rate_hawkishness.hawk);
       const hasDove = containsAny(doc.text, KEYWORDS.rate_hawkishness.dove);
-      
+
       if (hasHawk) weightedHawk += doc.weight;
       if (hasDove) weightedDove += doc.weight;
     }
 
-    const hawkScoreRaw = (weightedHawk - weightedDove) / (weightedHawk + weightedDove + 1);
+    const hawkScoreRaw =
+      (weightedHawk - weightedDove) / (weightedHawk + weightedDove + 1);
     const rateHawkishness = clamp01((hawkScoreRaw + 1) / 2);
 
     // For absolute risk tags
-    const totalPossibleWeight = docsWithWeights.reduce((sum, d) => sum + d.weight, 0);
-    
+    const totalPossibleWeight = docsWithWeights.reduce(
+      (sum, d) => sum + d.weight,
+      0,
+    );
+
     const calculateWeightedTag = (keywords) => {
-        const matchingWeight = docsWithWeights.reduce((sum, d) => {
-            return sum + (containsAny(d.text, keywords) ? d.weight : 0);
-        }, 0);
-        return clamp01(matchingWeight / (totalPossibleWeight || 1));
+      const matchingWeight = docsWithWeights.reduce((sum, d) => {
+        return sum + (containsAny(d.text, keywords) ? d.weight : 0);
+      }, 0);
+      return clamp01(matchingWeight / (totalPossibleWeight || 1));
     };
 
     const tags = {

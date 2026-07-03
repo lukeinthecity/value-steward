@@ -6,13 +6,13 @@ import { instrumentTransporter } from "./emailHealth.js";
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
 /**
- * Uses Gemini to synthesize a technical report into a human-readable 
+ * Uses Gemini to synthesize a technical report into a human-readable
  * professional summary for investors/stewards.
  */
 async function generateAISummary({ type, data }) {
   if (!API_KEY) return null;
   const client = new GoogleGenAI({ apiKey: API_KEY });
-  
+
   const systemInstruction = `
     You are the "Head of Portfolio Reporting" for an elite institutional investment desk. 
     Your persona is sophisticated, concise, and focused on risk-adjusted performance. 
@@ -58,14 +58,8 @@ async function generateAISummary({ type, data }) {
 }
 
 function loadEmailConfig(label) {
-  const {
-    SMTP_HOST,
-    SMTP_PORT,
-    SMTP_USER,
-    SMTP_PASS,
-    EMAIL_FROM,
-    EMAIL_TO,
-  } = process.env;
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM, EMAIL_TO } =
+    process.env;
 
   const missing = [];
   if (!SMTP_HOST) missing.push("SMTP_HOST");
@@ -78,8 +72,8 @@ function loadEmailConfig(label) {
   if (missing.length) {
     console.warn(
       `[ValueSteward] Email config incomplete (missing: ${missing.join(
-        ", "
-      )}), skipping ${label}.`
+        ", ",
+      )}), skipping ${label}.`,
     );
     return null;
   }
@@ -147,9 +141,9 @@ export async function sendLessonEmail({
       ? "Value Steward End-of-Day Summary"
       : "Value Steward Daily Lesson";
 
-  const aiSummary = await generateAISummary({ 
-    type: "Daily Execution & Policy Update", 
-    data: { result, training, worldContext } 
+  const aiSummary = await generateAISummary({
+    type: "Daily Execution & Policy Update",
+    data: { result, training, worldContext },
   });
 
   const bodyLines = [
@@ -159,7 +153,8 @@ export async function sendLessonEmail({
     "-".repeat(40),
     "",
     "Steward's Insight:",
-    aiSummary || "[System fallback: AI synthesis currently unavailable. Strategy remains focused on deterministic risk parity and momentum adherence.]",
+    aiSummary ||
+      "[System fallback: AI synthesis currently unavailable. Strategy remains focused on deterministic risk parity and momentum adherence.]",
     "",
     `Ran at: ${result.ranAt}`,
     `Market open at snapshot: ${result.marketOpen}`,
@@ -189,10 +184,10 @@ export async function sendLessonEmail({
     `- Buying power: ${formatCurrency(result.buyingPower)}`,
     `- Positions held: ${result.numPositions}`,
     `- Gross exposure: ${formatCurrency(result.grossExposure)} (${formatPercent(
-      result.grossExposurePct
+      result.grossExposurePct,
     )})`,
     `- Net exposure: ${formatCurrency(result.netExposure)} (${formatPercent(
-      result.netExposurePct
+      result.netExposurePct,
     )})`,
     `- Trade gate: mode=${result.tradeGate?.mode ?? "n/a"} canTrade=${
       result.tradeGate?.canTrade ?? "n/a"
@@ -235,9 +230,7 @@ export async function sendLessonEmail({
   ];
 
   if (!worldContext) {
-    bodyLines.push(
-      "- Status: no digest available (pipeline not run yet)."
-    );
+    bodyLines.push("- Status: no digest available (pipeline not run yet).");
   } else {
     const macroView = worldContext.macro_view ?? null;
     const finalRegime = worldContext.final_regime ?? null;
@@ -247,14 +240,13 @@ export async function sendLessonEmail({
       macroScore !== null && macroScore !== undefined
         ? `${Number(macroScore).toFixed(2)} (${macroLabel ?? "n/a"})`
         : "n/a (no tags yet)";
-    const regimeLine =
-      finalRegime?.final_label
-        ? `${finalRegime.final_label} score=${
-            typeof finalRegime.final_score === "number"
-              ? Number(finalRegime.final_score).toFixed(2)
-              : "n/a"
-          } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${finalRegime.fusion_reason ?? "n/a"}`
-        : "n/a";
+    const regimeLine = finalRegime?.final_label
+      ? `${finalRegime.final_label} score=${
+          typeof finalRegime.final_score === "number"
+            ? Number(finalRegime.final_score).toFixed(2)
+            : "n/a"
+        } divergence=${finalRegime.divergence === true ? "yes" : "no"} fusion=${finalRegime.fusion_reason ?? "n/a"}`
+      : "n/a";
 
     const tags = worldContext.tags ?? {};
     const macroTags = [
@@ -274,7 +266,7 @@ export async function sendLessonEmail({
           ? worldContext.sources_used.length
           : "n/a"
       }`,
-      `- Raw items in window: ${worldContext.raw_count ?? "n/a"}`
+      `- Raw items in window: ${worldContext.raw_count ?? "n/a"}`,
     );
 
     if (worldContext.massive_macro_summary) {
@@ -306,7 +298,7 @@ export async function sendLessonEmail({
         intradaySummary.persistent_candidates.length
           ? intradaySummary.persistent_candidates.join(", ")
           : "none"
-      }`
+      }`,
     );
   }
 
@@ -320,7 +312,7 @@ export async function sendLessonEmail({
       `- Side: ${lastOrderToday.side ?? "n/a"} Status: ${lastOrderToday.status ?? "n/a"}`,
       `- Qty/Notional: ${qtyText} Type: ${lastOrderToday.type ?? "n/a"}`,
       `- Submitted: ${lastOrderToday.submitted_at ?? "n/a"}`,
-      `- Filled: ${lastOrderToday.filled_at ?? "n/a"} Avg price: ${priceText}`
+      `- Filled: ${lastOrderToday.filled_at ?? "n/a"} Avg price: ${priceText}`,
     );
   } else {
     bodyLines.push("", "Last Order Today:", "- Status: none");
@@ -336,14 +328,14 @@ export async function sendLessonEmail({
       `- Side: ${lastBrokerOrder.side ?? "n/a"} Status: ${lastBrokerOrder.status ?? "n/a"}`,
       `- Qty/Notional: ${qtyText} Type: ${lastBrokerOrder.type ?? "n/a"}`,
       `- Submitted: ${lastBrokerOrder.submitted_at ?? "n/a"}`,
-      `- Filled: ${lastBrokerOrder.filled_at ?? "n/a"} Avg price: ${priceText}`
+      `- Filled: ${lastBrokerOrder.filled_at ?? "n/a"} Avg price: ${priceText}`,
     );
   }
 
   bodyLines.push(
     "",
     "—",
-    "This email was generated automatically by Value Steward’s EOD lesson loop."
+    "This email was generated automatically by Value Steward’s EOD lesson loop.",
   );
 
   const mailOptions = {
@@ -362,17 +354,20 @@ function formatTag(value) {
 }
 
 function formatNumber(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "n/a";
   return Number(value).toFixed(digits);
 }
 
 function formatPercent(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "n/a";
   return `${(Number(value) * 100).toFixed(2)}%`;
 }
 
 function formatCurrency(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  if (value === null || value === undefined || Number.isNaN(value))
+    return "n/a";
   return `$${Number(value).toFixed(2)}`;
 }
 
@@ -382,9 +377,9 @@ export async function sendHealthEmail({ health, reason = "scheduled" }) {
   const { transporter, from, to } = config;
 
   const subject = `Value Steward health check (${health.exchange_date})`;
-  const aiSummary = await generateAISummary({ 
-    type: "System Health & Data Integrity", 
-    data: health 
+  const aiSummary = await generateAISummary({
+    type: "System Health & Data Integrity",
+    data: health,
   });
 
   const issues = Array.isArray(health.issues) ? health.issues : [];
@@ -400,7 +395,8 @@ export async function sendHealthEmail({ health, reason = "scheduled" }) {
     "Value Steward System Health",
     "",
     "Steward's Insight:",
-    aiSummary || "System health is optimal. Core data pipelines are operational.",
+    aiSummary ||
+      "System health is optimal. Core data pipelines are operational.",
     "",
     `Generated at: ${health.generated_at}`,
     `Timezone: ${health.timezone}`,
@@ -425,7 +421,7 @@ export async function sendHealthEmail({ health, reason = "scheduled" }) {
     `- Date/slot: ${health.world?.date ?? "n/a"} / ${health.world?.slot ?? "n/a"}`,
     `- Macro: ${health.world?.macro_label ?? "n/a"} (${formatNumber(
       health.world?.macro_score,
-      2
+      2,
     )})`,
     `- Sources used: ${health.world?.sources_used ?? "n/a"}`,
     `- Raw items: ${health.world?.raw_count ?? "n/a"}`,
@@ -488,7 +484,7 @@ export async function sendPhaseCheckpointEmail({ phase, exchangeDate }) {
         `avg_excess_benchmark=${formatPercent(data.avg_excess_benchmark)} ` +
         `avg_signed_return=${formatPercent(data.avg_signed_return)} ` +
         `no_action_avoid=${formatPercent(data.no_action_beats_benchmark_rate)} ` +
-        `no_action_missed=${formatPercent(data.no_action_missed_rate)}`
+        `no_action_missed=${formatPercent(data.no_action_missed_rate)}`,
     );
   }
 
@@ -528,9 +524,9 @@ export async function sendWeeklyReportEmail({ report }) {
   const { transporter, from, to } = config;
 
   const subject = `Value Steward Weekly Report: ${report.startDate} to ${report.endDate}`;
-  const aiSummary = await generateAISummary({ 
-    type: "Weekly Performance & Strategy Audit", 
-    data: report 
+  const aiSummary = await generateAISummary({
+    type: "Weekly Performance & Strategy Audit",
+    data: report,
   });
 
   const bodyLines = [
@@ -539,7 +535,8 @@ export async function sendWeeklyReportEmail({ report }) {
     "=".repeat(60),
     "",
     "Steward's Insight:",
-    aiSummary || "[System fallback: AI synthesis currently unavailable. Weekly performance characterized by adherence to risk gates and momentum-driven rebalancing.]",
+    aiSummary ||
+      "[System fallback: AI synthesis currently unavailable. Weekly performance characterized by adherence to risk gates and momentum-driven rebalancing.]",
     "",
     `Total Decisions: ${report.totalIntents}`,
     "",
@@ -557,30 +554,32 @@ export async function sendWeeklyReportEmail({ report }) {
     `  - Macro Blocked:    ${report.holdSummary.blockedByMacro}`,
     `  - Risk Blocked:     ${report.holdSummary.blockedByRisk}`,
     `  - Data Stale:       ${report.holdSummary.staleData}`,
-    ""
-    );
+    "",
+  );
 
-    if (report.slippage && report.slippage.samples > 0) {
+  if (report.slippage && report.slippage.samples > 0) {
     bodyLines.push(
       "Execution Quality (Slippage):",
       `  - Avg Slippage:     ${report.slippage.avg} (${report.slippage.samples} trades)`,
-        ""
-      );
-      }
+      "",
+    );
+  }
 
-      if (report.intelligence && report.intelligence.samples > 0) {
-      bodyLines.push(
-        "System Logic Divergence (Deterministic vs Probabilistic):",
-        `  - Avg Divergence:   ${report.intelligence.avgDivergence}`,
-        `  - Significant (>0.3): ${report.intelligence.significantDisagreements} instances`,
-        ""
-      );
-      }
+  if (report.intelligence && report.intelligence.samples > 0) {
+    bodyLines.push(
+      "System Logic Divergence (Deterministic vs Probabilistic):",
+      `  - Avg Divergence:   ${report.intelligence.avgDivergence}`,
+      `  - Significant (>0.3): ${report.intelligence.significantDisagreements} instances`,
+      "",
+    );
+  }
 
   if (report.horizons.length > 0) {
     bodyLines.push("Performance Scorecard:");
     report.horizons.forEach((h) => {
-      bodyLines.push(`  - Horizon ${h.name}D: Ret=${h.avgReturn} Excess=${h.avgExcess} HitRate=${h.buyHitRate || 'n/a'}`);
+      bodyLines.push(
+        `  - Horizon ${h.name}D: Ret=${h.avgReturn} Excess=${h.avgExcess} HitRate=${h.buyHitRate || "n/a"}`,
+      );
     });
   } else {
     bodyLines.push("Performance Scorecard: No data collected for this period.");
@@ -608,7 +607,7 @@ export async function sendWeeklyReportEmail({ report }) {
         report.promotion.current_blockers?.length
           ? report.promotion.current_blockers.join(", ")
           : "none"
-      }`
+      }`,
     );
   }
 
@@ -622,14 +621,14 @@ export async function sendWeeklyReportEmail({ report }) {
         report.currentCycle.blockers?.length
           ? report.currentCycle.blockers.join(", ")
           : "none"
-      }`
+      }`,
     );
   }
 
   bodyLines.push(
     "",
     "—",
-    "This email was generated automatically by Value Steward’s weekly report loop."
+    "This email was generated automatically by Value Steward’s weekly report loop.",
   );
 
   await transporter.sendMail({

@@ -13,12 +13,17 @@ import {
 import { getExchangeDateString } from "./timeUtils.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
-const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
+const SCORECARD_PATH = path.join(
+  process.cwd(),
+  "data",
+  "signal-scorecard.jsonl",
+);
 const INTENT_LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
 
 function readJsonl(filePath) {
   if (!fs.existsSync(filePath)) return [];
-  return fs.readFileSync(filePath, "utf8")
+  return fs
+    .readFileSync(filePath, "utf8")
     .split("\n")
     .filter(Boolean)
     .map((line) => {
@@ -45,9 +50,12 @@ function average(values) {
 function uniqueExchangeDays(records) {
   return new Set(
     records
-      .map((record) => record.entry_date ?? record.timestamp ?? record.generated_at ?? null)
+      .map(
+        (record) =>
+          record.entry_date ?? record.timestamp ?? record.generated_at ?? null,
+      )
       .map((value) => (value ? getExchangeDateString(new Date(value)) : null))
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 
@@ -58,19 +66,25 @@ function countIssueLevels(issues = []) {
       acc[level] += 1;
       return acc;
     },
-    { warn: 0, error: 0 }
+    { warn: 0, error: 0 },
   );
 }
 
 function currentCapSettings(policy = {}) {
   const maxEffective = parseNumber(
-    policy.max_effective_capital_dollars ?? process.env.MAX_EFFECTIVE_CAPITAL_DOLLARS ?? 20
+    policy.max_effective_capital_dollars ??
+      process.env.MAX_EFFECTIVE_CAPITAL_DOLLARS ??
+      20,
   );
   const maxTrade = parseNumber(
-    policy.max_trade_notional_dollars ?? process.env.MAX_TRADE_NOTIONAL_DOLLARS ?? 5
+    policy.max_trade_notional_dollars ??
+      process.env.MAX_TRADE_NOTIONAL_DOLLARS ??
+      5,
   );
   const minTrade = parseNumber(
-    policy.min_trade_notional_dollars ?? process.env.MIN_TRADE_NOTIONAL_DOLLARS ?? 1
+    policy.min_trade_notional_dollars ??
+      process.env.MIN_TRADE_NOTIONAL_DOLLARS ??
+      1,
   );
   return {
     max_effective_capital_dollars: maxEffective ?? 20,
@@ -81,11 +95,15 @@ function currentCapSettings(policy = {}) {
 
 function buildCapCompliance({ portfolio, policy }) {
   const caps = currentCapSettings(policy);
-  const positions = Array.isArray(portfolio?.positions) ? portfolio.positions : [];
-  const tolerance = Number(process.env.VS_POSITION_CAP_TOLERANCE_MULTIPLIER ?? 1.25);
+  const positions = Array.isArray(portfolio?.positions)
+    ? portfolio.positions
+    : [];
+  const tolerance = Number(
+    process.env.VS_POSITION_CAP_TOLERANCE_MULTIPLIER ?? 1.25,
+  );
   const totalDeployed = positions.reduce((sum, position) => {
     const marketValue = Math.abs(
-      parseNumber(position.market_value ?? position.marketValue) ?? 0
+      parseNumber(position.market_value ?? position.marketValue) ?? 0,
     );
     return sum + marketValue;
   }, 0);
@@ -93,13 +111,16 @@ function buildCapCompliance({ portfolio, policy }) {
     .map((position) => ({
       symbol: position.symbol,
       market_value: Math.abs(
-        parseNumber(position.market_value ?? position.marketValue) ?? 0
+        parseNumber(position.market_value ?? position.marketValue) ?? 0,
       ),
     }))
-    .filter((position) => position.market_value > caps.max_effective_capital_dollars * tolerance);
+    .filter(
+      (position) =>
+        position.market_value > caps.max_effective_capital_dollars * tolerance,
+    );
   const maxPositionValue = positions.reduce((max, position) => {
     const marketValue = Math.abs(
-      parseNumber(position.market_value ?? position.marketValue) ?? 0
+      parseNumber(position.market_value ?? position.marketValue) ?? 0,
     );
     return Math.max(max, marketValue);
   }, 0);
@@ -109,14 +130,20 @@ function buildCapCompliance({ portfolio, policy }) {
     max_position_value: maxPositionValue,
     oversized_positions: oversizedPositions,
     oversized_count: oversizedPositions.length,
-    total_deployed_over_cap: totalDeployed > caps.max_effective_capital_dollars + 0.01,
+    total_deployed_over_cap:
+      totalDeployed > caps.max_effective_capital_dollars + 0.01,
     pass:
       oversizedPositions.length === 0 &&
       totalDeployed <= caps.max_effective_capital_dollars + 0.01,
   };
 }
 
-function buildArtifactReconciliation({ tickSnapshot, portfolio, worldContext, health }) {
+function buildArtifactReconciliation({
+  tickSnapshot,
+  portfolio,
+  worldContext,
+  health,
+}) {
   const tickPositions = Array.isArray(tickSnapshot?.result?.positions)
     ? tickSnapshot.result.positions.length
     : null;
@@ -124,15 +151,19 @@ function buildArtifactReconciliation({ tickSnapshot, portfolio, worldContext, he
     ? portfolio.positions.length
     : null;
   const tickEquity = parseNumber(tickSnapshot?.result?.equity);
-  const portfolioEquity = parseNumber(portfolio?.account?.equity ?? portfolio?.snapshot?.equity);
+  const portfolioEquity = parseNumber(
+    portfolio?.account?.equity ?? portfolio?.snapshot?.equity,
+  );
   const worldDate =
     worldContext?.date ??
     (worldContext?.generated_at
       ? getExchangeDateString(new Date(worldContext.generated_at))
       : null);
-  const exchangeDate = health?.exchange_date ?? getExchangeDateString(new Date());
+  const exchangeDate =
+    health?.exchange_date ?? getExchangeDateString(new Date());
   const tickArtifactComplete = tickPositions !== null && tickEquity !== null;
-  const portfolioArtifactComplete = portfolioPositions !== null && portfolioEquity !== null;
+  const portfolioArtifactComplete =
+    portfolioPositions !== null && portfolioEquity !== null;
   const sameWorldDate = worldDate !== null && worldDate === exchangeDate;
   const positionCountMatch =
     tickArtifactComplete &&
@@ -145,10 +176,16 @@ function buildArtifactReconciliation({ tickSnapshot, portfolio, worldContext, he
   const equityMatch = equityDifference !== null && equityDifference <= 1.0;
   const blockers = [];
   if (!tickArtifactComplete) blockers.push("tick_snapshot_incomplete");
-  if (!portfolioArtifactComplete) blockers.push("portfolio_snapshot_incomplete");
+  if (!portfolioArtifactComplete)
+    blockers.push("portfolio_snapshot_incomplete");
   if (worldDate === null) blockers.push("world_context_exchange_date_unknown");
-  else if (!sameWorldDate) blockers.push("world_context_exchange_date_mismatch");
-  if (tickArtifactComplete && portfolioArtifactComplete && !positionCountMatch) {
+  else if (!sameWorldDate)
+    blockers.push("world_context_exchange_date_mismatch");
+  if (
+    tickArtifactComplete &&
+    portfolioArtifactComplete &&
+    !positionCountMatch
+  ) {
     blockers.push("position_count_mismatch");
   }
   if (tickArtifactComplete && portfolioArtifactComplete && !equityMatch) {
@@ -179,7 +216,12 @@ function determineStage(tradingDays) {
   return "trust_build";
 }
 
-function determineVerdict({ tradingDays, blockers, avgExcessBenchmark, avgExcessCash }) {
+function determineVerdict({
+  tradingDays,
+  blockers,
+  avgExcessBenchmark,
+  avgExcessCash,
+}) {
   if (blockers.length) {
     return "not_eligible";
   }
@@ -201,20 +243,24 @@ function computeWeeklyPerformance(records) {
     .filter((record) => record?.horizons?.["1"])
     .map((record) => record.horizons["1"]);
   const avgExcessBenchmark = average(
-    oneDay.map((horizon) => parseNumber(horizon.excess_vs_benchmark))
+    oneDay.map((horizon) => parseNumber(horizon.excess_vs_benchmark)),
   );
   const avgExcessCash = average(
-    oneDay.map((horizon) => parseNumber(horizon.excess_vs_cash))
+    oneDay.map((horizon) => parseNumber(horizon.excess_vs_cash)),
   );
   const buyHorizons = records
-    .filter((record) => ["BUY", "MULTI"].includes(record.action_type) && record?.horizons?.["1"])
+    .filter(
+      (record) =>
+        ["BUY", "MULTI"].includes(record.action_type) &&
+        record?.horizons?.["1"],
+    )
     .map((record) => record.horizons["1"]);
   const buyHitRate = average(
     buyHorizons.map((horizon) =>
       typeof horizon.directional_correct === "boolean"
         ? Number(horizon.directional_correct)
-        : NaN
-    )
+        : NaN,
+    ),
   );
   return {
     avg_excess_benchmark_1d: avgExcessBenchmark,
@@ -230,14 +276,18 @@ function buildHealthBlockers(issues = []) {
     .map((code) => `health_${code}`);
 }
 
-function buildWeeklyBlockers({ filteredRecords, filteredIntents, performance }) {
+function buildWeeklyBlockers({
+  filteredRecords,
+  filteredIntents,
+  performance,
+}) {
   const blockers = [];
   const staleGateCount = filteredIntents.filter(
     (intent) =>
       intent?.gate_world_context_fresh === false ||
       intent?.gate_signal_fresh === false ||
       intent?.reason_code === "WORLD_STALE" ||
-      intent?.reason_code === "SIGNAL_STALE"
+      intent?.reason_code === "SIGNAL_STALE",
   ).length;
 
   if (!filteredRecords.length) {
@@ -301,15 +351,20 @@ export async function buildDailyPromotionSnapshot({
     reason: currentTraining?.reason ?? null,
     updated: currentTraining?.decision === "update",
     policy_version_before: currentTraining?.policyVersionBefore ?? null,
-    policy_version_after: currentTraining?.policyVersionAfter ?? currentTraining?.policyVersion ?? null,
+    policy_version_after:
+      currentTraining?.policyVersionAfter ??
+      currentTraining?.policyVersion ??
+      null,
   };
   const verdict = determineVerdict({
     tradingDays: health.scorecard?.trading_days ?? 0,
     blockers,
     avgExcessBenchmark: parseNumber(
-      health.scorecard?.horizons?.["1"]?.avg_excess_benchmark
+      health.scorecard?.horizons?.["1"]?.avg_excess_benchmark,
     ),
-    avgExcessCash: parseNumber(health.scorecard?.horizons?.["1"]?.avg_excess_cash),
+    avgExcessCash: parseNumber(
+      health.scorecard?.horizons?.["1"]?.avg_excess_cash,
+    ),
   });
 
   return {
@@ -345,20 +400,30 @@ export function buildWeeklyPromotionSummary({
   latestDailyPromotion,
 } = {}) {
   const currentState = loadStateSync();
-  const filteredRecords = filterPhase1Records(records ?? readJsonl(SCORECARD_PATH), {
-    state: currentState,
-  });
-  const filteredIntents = filterPhase1Records(intents ?? readJsonl(INTENT_LOG_PATH), {
-    state: currentState,
-  });
+  const filteredRecords = filterPhase1Records(
+    records ?? readJsonl(SCORECARD_PATH),
+    {
+      state: currentState,
+    },
+  );
+  const filteredIntents = filterPhase1Records(
+    intents ?? readJsonl(INTENT_LOG_PATH),
+    {
+      state: currentState,
+    },
+  );
   const performance = computeWeeklyPerformance(filteredRecords);
   const tradingDays = uniqueExchangeDays(filteredRecords).size;
-  const totalBuys = filteredIntents.filter((intent) => intent.action_type === "BUY").length;
-  const totalSells = filteredIntents.filter((intent) => intent.action_type === "SELL").length;
+  const totalBuys = filteredIntents.filter(
+    (intent) => intent.action_type === "BUY",
+  ).length;
+  const totalSells = filteredIntents.filter(
+    (intent) => intent.action_type === "SELL",
+  ).length;
   const policyVersions = new Set(
     filteredIntents
       .map((intent) => intent.policy_version)
-      .filter((value) => value !== null && value !== undefined)
+      .filter((value) => value !== null && value !== undefined),
   );
   const blockers = buildWeeklyBlockers({
     filteredRecords,
@@ -382,7 +447,10 @@ export function buildWeeklyPromotionSummary({
       performance.avg_excess_benchmark_1d === null
         ? null
         : Number((50 + performance.avg_excess_benchmark_1d * 1000).toFixed(1)),
-    learning_score: Math.max(0, 100 - Math.max(policyVersions.size - 1, 0) * 20),
+    learning_score: Math.max(
+      0,
+      100 - Math.max(policyVersions.size - 1, 0) * 20,
+    ),
     risk_score: Math.max(0, 100 - blockers.length * 20),
     metrics: {
       trading_days: tradingDays,

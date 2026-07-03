@@ -38,24 +38,22 @@ async function main() {
   });
   const isFinalTick = isWithinPreCloseWindow(5, new Date());
   const trainOnNonFinalTick = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_TRAIN_ON_NON_FINAL_TICK ?? "false").toLowerCase()
+    String(process.env.VS_TRAIN_ON_NON_FINAL_TICK ?? "false").toLowerCase(),
   );
 
   // 2. Local Training (Post-Tick)
-  await (
-    isFinalTick || trainOnNonFinalTick
-      ? trainPolicyFromHistoryLocal({
-          worldContext: result.worldContext,
-          allowScorecard: false,
-        })
-      : {
-          updated: false,
-          reason: "not_final_tick",
-          oldRisk: tickPolicy?.risk_level ?? null,
-          newRisk: tickPolicy?.risk_level ?? null,
-          metrics: null,
-        }
-  );
+  await (isFinalTick || trainOnNonFinalTick
+    ? trainPolicyFromHistoryLocal({
+        worldContext: result.worldContext,
+        allowScorecard: false,
+      })
+    : {
+        updated: false,
+        reason: "not_final_tick",
+        oldRisk: tickPolicy?.risk_level ?? null,
+        newRisk: tickPolicy?.risk_level ?? null,
+        metrics: null,
+      });
   const policy = loadPolicySnapshot() ?? tickPolicy;
 
   // 3. Status & Notifications
@@ -66,7 +64,10 @@ async function main() {
     worldContext: result.worldContext,
   });
 
-  const healthCheck = shouldSendHealthEmail({ agentState: state, snapshot: health });
+  const healthCheck = shouldSendHealthEmail({
+    agentState: state,
+    snapshot: health,
+  });
   if (healthCheck.send) {
     await sendHealthEmail({ health, reason: healthCheck.reason });
     await markHealthEmailSent();
@@ -89,13 +90,17 @@ async function main() {
     });
   }
 
-  const worldAgeMinutes = health.world?.age_hours ? health.world.age_hours * 60 : null;
+  const worldAgeMinutes = health.world?.age_hours
+    ? health.world.age_hours * 60
+    : null;
 
   console.log(
     `[local:tick] complete. mode=${result.agentMode} equity=${result.equity} ` +
       `positions=${result.numPositions} worldContextAgeMinutes=${
-        typeof worldAgeMinutes === "number" ? Number(worldAgeMinutes.toFixed(2)) : null
-      }`
+        typeof worldAgeMinutes === "number"
+          ? Number(worldAgeMinutes.toFixed(2))
+          : null
+      }`,
   );
 }
 

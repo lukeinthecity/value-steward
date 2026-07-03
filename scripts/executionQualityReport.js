@@ -14,11 +14,11 @@ async function main() {
       : `${(snapshot.fill_rate * 100).toFixed(0)}%`;
   console.log(
     `[execution:quality] window=${snapshot.window_days}d ` +
-      `attempts=${snapshot.attempts} fills=${snapshot.fills} (${rate})`
+      `attempts=${snapshot.attempts} fills=${snapshot.fills} (${rate})`,
   );
   for (const bucket of snapshot.by_score_bucket) {
     console.log(
-      `[execution:quality]   ${bucket.bucket}: ${bucket.fills}/${bucket.attempts} filled`
+      `[execution:quality]   ${bucket.bucket}: ${bucket.fills}/${bucket.attempts} filled`,
     );
   }
 }

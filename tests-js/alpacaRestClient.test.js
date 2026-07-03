@@ -28,7 +28,7 @@ test("throws immediately when credentials are missing", () => {
   try {
     assert.throws(
       () => createAlpacaRestClient({}),
-      /ALPACA_API_KEY_ID and ALPACA_SECRET_KEY/
+      /ALPACA_API_KEY_ID and ALPACA_SECRET_KEY/,
     );
   } finally {
     if (originalKey !== undefined) process.env.ALPACA_API_KEY_ID = originalKey;
@@ -101,7 +101,7 @@ test("trailing slash on baseUrl does not double up in the request URL", async ()
 
 test("non-2xx responses fail closed with the status code", async () => {
   const { impl } = fakeFetch(() =>
-    jsonResponse({ message: "forbidden" }, { ok: false, status: 403 })
+    jsonResponse({ message: "forbidden" }, { ok: false, status: 403 }),
   );
   const client = createAlpacaRestClient({
     ...CREDS,

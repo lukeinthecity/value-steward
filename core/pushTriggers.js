@@ -59,7 +59,9 @@ function portfolioEquity(portfolio) {
 }
 
 function portfolioPositionsCount(portfolio) {
-  return Array.isArray(portfolio?.positions) ? portfolio.positions.length : null;
+  return Array.isArray(portfolio?.positions)
+    ? portfolio.positions.length
+    : null;
 }
 
 /** Trading is "off"/halted when explicitly disabled or force-no-trade is set. */
@@ -188,8 +190,14 @@ export async function maybeSendHealthAlert({
     .sort()
     .join(",");
   const prev = pstate.last_health_alert || {};
-  const hoursSince = prev.at ? (now.getTime() - Date.parse(prev.at)) / 3600000 : null;
-  if (prev.signature === signature && hoursSince !== null && hoursSince < minHours) {
+  const hoursSince = prev.at
+    ? (now.getTime() - Date.parse(prev.at)) / 3600000
+    : null;
+  if (
+    prev.signature === signature &&
+    hoursSince !== null &&
+    hoursSince < minHours
+  ) {
     return { sent: false, reason: "deduped" };
   }
 

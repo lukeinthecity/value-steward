@@ -22,7 +22,9 @@ const SCRIPT_MAP = {
 };
 
 function resolveWithinRoot(relPath) {
-  const abs = path.isAbsolute(relPath) ? relPath : path.resolve(repoRoot, relPath);
+  const abs = path.isAbsolute(relPath)
+    ? relPath
+    : path.resolve(repoRoot, relPath);
   if (!abs.startsWith(repoRoot)) {
     throw new Error(`Path escape blocked: ${abs}`);
   }
@@ -118,7 +120,9 @@ function readEnvFallbackSecrets() {
     if (!fs.existsSync(envPath)) return {};
     const parsed = dotenv.parse(fs.readFileSync(envPath, "utf8"));
     return Object.fromEntries(
-      SECRET_KEYS.map((key) => [key, String(parsed[key] || "").trim()]).filter(([, value]) => value)
+      SECRET_KEYS.map((key) => [key, String(parsed[key] || "").trim()]).filter(
+        ([, value]) => value,
+      ),
     );
   } catch {
     return {};
@@ -144,7 +148,9 @@ function readStoredSecrets() {
     for (const key of SECRET_KEYS) {
       const encoded = raw?.[key];
       if (!encoded) continue;
-      const decrypted = safeStorage.decryptString(Buffer.from(encoded, "base64"));
+      const decrypted = safeStorage.decryptString(
+        Buffer.from(encoded, "base64"),
+      );
       if (decrypted) secrets[key] = decrypted;
     }
     return secrets;
@@ -178,10 +184,12 @@ function getSecretStatuses() {
     storageAvailable: getStorageAvailability(),
     secrets: Object.fromEntries(
       SECRET_KEYS.map((key) => {
-        if (stored[key]) return [key, { configured: true, source: "secure_store" }];
-        if (fallback[key]) return [key, { configured: true, source: ".env_fallback" }];
+        if (stored[key])
+          return [key, { configured: true, source: "secure_store" }];
+        if (fallback[key])
+          return [key, { configured: true, source: ".env_fallback" }];
         return [key, { configured: false, source: null }];
-      })
+      }),
     ),
   };
 }
@@ -304,8 +312,12 @@ ipcMain.handle("vs:load-dashboard-data", () => loadDashboardData());
 ipcMain.handle("vs:load-runtime-status", () => loadRuntimeSnapshot());
 ipcMain.handle("vs:run-action", (_event, name) => runScript(name));
 ipcMain.handle("vs:get-secret-status", () => getSecretStatuses());
-ipcMain.handle("vs:set-secrets", (_event, updates) => setSecrets(updates || {}));
-ipcMain.handle("vs:clear-secret", (_event, key) => clearSecret(String(key || "")));
+ipcMain.handle("vs:set-secrets", (_event, updates) =>
+  setSecrets(updates || {}),
+);
+ipcMain.handle("vs:clear-secret", (_event, key) =>
+  clearSecret(String(key || "")),
+);
 
 function createWindow() {
   const win = new BrowserWindow({

@@ -31,7 +31,9 @@ export function getGateCalibrationPath() {
 export function classifyGate(explanation) {
   const note = String(explanation ?? "").replace(/^buy blocked:\s*/i, "");
   if (note.startsWith("macro_label=")) {
-    return note.includes("signal_score=") ? "macro_score_floor" : "macro_sector";
+    return note.includes("signal_score=")
+      ? "macro_score_floor"
+      : "macro_sector";
   }
   if (note.startsWith("entry_quality score=")) return "score_floor";
   if (note.startsWith("entry_quality rel20=")) return "rel_strength_20d";
@@ -133,7 +135,7 @@ export function renderGateCalibrationMarkdown(result) {
           : "too tight?";
     lines.push(
       `| ${gate.gate} | ${gate.count} | ${fmtPct(gate.mean_excess)} | ` +
-        `${fmtPct(gate.median_excess)} | ${fmtT(gate.t_stat)} | ${verdict} |`
+        `${fmtPct(gate.median_excess)} | ${fmtT(gate.t_stat)} | ${verdict} |`,
     );
   }
   if (!result.gates.length) {
@@ -153,6 +155,9 @@ export function runGateCalibration({ now = new Date(), horizon = 5 } = {}) {
     horizon,
     now,
   });
-  writeTextAtomic(getGateCalibrationPath(), renderGateCalibrationMarkdown(result));
+  writeTextAtomic(
+    getGateCalibrationPath(),
+    renderGateCalibrationMarkdown(result),
+  );
   return result;
 }

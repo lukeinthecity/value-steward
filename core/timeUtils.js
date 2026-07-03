@@ -49,7 +49,10 @@ function nthWeekday(year, month, weekday, n) {
 }
 
 function lastWeekday(year, month, weekday) {
-  const nextMonth = month === 12 ? new Date(Date.UTC(year + 1, 0, 1)) : new Date(Date.UTC(year, month, 1));
+  const nextMonth =
+    month === 12
+      ? new Date(Date.UTC(year + 1, 0, 1))
+      : new Date(Date.UTC(year, month, 1));
   const last = new Date(nextMonth.getTime() - 86400000);
   const lastWeekdayIndex = last.getUTCDay();
   const daysBack = (lastWeekdayIndex - weekday + 7) % 7;
@@ -196,7 +199,10 @@ function isWeekendDate(dateString) {
   return weekday === 0 || weekday === 6;
 }
 
-export function getExchangeParts(date = new Date(), timeZone = getMarketTimeZone()) {
+export function getExchangeParts(
+  date = new Date(),
+  timeZone = getMarketTimeZone(),
+) {
   const d = date instanceof Date ? date : new Date(date);
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
@@ -286,7 +292,8 @@ function loadHolidayList() {
       ...generated.earlyCloses,
       ...earlyClosesRaw
         .map((entry) => {
-          if (typeof entry === "string") return { date: entry, close_time: "13:00" };
+          if (typeof entry === "string")
+            return { date: entry, close_time: "13:00" };
           if (entry && typeof entry === "object" && entry.date) {
             return {
               date: entry.date,
@@ -300,7 +307,7 @@ function loadHolidayList() {
       .reverse()
       .filter(
         (entry, index, all) =>
-          all.findIndex((candidate) => candidate.date === entry.date) === index
+          all.findIndex((candidate) => candidate.date === entry.date) === index,
       )
       .reverse()
       .map((entry) => {
@@ -381,7 +388,7 @@ export function minutesSinceClose(date = new Date()) {
 export function isWithinPostCloseWindow(
   startMinutesAfterClose,
   endMinutesAfterClose,
-  date = new Date()
+  date = new Date(),
 ) {
   const minutes = minutesSinceClose(date);
   if (minutes === null) return false;
@@ -404,7 +411,7 @@ export function isWithinPreOpenWindow(windowMinutes, date = new Date()) {
 
 export function isWithinMinutesBeforeCloseSlots(
   slotMinutes,
-  date = new Date()
+  date = new Date(),
 ) {
   if (!isTradingDay(date)) return false;
   if (!Array.isArray(slotMinutes) || !slotMinutes.length) return false;
@@ -415,7 +422,7 @@ export function isWithinMinutesBeforeCloseSlots(
 export function getNextMarketOpen(date = new Date()) {
   const { open } = getMarketOpenClose(date);
   const openStr = `${String(open.hour).padStart(2, "0")}:${String(
-    open.minute
+    open.minute,
   ).padStart(2, "0")}`;
   const today = getExchangeDateString(date);
   const parts = getExchangeParts(date);

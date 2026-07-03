@@ -10,7 +10,7 @@ export function validatePolicy(policy) {
     typeof policy.schema_version === "number" ? policy.schema_version : 1;
   if (schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
     warnings.push(
-      `Unsupported schema_version=${schemaVersion}; expected ${SUPPORTED_SCHEMA_VERSION}.`
+      `Unsupported schema_version=${schemaVersion}; expected ${SUPPORTED_SCHEMA_VERSION}.`,
     );
   }
 

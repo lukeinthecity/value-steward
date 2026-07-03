@@ -157,17 +157,14 @@ test("artifact cycle helpers build and validate matching provenance", () => {
   });
 
   assert.equal(cycleId, "2026-04-29:pre_close:2026-04-29T19:00:00.000Z");
-  assert.equal(
-    getArtifactCycleId({ result: { cycle_id: cycleId } }),
-    cycleId
-  );
+  assert.equal(getArtifactCycleId({ result: { cycle_id: cycleId } }), cycleId);
   assert.equal(
     assertMatchingCycleIds([
       { label: "tick", payload: { cycle_id: cycleId } },
       { label: "portfolio", payload: { cycle_id: cycleId } },
       { label: "world", payload: { cycle_id: cycleId } },
     ]),
-    cycleId
+    cycleId,
   );
 });
 
@@ -178,7 +175,7 @@ test("artifact cycle helper rejects mismatched provenance", () => {
         { label: "tick", payload: { cycle_id: "a" } },
         { label: "portfolio", payload: { cycle_id: "b" } },
       ]),
-    /Artifact cycle mismatch/
+    /Artifact cycle mismatch/,
   );
 });
 
@@ -189,13 +186,15 @@ test("artifact cycle helper rejects missing provenance", () => {
         { label: "tick", payload: { cycle_id: "a" } },
         { label: "portfolio", payload: {} },
       ]),
-    /Artifact cycle provenance missing/
+    /Artifact cycle provenance missing/,
   );
 });
 
 test("loadIntradayObservations filters to the requested exchange date", (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-intraday-artifacts-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-intraday-artifacts-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -225,7 +224,10 @@ test("writeJsonlAtomic round-trips and leaves no .tmp file behind", (t) => {
   t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
   const target = path.join(tmpDir, "nested", "inbox.jsonl");
-  const entries = [{ id: 1, t: "a" }, { id: 2, t: "b" }];
+  const entries = [
+    { id: 1, t: "a" },
+    { id: 2, t: "b" },
+  ];
   writeJsonlAtomic(target, entries);
 
   // Round-trips through the guarded reader.
@@ -236,7 +238,7 @@ test("writeJsonlAtomic round-trips and leaves no .tmp file behind", (t) => {
   // No stray temp files survive the rename.
   assert.deepEqual(
     fs.readdirSync(path.dirname(target)).filter((f) => f.includes(".tmp")),
-    []
+    [],
   );
 });
 

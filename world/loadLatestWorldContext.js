@@ -60,7 +60,7 @@ export async function loadLatestWorldContext() {
   } catch (err) {
     console.error(
       "[world] loadLatestWorldContext failed:",
-      err?.message ?? err
+      err?.message ?? err,
     );
     return null;
   }

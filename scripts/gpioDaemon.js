@@ -12,12 +12,16 @@ const DEFAULT_GPIO_PATH = path.join(process.cwd(), "data", "gpio-state.json");
 const DEFAULT_LED_PATH = path.join(process.cwd(), "data", "led-status.json");
 
 function isFalseyFlag(value) {
-  return ["0", "false", "no", "off"].includes(String(value ?? "").toLowerCase());
+  return ["0", "false", "no", "off"].includes(
+    String(value ?? "").toLowerCase(),
+  );
 }
 
 function writeJsonIfChanged(filePath, payload) {
   const next = JSON.stringify(payload, null, 2);
-  const prev = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
+  const prev = fs.existsSync(filePath)
+    ? fs.readFileSync(filePath, "utf8")
+    : null;
   if (prev && prev.trim() === next.trim()) {
     return false;
   }
@@ -38,9 +42,7 @@ function buildLedStatus({ snapshot, state, gpio, tradingEnabled }) {
   const forceNoTrade =
     typeof state?.force_no_trade === "boolean" ? state.force_no_trade : null;
   const canTrade =
-    marketOpen === true &&
-    tradingEnabled === true &&
-    forceNoTrade !== true;
+    marketOpen === true && tradingEnabled === true && forceNoTrade !== true;
 
   return {
     updated_at: new Date().toISOString(),
@@ -65,7 +67,7 @@ async function runOnce({ gpioPath, ledPath, ledEnabled }) {
     const forceNoTrade = applyResult.state?.force_no_trade ?? "unset";
     const reason = applyResult.state?.control_reason ?? "n/a";
     console.log(
-      `[gpio] control updated trading_enabled=${trading} force_no_trade=${forceNoTrade} reason=${reason}`
+      `[gpio] control updated trading_enabled=${trading} force_no_trade=${forceNoTrade} reason=${reason}`,
     );
   }
 
@@ -102,7 +104,9 @@ function getArgValue(args, name) {
 async function main() {
   const args = process.argv.slice(2);
   const gpioPath =
-    getArgValue(args, "--gpio") || process.env.VS_GPIO_PATH || DEFAULT_GPIO_PATH;
+    getArgValue(args, "--gpio") ||
+    process.env.VS_GPIO_PATH ||
+    DEFAULT_GPIO_PATH;
   const ledPath =
     getArgValue(args, "--led") ||
     process.env.VS_LED_STATUS_PATH ||
@@ -125,7 +129,7 @@ async function main() {
   }
 
   console.log(
-    `[gpio] watching ${gpioPath} every ${pollMs}ms (led=${ledEnabled ? ledPath : "disabled"})`
+    `[gpio] watching ${gpioPath} every ${pollMs}ms (led=${ledEnabled ? ledPath : "disabled"})`,
   );
 
   let running = true;

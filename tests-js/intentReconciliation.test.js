@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importModule() {
-  const moduleUrl = `${pathToFileURL(
-    path.join(repoRoot, "core", "intentReconciliation.js")
-  ).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${
+    pathToFileURL(path.join(repoRoot, "core", "intentReconciliation.js")).href
+  }?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -308,7 +308,7 @@ test("runIntentReconciliation reads artifacts and appends outcomes", async (t) =
   fs.mkdirSync(path.join(tmpDir, "data"), { recursive: true });
   fs.writeFileSync(
     path.join(tmpDir, "logs", "intent_log.jsonl"),
-    `${JSON.stringify(intent)}\n`
+    `${JSON.stringify(intent)}\n`,
   );
   fs.writeFileSync(
     path.join(tmpDir, "data", "portfolio-live.json"),
@@ -325,7 +325,7 @@ test("runIntentReconciliation reads artifacts and appends outcomes", async (t) =
           submitted_at: new Date().toISOString(),
         },
       ],
-    })
+    }),
   );
 
   const result = runIntentReconciliation();

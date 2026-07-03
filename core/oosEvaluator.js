@@ -49,8 +49,7 @@ function summarize(values) {
   const std = n > 1 ? Math.sqrt(sumSq / (n - 1)) : 0;
   // Sharpe defined only when std is meaningfully non-zero — otherwise
   // the ratio is dominated by floating-point noise.
-  const sharpe =
-    n > 1 && std > 1e-9 ? mean / std : null;
+  const sharpe = n > 1 && std > 1e-9 ? mean / std : null;
   return {
     sampleCount: n,
     mean,

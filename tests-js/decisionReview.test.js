@@ -61,7 +61,7 @@ test("decision review summarizes actions, reasons, and symbols", () => {
   ]);
   assert.equal(
     review.summary,
-    "Primary decision activity was BUY under watchful conditions, most often driven by UNDER_TARGET_BUY, but no broker orders were submitted."
+    "Primary decision activity was BUY under watchful conditions, most often driven by UNDER_TARGET_BUY, but no broker orders were submitted.",
   );
 });
 
@@ -83,7 +83,7 @@ test("decision review filters to one exchange date", () => {
         world_regime_label: "crisis-prone",
       },
     ],
-    "2026-03-27"
+    "2026-03-27",
   );
 
   assert.equal(review.total_intents, 1);
@@ -154,7 +154,7 @@ test("decision review separates intents from submitted and filled broker orders"
           },
         ],
       },
-    }
+    },
   );
 
   assert.equal(review.orders_submitted, 1);
@@ -164,6 +164,6 @@ test("decision review separates intents from submitted and filled broker orders"
   assert.deepEqual(review.filled_symbols, []);
   assert.equal(
     review.summary,
-    "Primary decision activity was BUY under calm conditions, most often driven by UNDER_TARGET_BUY. Broker orders were submitted, but none filled."
+    "Primary decision activity was BUY under calm conditions, most often driven by UNDER_TARGET_BUY. Broker orders were submitted, but none filled.",
   );
 });

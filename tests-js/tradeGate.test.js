@@ -20,7 +20,7 @@ test("canTrade is true when enabled, not kill-switched, and mode is active", () 
 test("canTrade is false when the master toggle is off", () => {
   const r = computeCanTrade(
     { mode: MODES.LIVE },
-    { loadState: () => ({ trading_enabled: false, force_no_trade: false }) }
+    { loadState: () => ({ trading_enabled: false, force_no_trade: false }) },
   );
   assert.equal(r.canTrade, false);
 });
@@ -28,7 +28,7 @@ test("canTrade is false when the master toggle is off", () => {
 test("canTrade is false when the kill-switch (force_no_trade) is on", () => {
   const r = computeCanTrade(
     { mode: MODES.LIVE },
-    { loadState: () => ({ trading_enabled: true, force_no_trade: true }) }
+    { loadState: () => ({ trading_enabled: true, force_no_trade: true }) },
   );
   assert.equal(r.canTrade, false);
 });

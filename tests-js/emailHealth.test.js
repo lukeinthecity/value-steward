@@ -4,7 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { recordEmailHealth, instrumentTransporter } from "../core/emailHealth.js";
+import {
+  recordEmailHealth,
+  instrumentTransporter,
+} from "../core/emailHealth.js";
 
 // Each test gets its own temp file via VS_EMAIL_HEALTH_PATH so we never touch
 // the real data/email-health.json and never mutate process.cwd() (which is

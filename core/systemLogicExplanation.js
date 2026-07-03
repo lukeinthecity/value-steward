@@ -47,7 +47,8 @@ export function buildSystemLogicExplanation(worldContext) {
   const deterministic = worldContext?.macro_view?.macro_label ?? null;
   const probabilistic = worldContext?.scout_label ?? null;
   const finalRegime = worldContext?.final_regime ?? null;
-  const finalLabel = finalRegime?.final_label ?? deterministic ?? probabilistic ?? "n/a";
+  const finalLabel =
+    finalRegime?.final_label ?? deterministic ?? probabilistic ?? "n/a";
   const divergence = finalRegime?.divergence === true;
   const fusionReason = describeFusionReason(finalRegime?.fusion_reason);
 

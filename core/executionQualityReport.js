@@ -17,10 +17,7 @@
 
 import path from "path";
 
-import {
-  appendJsonlLineSync,
-  readJsonl,
-} from "./runtimeArtifacts.js";
+import { appendJsonlLineSync, readJsonl } from "./runtimeArtifacts.js";
 import {
   getIntentOutcomesPath,
   toExchangeDate,
@@ -49,7 +46,7 @@ function isFilled(outcome) {
 
 function latestOutcomesInWindow(outcomes, now, windowDays) {
   const cutoff = toExchangeDate(
-    new Date(now.getTime() - windowDays * 86400000).toISOString()
+    new Date(now.getTime() - windowDays * 86400000).toISOString(),
   );
   const latest = new Map();
   for (const row of outcomes ?? []) {

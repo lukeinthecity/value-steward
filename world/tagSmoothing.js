@@ -31,9 +31,10 @@ export function computeSmoothedTags({
       ? priorValues[priorValues.length - 1]
       : null;
 
-    const raw = latestRawTags && isNumeric(latestRawTags[key])
-      ? latestRawTags[key]
-      : prev;
+    const raw =
+      latestRawTags && isNumeric(latestRawTags[key])
+        ? latestRawTags[key]
+        : prev;
 
     if (raw === null || raw === undefined) {
       result[key] = null;
