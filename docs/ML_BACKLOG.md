@@ -12,7 +12,14 @@ The thesis behind deferring everything below: it's the most common quant-shop mi
 
 ## Known limitations (observed, not yet actioned)
 
-### OOS `strict` metric is structurally always empty
+### ~~OOS `strict` metric is structurally always empty~~ — RESOLVED 2026-07-03
+
+**Fixed for the Run-3 restart** (both options below were implemented):
+`maybeRunOosAndChampionChallenger` now receives the pre-trainer-chain
+version, so `strict` matches the rows today's decisions were actually made
+under; and the posteriors rebuild only bumps `policy.version` when its
+content materially changed (was: +1 every cycle with data). Original
+observation kept below for the record.
 
 `oosEvaluator.evaluateOos` produces two blocks: `strict` (rows whose
 `policy_version === currentPolicyVersion`) and `rolling` (most recent N rows,
