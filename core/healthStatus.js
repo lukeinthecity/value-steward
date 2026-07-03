@@ -6,6 +6,8 @@ import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import {
   loadLatestTickSnapshot,
   loadPortfolioLiveSnapshot,
+  readJson,
+  readJsonl,
 } from "./runtimeArtifacts.js";
 import { loadStateSync } from "./stewardState.js";
 import {
@@ -26,31 +28,6 @@ const SCORECARD_SUMMARY_PATH = path.join(DATA_DIR, "scorecard-summary.json");
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
 const FEEDS_PATH = path.join(process.cwd(), "world", "feeds.json");
 const WORLD_CONTEXT_PATH = path.join(DATA_DIR, "world-context.jsonl");
-
-function readJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function readJsonl(filePath) {
-  if (!fs.existsSync(filePath)) return [];
-  const raw = fs.readFileSync(filePath, "utf8");
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
-}
 
 function loadActiveFeedIds() {
   const feeds = readJson(FEEDS_PATH);

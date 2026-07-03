@@ -3,6 +3,7 @@ import path from "path";
 import { spawnSync } from "child_process";
 import "dotenv/config";
 import { getExchangeDateString } from "../core/timeUtils.js";
+import { readJsonl } from "../core/runtimeArtifacts.js";
 import { sendWeeklyReportEmail } from "../core/emailNotifications.js";
 import { buildDailyPromotionSnapshot, buildWeeklyPromotionSummary } from "../core/promotionMetrics.js";
 import { buildSystemLogicExplanation } from "../core/systemLogicExplanation.js";
@@ -11,21 +12,6 @@ import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 
 const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 const INTENT_LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
-
-function loadJsonl(filePath) {
-  if (!fs.existsSync(filePath)) return [];
-  return fs.readFileSync(filePath, "utf8")
-    .split("\n")
-    .filter(Boolean)
-    .map(line => {
-        try {
-            return JSON.parse(line);
-        } catch(e) {
-            return null;
-        }
-    })
-    .filter(Boolean);
-}
 
 function fmtPct(val) {
   if (val === null || val === undefined) return "n/a";
@@ -36,8 +22,8 @@ async function main() {
   const args = process.argv.slice(2);
   const shouldEmail = args.includes("--send-email");
 
-  const records = loadJsonl(SCORECARD_PATH);
-  const intents = loadJsonl(INTENT_LOG_PATH);
+  const records = readJsonl(SCORECARD_PATH);
+  const intents = readJsonl(INTENT_LOG_PATH);
   
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
