@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timezone
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, cast
@@ -40,9 +41,16 @@ from valuesteward.steward_state import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 @click.group()
 def main() -> None:
     """Value Steward CLI."""
+    # Without a handler, Python drops INFO logs from the whole stack (the
+    # [EXEC] order trail never reached cron logs). Messages carry their own
+    # [TAG] prefixes, so keep the format bare.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 @main.command()
@@ -69,7 +77,7 @@ def status() -> None:
         print(f"Daily Baseline:  ${baseline:,.2f} (Loss: {loss:.2%})")
 
 
-def _iso(value) -> str | None:
+def _iso(value: Any) -> str | None:
     if value is None:
         return None
     if hasattr(value, "isoformat"):
@@ -77,7 +85,7 @@ def _iso(value) -> str | None:
     return str(value)
 
 
-def _json_scalar(value):
+def _json_scalar(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, UUID):
@@ -112,7 +120,7 @@ def _exchange_date_iso_now() -> str:
     return datetime.now(timezone.utc).astimezone(get_market_timezone()).date().isoformat()
 
 
-def _format_account(account) -> dict:
+def _format_account(account: Any) -> dict:
     return {
         "status": getattr(account, "status", None),
         "equity": float(getattr(account, "equity", 0) or 0),
@@ -131,7 +139,7 @@ def _format_account(account) -> dict:
     }
 
 
-def _format_order(order) -> dict:
+def _format_order(order: Any) -> dict:
     return {
         "id": _json_scalar(getattr(order, "id", None)),
         "client_order_id": _json_scalar(getattr(order, "client_order_id", None)),
@@ -149,7 +157,7 @@ def _format_order(order) -> dict:
     }
 
 
-def _format_clock(clock) -> dict:
+def _format_clock(clock: Any) -> dict:
     return {
         "timestamp": _iso(getattr(clock, "timestamp", None)),
         "is_open": getattr(clock, "is_open", None),
@@ -178,18 +186,18 @@ def portfolio(out: str) -> None:
     try:
         orders = alpaca_client.get_open_orders()
     except Exception as exc:  # noqa: BLE001
-        print(f"[WARN] Failed to fetch open orders: {exc}")
+        logger.warning(f"[WARN] Failed to fetch open orders: {exc}")
         orders = []
     try:
         # 100 keeps multi-day expiries inside the intent-reconciliation window.
         recent_orders = alpaca_client.get_recent_orders(limit=100)
     except Exception as exc:  # noqa: BLE001
-        print(f"[WARN] Failed to fetch recent orders: {exc}")
+        logger.warning(f"[WARN] Failed to fetch recent orders: {exc}")
         recent_orders = []
     try:
         clock = alpaca_client.get_clock()
     except Exception as exc:  # noqa: BLE001
-        print(f"[WARN] Failed to fetch market clock: {exc}")
+        logger.warning(f"[WARN] Failed to fetch market clock: {exc}")
         clock = None
 
     payload = {
@@ -289,7 +297,7 @@ def manual_order(symbol: str, side: str, notional: float) -> None:
     settings = get_settings()
     policy, policy_warnings = load_policy()
     for warning in policy_warnings:
-        print(f"[POLICY] Warning: {warning}")
+        logger.warning(f"[POLICY] Warning: {warning}")
     settings = apply_policy_to_settings(settings, policy)
 
     alpaca_client = AlpacaClient(settings=settings)
@@ -355,7 +363,7 @@ def tick() -> None:
     settings = get_settings()
     policy, policy_warnings = load_policy()
     for warning in policy_warnings:
-        print(f"[POLICY] Warning: {warning}")
+        logger.warning(f"[POLICY] Warning: {warning}")
 
     # Load world context early so regime-conditional signal weights can be
     # picked up by apply_policy_to_settings before the signal engine builds.
@@ -535,7 +543,7 @@ def tick() -> None:
         if world_context:
             db_mgr.sync_world_context(world_context)
     except Exception as exc:
-        print(f"[DB-WARN] SQLite sync failed: {exc}")
+        logger.warning(f"[DB-WARN] SQLite sync failed: {exc}")
 
     print("Logged intent to logs/intent_log.jsonl")
     print(f"Memory now contains {len(memory_engine.get_all_intents())} intents.")
@@ -675,7 +683,7 @@ def _parse_horizons(value: str) -> list[int]:
     return sorted(set(horizons))
 
 
-def _extract_bar_date(bar) -> datetime | None:
+def _extract_bar_date(bar: Any) -> datetime | None:
     ts = getattr(bar, "timestamp", None) or getattr(bar, "t", None)
     if ts is None:
         return None
@@ -703,7 +711,7 @@ def _build_price_series(bars: list) -> tuple[list[date], dict[date, float]]:
     return dates, by_date
 
 
-def _resolve_symbol(intent) -> str | None:
+def _resolve_symbol(intent: Any) -> str | None:
     return (
         (intent.signal_symbol or "").strip().upper()
         or (intent.symbol or "").strip().upper()
