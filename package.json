@@ -15,6 +15,7 @@
     "intraday:observe:scheduled": "node scripts/intradayObservationScheduled.js",
     "portfolio:refresh": "node scripts/portfolioRefresh.js",
     "intent:reconcile": "node scripts/intentReconcile.js",
+    "execution:quality": "node scripts/executionQualityReport.js",
     "scorecard:refresh": "node scripts/scorecardRefresh.js",
     "lint:py": "node scripts/lintPy.js",
     "format:py": "node scripts/formatPy.js",
