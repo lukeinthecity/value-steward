@@ -1,5 +1,5 @@
 import "dotenv/config";
-import Alpaca from "@alpacahq/alpaca-trade-api";
+import { createAlpacaRestClient } from "../core/alpacaRestClient.js";
 import { runTick } from "../core/tick.js";
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import {
@@ -24,10 +24,9 @@ async function main() {
   const alpacaConfig = {
     keyId: process.env.ALPACA_API_KEY_ID,
     secretKey: process.env.ALPACA_SECRET_KEY,
-    paper: true,
   };
 
-  const alpaca = new Alpaca(alpacaConfig);
+  const alpaca = createAlpacaRestClient(alpacaConfig);
   const clock = await alpaca.getClock();
   const marketOpen = clock.is_open;
 
