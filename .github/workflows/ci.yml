@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The system operates on US exchange time and some tests assume it
+# (desktopRenderer freshness checks fail under UTC).
+env:
+  TZ: America/New_York
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:js
+      - run: npm run test:js
+
+  python:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy credentials: the Alpaca SDK rejects empty keys at client
+      # construction; the test suite makes no network calls.
+      ALPACA_API_KEY_ID: ci-dummy
+      ALPACA_SECRET_KEY: ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: npm ci
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -r requirements.txt
+      - run: npm run test:py
+      - run: npm run lint:py
+      - run: npm run typecheck:py
+      - run: npm run security:py
