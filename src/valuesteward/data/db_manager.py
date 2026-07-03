@@ -16,14 +16,14 @@ class DatabaseManager:
         self.db_path = db_path
         self._init_db()
 
-    def _get_connection(self):
+    def _get_connection(self) -> sqlite3.Connection:
         """Returns a connection with WAL mode enabled for concurrent performance."""
         conn = sqlite3.connect(self.db_path, timeout=10) # Wait up to 10s if locked
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         """Initialize the database with the schema if it doesn't exist."""
         if not self.db_path.exists():
             logger.info(f"Initializing fresh database at {self.db_path}")
@@ -34,7 +34,7 @@ class DatabaseManager:
 
     def sync_intent(
         self, intent_dict: Dict[str, Any], conn: Optional[sqlite3.Connection] = None
-    ):
+    ) -> None:
         """Upsert a single intent into the database."""
         world_id = intent_dict.get("world_context_generated_at")
         
@@ -68,7 +68,7 @@ class DatabaseManager:
 
     def sync_world_context(
         self, context_dict: Dict[str, Any], conn: Optional[sqlite3.Connection] = None
-    ):
+    ) -> None:
         """Upsert a world context entry."""
         ctx_id = context_dict.get("generated_at")
         if not ctx_id:
@@ -99,7 +99,9 @@ class DatabaseManager:
             with self._get_connection() as c:
                 c.execute(sql, vals)
 
-    def sync_signals(self, signals: List[Any], world_context_id: Optional[str] = None):
+    def sync_signals(
+        self, signals: List[Any], world_context_id: Optional[str] = None
+    ) -> None:
         """Upsert current signal ranking into the database."""
         sql = """
             INSERT INTO signals (
@@ -114,7 +116,7 @@ class DatabaseManager:
                     sig.score, sig.volatility, sig.last_close, world_context_id
                 ))
 
-def sync_all_logs():
+def sync_all_logs() -> None:
     """Batch sync all JSONL logs to SQLite using a single transaction."""
     mgr = DatabaseManager()
     

@@ -45,12 +45,12 @@ def _is_noisy_asset(asset: Any) -> bool:
         return True
     return False
 
-def retry_alpaca(retries: int = 3, backoff: float = 1.0):
+def retry_alpaca(retries: int = 3, backoff: float = 1.0) -> Callable:
     """Decorator for institutional-grade exponential backoff."""
-    def decorator(func: Callable):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exc = None
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exc: Exception | None = None
             for i in range(retries):
                 try:
                     return func(*args, **kwargs)
@@ -72,7 +72,10 @@ def retry_alpaca(retries: int = 3, backoff: float = 1.0):
                         time.sleep(wait)
                         continue
                     raise # Don't retry on auth or logic errors
-            raise last_exc
+            if last_exc is not None:
+                raise last_exc
+            # Only reachable with retries <= 0 (previously raised a bare None).
+            raise RuntimeError("retry_alpaca exhausted without making an attempt")
         return wrapper
     return decorator
 
@@ -93,11 +96,11 @@ class AlpacaClient:
         )
 
     @retry_alpaca()
-    def get_account(self):
+    def get_account(self) -> Any:
         return self._trading_client.get_account()
 
     @retry_alpaca()
-    def get_all_assets(self):
+    def get_all_assets(self) -> Any:
         return self._trading_client.get_all_assets()
 
     def list_tradable_symbols(self) -> List[str]:
@@ -133,11 +136,11 @@ class AlpacaClient:
         return positions
 
     @retry_alpaca()
-    def get_clock(self):
+    def get_clock(self) -> Any:
         return self._trading_client.get_clock()
 
     @retry_alpaca()
-    def get_snapshots(self, symbols: List[str]):
+    def get_snapshots(self, symbols: List[str]) -> Any:
         request = StockSnapshotRequest(symbol_or_symbols=symbols)
         return self._data_client.get_stock_snapshot(request)
 
@@ -153,12 +156,12 @@ class AlpacaClient:
         )
 
     @retry_alpaca()
-    def get_open_orders(self):
+    def get_open_orders(self) -> Any:
         request = GetOrdersRequest(status=QueryOrderStatus.OPEN)
         return self._trading_client.get_orders(filter=request)
 
     @retry_alpaca()
-    def get_recent_orders(self, limit: int = 20):
+    def get_recent_orders(self, limit: int = 20) -> Any:
         request = GetOrdersRequest(
             status=QueryOrderStatus.ALL,
             limit=limit,

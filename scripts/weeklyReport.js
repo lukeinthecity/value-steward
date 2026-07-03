@@ -15,6 +15,7 @@ import {
 import { buildSystemLogicExplanation } from "../core/systemLogicExplanation.js";
 import { summarizeDecisionReview } from "../core/decisionReview.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
+import { fileURLToPath } from "url";
 
 const SCORECARD_PATH = path.join(
   process.cwd(),
@@ -343,4 +344,10 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch(console.error);
+}

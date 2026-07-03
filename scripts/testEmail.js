@@ -3,6 +3,8 @@ import "dotenv/config";
 import { sendLessonEmail } from "../core/emailNotifications.js";
 import { loadLatestWorldContext } from "../world/loadLatestWorldContext.js";
 import { startSpinner } from "../world/spinner.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 async function main() {
   const stopSpinner = startSpinner("email test", { total: 2 });
@@ -54,7 +56,13 @@ async function main() {
   console.log("[ValueSteward] Test email requested.");
 }
 
-main().catch((err) => {
-  console.error("[ValueSteward] Test email failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[ValueSteward] Test email failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}

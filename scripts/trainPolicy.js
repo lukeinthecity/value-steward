@@ -4,6 +4,8 @@
 import "dotenv/config";
 import { trainPolicyFromHistoryLocal } from "../core/localTrainer.js";
 import { startSpinner } from "../world/spinner.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 async function main() {
   const stopSpinner = startSpinner("train policy", { total: 1 });
@@ -34,7 +36,13 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

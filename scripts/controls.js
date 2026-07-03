@@ -1,5 +1,7 @@
 // scripts/controls.js
 import { loadStateSync, updateStateSync } from "../core/stewardState.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const args = process.argv.slice(2);
 const command = args[0]?.toLowerCase();
@@ -49,4 +51,10 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch(console.error);
+}

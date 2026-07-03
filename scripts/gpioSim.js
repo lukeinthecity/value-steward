@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const DEFAULT_GPIO_PATH = path.join(process.cwd(), "data", "gpio-state.json");
 const GPIO_PATH =
@@ -93,4 +94,10 @@ function main() {
   process.exit(1);
 }
 
-main();
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main();
+}

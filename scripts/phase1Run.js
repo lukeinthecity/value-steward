@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 
 import { startSpinner } from "../world/spinner.js";
+import { fileURLToPath } from "url";
 
 function resolvePythonCommand() {
   const explicit = (process.env.VS_PYTHON || "").trim();
@@ -71,7 +72,13 @@ async function main() {
   stopSpinner("complete");
 }
 
-main().catch((err) => {
-  console.error("[phase1] runbook failed:", err?.message ?? err);
-  process.exit(1);
-});
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error("[phase1] runbook failed:", err?.message ?? err);
+    process.exit(1);
+  });
+}
