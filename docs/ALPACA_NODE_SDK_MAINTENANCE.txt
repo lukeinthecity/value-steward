@@ -2,6 +2,10 @@ Value Steward: Alpaca Node SDK Maintenance / Replacement Strategy
 =================================================================
 
 Date: 2026-04-01
+Status update (2026-07-03): IMPLEMENTED. `core/alpacaRestClient.js` now provides
+the read-only fetch client described below, all JS call sites use it, and
+`@alpacahq/alpaca-trade-api` has been removed from package.json/lockfile.
+The rest of this document is kept as the design rationale.
 
 Context
 -------

@@ -1,5 +1,5 @@
 // core/tick.js
-import Alpaca from "@alpacahq/alpaca-trade-api";
+import { createAlpacaRestClient } from "./alpacaRestClient.js";
 import { runValueSteward } from "./runValueSteward.js";
 import { loadState, updateState } from "./stewardState.js";
 import { MODES } from "./modes.js";
@@ -219,7 +219,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
 
   // 5. Enrich the dashboard snapshot with fresh read-only broker data when available.
   try {
-    const alpaca = new Alpaca(alpacaConfig);
+    const alpaca = createAlpacaRestClient(alpacaConfig);
     const result = await runValueSteward({
       alpaca,
       policy,
