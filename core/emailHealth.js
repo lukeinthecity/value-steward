@@ -6,42 +6,16 @@
  * the outcome of every send attempt to data/email-health.json so the
  * non-email observability path (npm run runtime:status) can surface it.
  *
- * Schema (data/email-health.json):
- *   {
- *     "<label>": {
- *       "last_attempt_at": ISO,
- *       "last_outcome": "ok" | "error",
- *       "last_error": string | null,
- *       "last_success_at": ISO | null
- *     },
- *     ...
- *   }
+ * Shared implementation lives in core/channelHealth.js (same tracker as
+ * push notifications).
  */
 
-import fs from "fs";
-import path from "path";
+import { createChannelHealth } from "./channelHealth.js";
 
-// Resolved per-call (not at import). VS_EMAIL_HEALTH_PATH lets tests (and
-// operators) point at an explicit file without mutating process.cwd() —
-// process.chdir is global and unsafe under concurrent test runners.
-function healthPath() {
-  const override = (process.env.VS_EMAIL_HEALTH_PATH || "").trim();
-  if (override) return override;
-  return path.join(process.cwd(), "data", "email-health.json");
-}
-
-function readHealth() {
-  try {
-    return JSON.parse(fs.readFileSync(healthPath(), "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function normalizeLabel(label) {
-  const s = String(label || "").trim().toLowerCase();
-  return s.length ? s : "unknown";
-}
+const channel = createChannelHealth({
+  envVar: "VS_EMAIL_HEALTH_PATH",
+  defaultFile: "email-health.json",
+});
 
 /**
  * Record one send attempt outcome.
@@ -50,27 +24,8 @@ function normalizeLabel(label) {
  * @param {boolean} args.ok - Whether the send succeeded.
  * @param {string|null} [args.error] - Error message when ok is false.
  */
-export function recordEmailHealth({ label, ok, error = null }) {
-  const key = normalizeLabel(label);
-  const nowIso = new Date().toISOString();
-  let health = readHealth();
-  if (!health || typeof health !== "object") health = {};
-  const prev = health[key] && typeof health[key] === "object" ? health[key] : {};
-  health[key] = {
-    last_attempt_at: nowIso,
-    last_outcome: ok ? "ok" : "error",
-    last_error: ok ? null : error ? String(error).slice(0, 300) : "unknown",
-    last_success_at: ok ? nowIso : prev.last_success_at ?? null,
-  };
-  try {
-    const p = healthPath();
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(health, null, 2));
-    fs.renameSync(tmp, p);
-  } catch {
-    // Health recording must never break the actual send path.
-  }
+export function recordEmailHealth(args) {
+  channel.recordHealth(args);
 }
 
 /**
@@ -95,4 +50,4 @@ export function instrumentTransporter(transporter, label) {
   return transporter;
 }
 
-export { healthPath as emailHealthPath };
+export const emailHealthPath = channel.healthPath;
