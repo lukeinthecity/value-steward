@@ -113,7 +113,11 @@ function buildWorldSnapshot(worldContext) {
   };
 }
 
-function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
+function maybeRunOosAndChampionChallenger({
+  baselinePolicy,
+  worldContext,
+  preChainVersion = null,
+}) {
   const enabled = !["0", "false", "no", "off"].includes(
     String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase(),
   );
@@ -122,7 +126,10 @@ function maybeRunOosAndChampionChallenger({ baselinePolicy, worldContext }) {
   const records = loadScorecardRecords(SCORECARD_PATH);
   const oos = evaluateOos({
     records,
-    currentPolicyVersion: baselinePolicy.version ?? null,
+    // Strict OOS must compare against the version decisions were actually
+    // made under — the version BEFORE this trainer chain bumped it. Using
+    // the post-chain version left strict structurally empty (ML_BACKLOG).
+    currentPolicyVersion: preChainVersion ?? baselinePolicy.version ?? null,
     horizon: parseNumber(process.env.VS_OOS_HORIZON, 5),
     rollingWindow: parseNumber(process.env.VS_OOS_ROLLING_WINDOW, 20),
     minSamples: parseNumber(process.env.VS_OOS_MIN_SAMPLES, 5),
@@ -370,6 +377,28 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
   return mergedPolicy;
 }
 
+function posteriorsEqual(a, b) {
+  const aObj = a && typeof a === "object" ? a : {};
+  const bObj = b && typeof b === "object" ? b : {};
+  const aKeys = Object.keys(aObj).sort();
+  const bKeys = Object.keys(bObj).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i += 1) {
+    if (aKeys[i] !== bKeys[i]) return false;
+    const x = aObj[aKeys[i]] ?? {};
+    const y = bObj[bKeys[i]] ?? {};
+    if (
+      x.alpha !== y.alpha ||
+      x.beta !== y.beta ||
+      x.sample_count !== y.sample_count ||
+      x.avg_excess !== y.avg_excess
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
   const posteriorsDisabled = ["0", "false", "no", "off"].includes(
     String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase(),
@@ -384,12 +413,23 @@ function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
 
   const result = buildScoreGatePosteriors({ records, horizon, target });
 
+  // Rebuilding identical posteriors is not a material policy change — don't
+  // burn a version number on it (version inflation kept strict OOS empty).
+  const unchanged =
+    result.sampleCount > 0 &&
+    posteriorsEqual(result.posteriors, baselinePolicy.score_gate_posteriors);
+  const materialRebuild = result.sampleCount > 0 && !unchanged;
+
   const nowIso = new Date().toISOString();
   const logEntry = {
     ranAt: nowIso,
     source: "score_gate_posteriors",
-    decision: result.sampleCount > 0 ? "rebuild" : "no_update",
-    reason: result.sampleCount > 0 ? "posteriors_rebuilt" : "no_samples",
+    decision: materialRebuild ? "rebuild" : "no_update",
+    reason: materialRebuild
+      ? "posteriors_rebuilt"
+      : unchanged
+        ? "posteriors_unchanged"
+        : "no_samples",
     sampleCount: result.sampleCount,
     symbolCount: Object.keys(result.posteriors).length,
     skippedNoTarget: result.skippedNoTarget,
@@ -397,15 +437,14 @@ function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
     skippedNonBuy: result.skippedNonBuy,
     diagnostics: result.diagnostics,
     policyVersionBefore: baselinePolicy.version ?? 1,
-    policyVersionAfter:
-      result.sampleCount > 0
-        ? (baselinePolicy.version ?? 1) + 1
-        : (baselinePolicy.version ?? 1),
+    policyVersionAfter: materialRebuild
+      ? (baselinePolicy.version ?? 1) + 1
+      : (baselinePolicy.version ?? 1),
     worldMacroSnapshot: buildWorldSnapshot(worldContext),
   };
   appendTrainingLog(logEntry);
 
-  if (result.sampleCount === 0) {
+  if (!materialRebuild) {
     return baselinePolicy;
   }
 
@@ -539,6 +578,9 @@ export function trainPolicyFromHistoryLocal({
       appendTrainingLog(entry);
 
       let baselinePolicy = policy;
+      // The version today's decisions were made under — captured before any
+      // trainer bumps it, so strict OOS can match scorecard rows.
+      const preChainVersion = policy.version ?? 1;
       if (scorecardTraining.updated && scorecardTraining.newPolicy) {
         baselinePolicy = scorecardTraining.newPolicy;
         savePolicy(baselinePolicy);
@@ -570,6 +612,7 @@ export function trainPolicyFromHistoryLocal({
         baselinePolicy = maybeRunOosAndChampionChallenger({
           baselinePolicy,
           worldContext,
+          preChainVersion,
         });
       }
 

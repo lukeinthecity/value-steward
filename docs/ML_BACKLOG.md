@@ -20,13 +20,17 @@ archived under `data/archive/run3/`. The three observation tools below
 
 ## Known limitations (observed, not yet actioned)
 
-### ~~OOS `strict` metric is structurally always empty~~ — ✅ RESOLVED (#65, 2026-07-04)
+### ~~OOS `strict` metric is structurally always empty~~ — ✅ RESOLVED (2026-07-21)
 
-**Fixed for the Run-3 restart.** `maybeRunOosAndChampionChallenger` now
-receives the pre-trainer-chain policy version, so `strict` matches the rows
-today's decisions were actually made under; and the posteriors rebuild only
-bumps `policy.version` on a material change (was +1 every cycle). The
-original observation is preserved below for the record.
+**Fixed.** `maybeRunOosAndChampionChallenger` now receives the
+pre-trainer-chain policy version, so `strict` matches the rows today's
+decisions were actually made under; and the posteriors rebuild only bumps
+`policy.version` on a material change (was +1 every cycle). Note: the fix
+was authored 2026-07-03 (#65) but a stacked-PR base mishap merged it into
+its base branch instead of main; the branch-cleanup audit on 2026-07-21
+caught this and restored it — so Run-3 days 1–8 ran with the old
+semantics (strict empty, versions inflating; decisions unaffected).
+Original observation preserved below for the record.
 
 `oosEvaluator.evaluateOos` produces two blocks: `strict` (rows whose
 `policy_version === currentPolicyVersion`) and `rolling` (most recent N rows,
