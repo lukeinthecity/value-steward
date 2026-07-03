@@ -36,6 +36,87 @@ as they touch version semantics (regression risk mid-run):
 Decision rule: address during the post-run review alongside any version-
 semantics cleanup. Do NOT change mid-run.
 
+### Score-gate posteriors have no recency decay
+
+`scoreGatePosteriors.buildScoreGatePosteriors` rebuilds each symbol's
+Beta(α, β) from scratch every cycle, counting every Phase-1 outcome with equal
+weight forever. A benchmark beat from week 1 counts exactly as much as
+yesterday's — there is no notion of evidence going stale, even though the
+regime that produced the old outcome may be long gone.
+
+Possible fixes, post-run: exponential down-weighting by age (tunable
+half-life) or a sliding sample window. Both change what the Thompson gate
+sees, so they are decision-affecting.
+
+Decision rule: revisit alongside the posteriors work at the post-run review.
+Do NOT change mid-run.
+
+### Thompson prior is uninformed Beta(2, 2)
+
+`VS_SCORE_GATE_THOMPSON_PRIOR_ALPHA` / `_BETA` default to 2.0 / 2.0
+(`decision_engine.py`), i.e. "assume a 50% hit rate worth 4
+pseudo-observations." That number was picked for symmetry, not from data. If
+the realized cross-symbol base rate of beating the benchmark is materially
+different from 50%, every young posterior is mis-centered.
+
+Post-run option: empirical-Bayes prior — set the prior mean to the observed
+Phase-1 cross-symbol hit rate (with the same ~4-observation strength).
+
+Decision rule: compute the observed base rate at the post-run review;
+recalibrate only if it deviates materially from 0.5.
+
+### Champion-challenger margins sit below the Sharpe noise floor
+
+The promote/revert margins are ±0.10 Sharpe (`championChallenger.js`,
+`DEFAULT_PROMOTE_MARGIN` / `DEFAULT_REVERT_MARGIN`) evaluated on a rolling
+window of ~20 samples. The standard error of a Sharpe estimate at n=20 is
+roughly 0.22–0.3 (worse with overlapping 5-day horizons), so a ±0.10 margin
+is well inside one standard error: promotions and reverts are likely reacting
+to estimation noise, not real performance drift.
+
+Post-run options: sensitivity grid (margin × window) replayed over the
+accumulated `oos-eval.jsonl` history, or replace the fixed margin with a
+significance-based criterion.
+
+Decision rule: analyze at the post-run review with the accumulated history.
+Do NOT retune mid-run — the champion-challenger is the only rollback guard.
+
+### Hyperparameters without sensitivity analysis (inventory)
+
+None of the following constants have a documented justification or
+sensitivity pass. Inventory for a post-run one-at-a-time sweep:
+
+| Constant | Value | Where |
+|---|---|---|
+| Ridge λ | 0.01 | `core/signalWeightTrainer.js` (`DEFAULT_RIDGE_LAMBDA`) |
+| Rolling OOS window | 20 | `core/oosEvaluator.js` |
+| CC promote/revert margins | ±0.10 | `core/championChallenger.js` |
+| Exec-quality blend | 0.90 / 0.10 | `signal_engine.py` score blend |
+| Exec-quality sub-weights | 0.35 / 0.20 / 0.20 / 0.25 | `execution_quality.py` `quality_score` |
+| Thompson prior | Beta(2, 2) | `decision_engine.py` |
+| Realized-alpha scale | 0.05 | `realized_alpha.py` |
+| Intraday persistence weight | 0.05 | `signal_engine.py` |
+| Pattern-bias nudge caps | 0.05 / 0.15 | `decision_engine.py` `_apply_pattern_bias` |
+
+Decision rule: sweep on collected Phase-1 data at the post-run review before
+any of these is re-tuned. No mid-run changes.
+
+### `execution_quality.py` is decision-affecting, not just observability
+
+Despite the observability-sounding name, the per-symbol
+`quality_score` from `execution_quality.py` blends 10% into the live signal
+score (`signal_engine.py`: `score = 0.90 * score + 0.10 * quality_score`).
+Two consequences:
+
+  1. Any execution-policy change motivated by fill-rate metrics (item 2.8) is
+     decision-affecting and post-run only.
+  2. The item-2.8 fill-rate *metric* must live in a separate observation
+     module that never feeds scoring — do not extend `execution_quality.py`
+     for it.
+
+Decision rule: standing constraint, not a scheduled fix. Applies to all
+execution-quality work.
+
 ---
 
 ## Tier 2 — Worth doing if appetite exists
@@ -283,4 +364,4 @@ These were considered and rejected to avoid hallucinated complexity:
 | — | Phase 1 Run 1 → Run 2 reset | ✅ Done 2026-05-29 (PR #17) — Day 1 = 2026-06-01 |
 | — | Debug-scan fixes (SELL pollution in posteriors + cap_breach over-exit + exposure consistency) | ✅ Shipped (PR #18) |
 
-Last updated: 2026-06-16
+Last updated: 2026-07-02
