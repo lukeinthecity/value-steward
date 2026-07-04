@@ -35,12 +35,37 @@ const DATA_ARTIFACTS = [
 ];
 const LOG_ARTIFACTS = ["intent_log.jsonl", "intent_outcomes.jsonl"];
 
-function validateArgs({ runLabel, startDate }) {
+const CAP_FIELDS = Object.freeze({
+  cap: "max_effective_capital_dollars",
+  maxTrade: "max_trade_notional_dollars",
+  minTrade: "min_trade_notional_dollars",
+});
+
+function validateArgs({ runLabel, startDate, capOverrides = {} }) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(String(runLabel ?? ""))) {
     throw new Error(`invalid run label: ${runLabel}`);
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startDate ?? ""))) {
     throw new Error(`invalid start date (want YYYY-MM-DD): ${startDate}`);
+  }
+  for (const [key, value] of Object.entries(capOverrides)) {
+    if (!(key in CAP_FIELDS)) {
+      throw new Error(`unknown cap override: ${key}`);
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error(`invalid ${key} (want a positive number): ${value}`);
+    }
+  }
+  const cap = capOverrides.cap;
+  const maxTrade = capOverrides.maxTrade;
+  const minTrade = capOverrides.minTrade;
+  if (cap !== undefined && maxTrade !== undefined && maxTrade > cap) {
+    throw new Error(`maxTrade (${maxTrade}) must not exceed cap (${cap})`);
+  }
+  if (maxTrade !== undefined && minTrade !== undefined && minTrade > maxTrade) {
+    throw new Error(
+      `minTrade (${minTrade}) must not exceed maxTrade (${maxTrade})`,
+    );
   }
 }
 
@@ -61,7 +86,7 @@ function artifactMoves(runLabel) {
   return moves.filter((move) => fs.existsSync(move.from));
 }
 
-function buildResetPolicy(policy, { runLabel, nowIso }) {
+function buildResetPolicy(policy, { runLabel, nowIso, capOverrides = {} }) {
   const reset = {
     ...policy,
     version: 1,
@@ -71,6 +96,11 @@ function buildResetPolicy(policy, { runLabel, nowIso }) {
     lastTrainingReason: `phase1_${runLabel}_reset`,
   };
   delete reset.score_gate_posteriors_meta;
+  for (const [key, field] of Object.entries(CAP_FIELDS)) {
+    if (capOverrides[key] !== undefined) {
+      reset[field] = capOverrides[key];
+    }
+  }
   return normalizePolicySnapshot(reset);
 }
 
@@ -89,14 +119,15 @@ function buildStatePatch(startDate) {
 /**
  * What a reset WOULD do — used by the dry-run.
  */
-export function planPhaseReset({ runLabel, startDate }) {
-  validateArgs({ runLabel, startDate });
+export function planPhaseReset({ runLabel, startDate, capOverrides = {} }) {
+  validateArgs({ runLabel, startDate, capOverrides });
   const policyPath = path.join(process.cwd(), "config", "policy.json");
   return {
     run_label: runLabel,
     start_date: startDate,
     archives: artifactMoves(runLabel),
     policy_reset: fs.existsSync(policyPath),
+    cap_overrides: capOverrides,
     state_patch: buildStatePatch(startDate),
   };
 }
@@ -111,11 +142,12 @@ export function planPhaseReset({ runLabel, startDate }) {
 export function executePhaseReset({
   runLabel,
   startDate,
+  capOverrides = {},
   now = new Date(),
   applyStatePatch = (patch) =>
     updateStateSync((state) => ({ ...state, ...patch })),
 } = {}) {
-  const plan = planPhaseReset({ runLabel, startDate });
+  const plan = planPhaseReset({ runLabel, startDate, capOverrides });
   const nowIso = now.toISOString();
 
   for (const move of plan.archives) {
@@ -128,7 +160,10 @@ export function executePhaseReset({
   const policyPath = path.join(process.cwd(), "config", "policy.json");
   if (plan.policy_reset) {
     const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
-    writeJsonAtomic(policyPath, buildResetPolicy(policy, { runLabel, nowIso }));
+    writeJsonAtomic(
+      policyPath,
+      buildResetPolicy(policy, { runLabel, nowIso, capOverrides }),
+    );
     policyReset = true;
   }
 

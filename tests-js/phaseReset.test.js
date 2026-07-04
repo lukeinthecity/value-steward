@@ -76,6 +76,41 @@ test("plan lists only existing artifacts and validates inputs", async (t) => {
     () => planPhaseReset({ runLabel: "run3", startDate: "07/06/2026" }),
     /invalid start date/,
   );
+  assert.throws(
+    () =>
+      planPhaseReset({
+        runLabel: "run3",
+        startDate: "2026-07-06",
+        capOverrides: { cap: -5 },
+      }),
+    /invalid cap/,
+  );
+  assert.throws(
+    () =>
+      planPhaseReset({
+        runLabel: "run3",
+        startDate: "2026-07-06",
+        capOverrides: { cap: 2000, maxTrade: 5000 },
+      }),
+    /must not exceed cap/,
+  );
+});
+
+test("caps are preserved when no overrides are given", async (t) => {
+  const tmpDir = setupTmpRepo(t);
+  const { executePhaseReset } = await importModule();
+
+  executePhaseReset({
+    runLabel: "run3",
+    startDate: "2026-07-06",
+    applyStatePatch: () => {},
+  });
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(tmpDir, "config", "policy.json"), "utf8"),
+  );
+  assert.equal(policy.max_effective_capital_dollars, 20);
+  assert.equal(policy.max_trade_notional_dollars, 8);
+  assert.equal(policy.min_trade_notional_dollars, 1);
 });
 
 test("execute archives, truncates, resets learned policy, patches state", async (t) => {
@@ -86,6 +121,7 @@ test("execute archives, truncates, resets learned policy, patches state", async 
   const result = executePhaseReset({
     runLabel: "run3",
     startDate: "2026-07-06",
+    capOverrides: { cap: 2000, maxTrade: 500, minTrade: 100 },
     now: new Date("2026-07-05T12:00:00Z"),
     applyStatePatch: (patch) => {
       appliedPatch = patch;
@@ -123,7 +159,11 @@ test("execute archives, truncates, resets learned policy, patches state", async 
   assert.equal(policy.lastTrainingReason, "phase1_run3_reset");
   assert.equal(policy.risk_level, 0.2);
   assert.equal(policy.rebalance_buffer_pct, 0.021);
-  assert.equal(policy.max_trade_notional_dollars, 8);
+
+  // Cap overrides applied.
+  assert.equal(policy.max_effective_capital_dollars, 2000);
+  assert.equal(policy.max_trade_notional_dollars, 500);
+  assert.equal(policy.min_trade_notional_dollars, 100);
 
   // Phase fields patched.
   assert.equal(appliedPatch.phase1_start_date, "2026-07-06");
