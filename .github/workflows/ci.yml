@@ -9,11 +9,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The system operates on US exchange time and some tests assume it
-# (desktopRenderer freshness checks fail under UTC).
-env:
-  TZ: America/New_York
-
 jobs:
   node:
     runs-on: ubuntu-latest
