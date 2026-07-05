@@ -17,6 +17,7 @@
     "intent:reconcile": "node scripts/intentReconcile.js",
     "execution:quality": "node scripts/executionQualityReport.js",
     "gate:calibration": "node scripts/gateCalibration.js",
+    "phase:reset": "node scripts/phaseReset.js",
     "scorecard:refresh": "node scripts/scorecardRefresh.js",
     "lint:py": "node scripts/lintPy.js",
     "format:py": "node scripts/formatPy.js",
