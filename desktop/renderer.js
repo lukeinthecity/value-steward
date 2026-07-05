@@ -1,3 +1,8 @@
+// The whole system operates on US exchange time; render market/system
+// timestamps in it too so the dashboard reads consistently regardless of the
+// viewer's local timezone (and so tests are deterministic).
+const EXCHANGE_TIME_ZONE = "America/New_York";
+
 const SECRET_FIELD_CONFIG = [
   {
     key: "ALPACA_API_KEY_ID",
@@ -440,6 +445,7 @@ function renderIntents(intents) {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
+            timeZone: EXCHANGE_TIME_ZONE,
           });
       const timeText = Number.isNaN(ts.getTime())
         ? "unknown"
@@ -448,6 +454,7 @@ function renderIntents(intents) {
             minute: "2-digit",
             second: "2-digit",
             hour12: true,
+            timeZone: EXCHANGE_TIME_ZONE,
           });
       time.textContent = `[${dateText} ${timeText}]`;
       row.appendChild(time);
@@ -524,7 +531,9 @@ function renderPositions(snapshot, holdingDates = new Map()) {
     const heldValue = document.createElement("div");
     heldValue.className = "data-mono position-detail-value";
     heldValue.textContent = holdingDates.get(pos.symbol)
-      ? new Date(holdingDates.get(pos.symbol)).toLocaleDateString()
+      ? new Date(holdingDates.get(pos.symbol)).toLocaleDateString("en-US", {
+          timeZone: EXCHANGE_TIME_ZONE,
+        })
       : "n/a";
     card.appendChild(heldValue);
 
@@ -710,6 +719,7 @@ async function loadData() {
               minute: "2-digit",
               second: "2-digit",
               hour12: true,
+              timeZone: EXCHANGE_TIME_ZONE,
             })
           : "Never";
         elements.tickMeta.textContent = `Last Run: ${lastRun}`;
