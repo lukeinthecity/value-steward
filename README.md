@@ -6,6 +6,14 @@
 
 Value Steward is an institutional-grade automated trading agent designed to "turn one dollar into two" through systematic momentum capture and rigorous risk management. It bridges global macro intelligence with local mathematical precision to operate as a disciplined portfolio manager.
 
+> ⚠️ **Status: experimental research project — paper trading only.**
+> Value Steward is a personal engineering + machine-learning learning project,
+> currently running a live **paper-trading** experiment (simulated money, no
+> real capital). It is **not financial advice**, **not a product**, and is
+> provided **with no warranty** (Apache-2.0). Nothing here recommends buying or
+> selling any security. **Do not run it with real money.** See the
+> [Disclaimer](#-disclaimer) and [Roadmap](#-roadmap) below.
+
 ---
 
 ## 🏛 Architecture
@@ -99,12 +107,47 @@ Value Steward automatically generates a **Weekly Performance Report** every Sund
 
 Daily **End-of-Day** and **Health** emails include an AI-synthesized "Steward's Insight" (Google Gemini via the `generateContent` API) over the cycle's technical data.
 
----
+## 🗺 Roadmap
 
----
+Value Steward is under active development as a live paper-trading experiment.
+The full backlog — with the reasoning and the decision rule behind every item —
+lives in [`docs/ML_BACKLOG.md`](docs/ML_BACKLOG.md). At a glance:
+
+**Recently shipped**
+- Intent → fill reconciliation, execution fill-rate / adverse-selection metric, and per-gate calibration reporting (observation tooling).
+- Strict out-of-sample evaluation restored (a policy version-semantics fix).
+- Repeatable phase-run reset tooling; CI; hermetic test suite.
+
+**Next / under evaluation**
+- Statistical audit + pruning of the pattern library and entry gates.
+- Recency-decay and empirical-Bayes priors for the score-gate posteriors.
+- Champion-challenger margin sensitivity analysis.
+- Risk-adjusted training label; continuous macro-score feature.
+- Predictive sell-side trainer.
+- Walk-forward backtest harness (price-signal core; the macro layer can't be reconstructed for past dates, so it would be stubbed — a documented limitation).
+- Transaction-cost modeling — a hard gate before any hypothetical live-money graduation.
+
+The guiding discipline: **most of the above is deliberately deferred until the
+live run produces the evidence to justify it, rather than added speculatively.**
+A documented "why I'm waiting" is the point, not a gap.
+
+## 🤝 Contributing
+
+This is a personal research project, but issues and PRs are welcome — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Please treat it as a study of *how* an
+automated trading agent can be built and governed, not as software to run with
+real money.
+
+## ⚠️ Disclaimer
+
+**Value Steward is experimental software for education and research, and trades
+only on a simulated (paper) account.** It is **not** investment or financial
+advice, **not** a recommendation to buy or sell any security, and **not** a
+product or service. Algorithmic trading carries substantial financial risk; any
+use with real capital is entirely at your own risk. Past or simulated
+performance does not indicate future results. The software is provided **"AS IS"
+without warranty of any kind** under the Apache License 2.0.
 
 ## 📜 License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details. 
-
-*Disclaimer: Value Steward is an automated software utility designed for educational and paper-testing purposes. Algorithmic trading carries substantial financial risk. Use of this software with live capital is entirely at your own risk under the terms of the Apache 2.0 liability shield.*
+This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
