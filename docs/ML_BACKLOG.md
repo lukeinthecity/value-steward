@@ -2,17 +2,31 @@
 
 This is the **post-run-evaluation backlog** for the ML loop. Items here were proposed during the Phase 2 audit and intentionally deferred until we have ~60 days of live data to validate against.
 
-The thesis behind deferring everything below: it's the most common quant-shop mistake to keep adding features and refactors before the existing system has produced evidence. Re-evaluate after **2026-07-31** (60 trading days from Phase 1 Run 2 Day 1 = 2026-06-01).
+The thesis behind deferring everything below: it's the most common quant-shop mistake to keep adding features and refactors before the existing system has produced evidence. Re-evaluate after **≈ 2026-09-28** (60 trading days from Phase 1 Run 3 Day 1 = 2026-07-06).
 
 **Evaluate every item below through the lens in [`docs/COUNTERFACTUAL_LEARNING.md`](COUNTERFACTUAL_LEARNING.md):** the system learns only from counterfactuals the market actually printed, never from assumed outcomes. Each item's "Layer" (per that doc) tells you whether its signal is ground truth or a hypothesis.
 
-**Phase 1 Run 1 (2026-05-18 to 2026-05-29) was reset** after PR #16 added structural cap-breach sell logic mid-experiment, making old data non-comparable. Run 2 starts fresh with two-way cap enforcement active from Day 1.
+**Run history.** Run 1 (2026-05-18 → 05-29) was reset after PR #16 added
+structural cap-breach sell logic mid-experiment. Run 2 (2026-06-01 → 07-04)
+was reset after the version-semantics fix (#65) restored the strict-OOS
+metric, which had been structurally empty for its whole duration — so Run 2's
+evaluation could not cleanly attribute results to a policy version. **Run 3
+(Day 1 = 2026-07-06)** starts fresh with strict-OOS working, sandbox caps
+raised to \$2,000 / \$500 / \$100 (was \$20 / \$8 / \$1), and Run-2 artifacts
+archived under `data/archive/run3/`. The three observation tools below
+(2.4 / 2.7 / 2.8) shipped just before Run 3 and collect data from Day 1.
 
 ---
 
 ## Known limitations (observed, not yet actioned)
 
-### OOS `strict` metric is structurally always empty
+### ~~OOS `strict` metric is structurally always empty~~ — ✅ RESOLVED (#65, 2026-07-04)
+
+**Fixed for the Run-3 restart.** `maybeRunOosAndChampionChallenger` now
+receives the pre-trainer-chain policy version, so `strict` matches the rows
+today's decisions were actually made under; and the posteriors rebuild only
+bumps `policy.version` on a material change (was +1 every cycle). The
+original observation is preserved below for the record.
 
 `oosEvaluator.evaluateOos` produces two blocks: `strict` (rows whose
 `policy_version === currentPolicyVersion`) and `rolling` (most recent N rows,
@@ -172,9 +186,16 @@ execution-quality work.
 
 ---
 
-### 2.4 Per-gate "right call" post-mortem
+### 2.4 Per-gate "right call" post-mortem — ✅ SHIPPED (#56)
 
-**Current state:** Every `BUY_BLOCKED` row records *which* gate fired (`entry_quality score=...`, `rel20=...`, `rel60=...`, `trend=...`, etc.) and also records the counterfactual 5-day forward return. We can grade each gate's calibration after the fact, but the system never does this.
+Shipped as `core/gateCalibration.js` + `scripts/gateCalibration.js`
+(`npm run gate:calibration`), regenerated weekly into `data/gate-calibration.md`.
+Observation-only. First live run (72 Run-2 blocks): `rel_strength_60d` — the
+gate doing 47 of the blocks — showed mean 5-day excess ≈ 0.00% (t ≈ 0.00),
+i.e. so far neither protecting nor costing at the 5-day horizon. Feeds the
+post-run gate-pruning review (3.4).
+
+**Current state (original pitch):** Every `BUY_BLOCKED` row records *which* gate fired (`entry_quality score=...`, `rel20=...`, `rel60=...`, `trend=...`, etc.) and also records the counterfactual 5-day forward return. We can grade each gate's calibration after the fact, but the system never does this.
 
 **Issue:** If `rel60 < 0` blocks ran with a 5-day excess of `+0.20%` on average, the gate is *too tight*. If they ran with `-0.10%` average, the gate is correct. We don't know.
 
@@ -236,9 +257,15 @@ These become *candidates* for inclusion in a future continuous-feature trainer (
 
 ---
 
-### 2.7 Intent → fill linkage in the audit trail
+### 2.7 Intent → fill linkage in the audit trail — ✅ SHIPPED (#54)
 
-**Current state:** `logs/intent_log.jsonl` records every *decision* (what the engine wanted to do) but not the *outcome* (whether the order filled). Fill status lives separately in `data/portfolio-live.json`'s `recent_orders` (filled / canceled / expired). The two are not linked.
+Shipped: `client_order_id` (`intent.id:symbol`) stamped at submission in
+`execution_engine.py`, an EOD reconciliation pass (`core/intentReconciliation.js`)
+that joins intents to broker outcomes into `logs/intent_outcomes.jsonl`, and a
+"fills vs attempts" line in `runtime:status`. The `client_order_id` doubles as
+a broker-side idempotency key. Observation-only.
+
+**Current state (original pitch):** `logs/intent_log.jsonl` records every *decision* (what the engine wanted to do) but not the *outcome* (whether the order filled). Fill status lives separately in `data/portfolio-live.json`'s `recent_orders` (filled / canceled / expired). The two are not linked.
 
 **Issue (surfaced 2026-06-15 review):** On 2026-06-08 the log shows "BUY KALV" four times — which reads like four purchases. In reality all four were mid-point limit orders that expired **unfilled**; KALV was never held. To know what actually happened you must cross-reference the broker artifact. The decision trail is legible at the *intent* level but silent on the *fill* level, which can mislead anyone reading the log alone (including a future trainer that treats a BUY intent as an executed position).
 
@@ -255,9 +282,17 @@ These become *candidates* for inclusion in a future continuous-feature trainer (
 
 ---
 
-### 2.8 Execution fill-rate metric ("Fishing" strategy evaluation)
+### 2.8 Execution fill-rate metric ("Fishing" strategy evaluation) — ✅ SHIPPED (#55, metric only)
 
-**Current state:** Orders use a mid-point limit ((bid+ask)/2) "Fishing" strategy with cancel-and-catch across the pre-close execution slots. It saves the bid-ask spread but only fills when price comes to the midpoint.
+Shipped: `core/executionQualityReport.js` (`npm run execution:quality`) appends
+snapshots to `data/execution-quality.jsonl` — fill rate overall and by
+conviction tercile, plus an adverse-selection Welch t-test (did unfilled names
+outperform filled ones?). Separate from the decision-path `execution_quality.py`.
+**The conviction-scaled execution *policy* change is NOT shipped** — it stays
+gated on the decision rule below (only act if top-bucket fill rate is materially
+below the rest), and is decision-affecting (post-run).
+
+**Current state (original pitch):** Orders use a mid-point limit ((bid+ask)/2) "Fishing" strategy with cancel-and-catch across the pre-close execution slots. It saves the bid-ask spread but only fills when price comes to the midpoint.
 
 **Issue (surfaced 2026-06-15 review):** KALV — the single highest-conviction name of the week (rel60 +40%, mom60 +55%) — never filled across four attempts because its limit was never hit, so the system walked away with nothing while lower-conviction names (PWV, AFBI) did fill. The spread savings may not be worth the missed alpha on exactly the names we most want.
 
@@ -300,11 +335,30 @@ If the data shows high-conviction names consistently slipping, consider a **conv
 
 **Pitch:** Build the partial backtest first. Replay the decision engine over 6 months of historical bars with a constant "calm" macro. Track hypothetical excess returns. Compare to actual live Phase 1 results.
 
-**Why deferred:** Realistic value is low until we have 30+ days of live data to validate the backtest's predictions against. The backtest is only useful if it correlates with live performance.
+**Two honest caveats (must be stated in the harness output):**
+1. **Macro blind spot.** The decision engine consumes `world_context` — macro
+   labels an LLM generated live from *that day's* news, which cannot be
+   reconstructed for arbitrary past dates. So the partial backtest stubs macro
+   to "calm" and therefore tests only the price-signal core
+   (momentum / vol / drawdown), blind to the entire world/regime layer. It
+   validates roughly the price-driven part of the system, not the whole.
+2. **Backtests overfit and mislead by default.** A great-looking backtest is
+   usually one that has seen its own answer. The only thing that makes it
+   trustworthy is validation against out-of-sample *live* results.
 
-**Cost:** 3–5 days. Requires a stub world-context generator and a replay harness.
+**Why now actionable (was: deferred).** We now hold real Run-2 live results in
+`data/archive/run3/` (scorecard, intents, OOS). The validation step is
+concrete: run the harness over Run-2's window and check whether its
+hypothetical outcomes track what actually happened live. If they diverge, the
+backtest is not trustworthy — which is itself a useful finding.
 
-**Decision rule:** Build after 60 days IF the live results are interesting enough to warrant historical comparison.
+**Cost:** 3–5 days. Stub world-context generator + a replay harness that drives
+the *real* `SignalEngine`/`DecisionEngine` with historical bars via dependency
+injection (no reimplementation), + a validation report vs archived Run-2.
+
+**Decision rule:** Build pre-public as a portfolio centerpiece, with both
+caveats surfaced in its output. Trust its numbers only after the Run-2
+validation pass shows correlation with live results.
 
 ---
 
@@ -363,5 +417,22 @@ These were considered and rejected to avoid hallucinated complexity:
 | — | Two-way sandbox cap (cap_breach_sell) | ✅ Shipped (PR #16) — was structural; triggered Run 2 reset |
 | — | Phase 1 Run 1 → Run 2 reset | ✅ Done 2026-05-29 (PR #17) — Day 1 = 2026-06-01 |
 | — | Debug-scan fixes (SELL pollution in posteriors + cap_breach over-exit + exposure consistency) | ✅ Shipped (PR #18) |
+| 2.7 | Intent → fill linkage | ✅ Shipped (PR #54) |
+| 2.8 | Execution fill-rate + adverse-selection metric | ✅ Shipped (PR #55) — metric only; policy change deferred |
+| 2.4 | Gate-calibration report | ✅ Shipped (PR #56) |
+| KL | Strict-OOS / policy version-semantics fix | ✅ Shipped (PR #65) — restored strict OOS; triggered Run 3 |
+| — | Repeatable phase-reset script (`npm run phase:reset`) | ✅ Shipped (PR #66) |
+| — | Run 2 → Run 3 reset + caps raised to $2,000/$500/$100 | ✅ Done 2026-07-06 (Day 1) |
 
-Last updated: 2026-07-02
+## Next up (buildable now, pre-public)
+
+- **3.2 walk-forward backtest harness** — the one open item that does *not*
+  need live Run-3 data. Partial (price-only, macro stubbed to "calm"),
+  validated against the archived Run-2 results in `data/archive/run3/`. See
+  the Tier-3 entry for scope + the honest macro-blind-spot caveat.
+
+Everything else open is *evidence-gated* by design — waiting for Run-3 data,
+not for developer time. That is deliberate (see the opening thesis), not a
+backlog gap.
+
+Last updated: 2026-07-05
