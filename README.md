@@ -4,7 +4,7 @@
 
 **Systematic, Risk-Aware Portfolio Management Agent**
 
-Value Steward is an institutional-grade automated trading agent designed to "turn one dollar into two" through systematic momentum capture and rigorous risk management. It bridges global macro intelligence with local mathematical precision to operate as a disciplined portfolio manager.
+Value Steward is an automated trading agent that ranks assets by momentum, volatility, and drawdown, sizes positions within hard risk limits, and learns from the forward returns of its own past decisions — including the trades it chose *not* to make. It pairs a news-derived macro-context layer with a rule-based decision engine and runs on a live paper-trading schedule.
 
 > ⚠️ **Status: experimental research project — paper trading only.**
 > Value Steward is a personal engineering + machine-learning learning project,
@@ -22,14 +22,14 @@ The system uses a **Hybrid-Language, Unified-State Architecture**:
 
 *   **World Layer (Node.js):** Continuous global financial news ingestion, sentiment scoring, and macro risk classification.
 *   **Brain Layer (Python):** Deterministic signal ranking (Momentum, Volatility, Drawdown), portfolio rebalancing, and risk governance.
-*   **Execution Layer (Python):** High-precision order submission using "Fishing" (Mid-point Limit) strategies to minimize slippage.
+*   **Execution Layer (Python):** Order submission using "Fishing" (mid-point limit) strategies to reduce the bid-ask spread paid.
 *   **Unified State:** A shared JSON source of truth that ensures all system components operate on identical daily equity baselines and safety toggles.
 
 ## 🚀 Key Features
 
 *   **Dynamic Risk Modes:** Support for `LOW`, `MEDIUM`, and `HIGH` target risk exposures.
-*   **Professional Execution:** Mid-point Limit Orders with "Cancel & Catch" logic to save the bid-ask spread.
-*   **Institutional Safety:** Multi-layered circuit breakers, including a 3% daily equity kill-switch, a 2.0 SD per-position vol-stop (panic exit), and stale-data guards.
+*   **Execution:** Mid-point limit orders with "Cancel & Catch" logic to reduce the bid-ask spread paid.
+*   **Safety Circuit Breakers:** Multi-layered checks, including a 3% daily equity kill-switch, a 2.0 SD per-position vol-stop (panic exit), and stale-data guards.
 *   **Capital Discipline + Rotation:** A hard deployment cap bounds total at-risk capital. Appreciation *above* the cap is allowed — winners run. The system only sells to free room when a genuinely stronger new candidate is otherwise blocked, rotating out the weakest holding (buy-coupled rotation, not forced trimming).
 *   **Strategic Hold Logic:** Lets winners run by refusing to sell strong assets for marginal opportunities.
 *   **Auditability:** Comprehensive JSONL logs of every intent, decision, and execution for performance attribution and learning.

@@ -1,12 +1,17 @@
-Value Steward - Dedicated Device Instantiation Checklist
+# Value Steward — Dedicated Device Deployment (Paper Trading)
 
 Purpose
 Prepare a dedicated Linux device to run Value Steward 24/7 with GPIO toggles and systemd scheduling.
 
+**This guide covers paper trading only.** Value Steward is an experimental
+research project designed to run against Alpaca's simulated paper-trading API,
+and this checklist configures exactly that. Read the project README's
+Disclaimer first; do not point this software at a real-money account.
+
 Assumptions
 - Target device is a Linux box (not WSL).
 - Repo will live at /home/lukes/value-steward (adjust if different).
-- This device will use LIVE trading credentials (paper is only for phased validation).
+- This device will use Alpaca PAPER credentials (simulated money only).
 
 1) Base OS setup
 1. Install a current Ubuntu LTS (or similar).
@@ -38,11 +43,12 @@ Assumptions
 4) Environment configuration
 1. Copy .env example:
    cp .env.example .env
-2. Fill Alpaca LIVE keys + base URL:
+2. Fill Alpaca PAPER keys + base URL (from the Paper Trading tab of the
+   Alpaca dashboard):
    ALPACA_API_KEY_ID=...
    ALPACA_SECRET_KEY=...
-   ALPACA_BASE_URL=https://api.alpaca.markets
-   (Keep paper keys in a separate .env if you want a quick revert.)
+   ALPACA_PAPER_BASE_URL=https://paper-api.alpaca.markets
+   (The code targets the paper endpoint; keep it that way.)
 3. Email config (optional):
    SMTP_HOST=smtp.gmail.com
    SMTP_PORT=587

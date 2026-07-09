@@ -9,7 +9,7 @@ This skill provides the financial logic and risk management standards for the Va
 
 ## Core Mandates
 
-1.  **Capital Preservation First:** The "Golden Rule" is turning one dollar into two. This requires avoiding "unforced errors" like trading on stale data or ignoring daily drawdown limits.
+1.  **Capital Preservation First:** Compounding only works if capital survives. Avoid "unforced errors" like trading on stale data or ignoring daily drawdown limits.
 2.  **Momentum with Discipline:** Capture upside trends but only when accompanied by low volatility.
 3.  **The Steward's Shield:** Always honor the 3% daily kill-switch. Never override a circuit breaker without a manual audit.
 
