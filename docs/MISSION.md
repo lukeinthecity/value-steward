@@ -1,8 +1,8 @@
 # Value Steward Mission
 
-**Mission statement:** *Turn one dollar into two.*
+**Mission statement:** *Compound capital steadily while keeping risk controlled and every decision explainable.*
 
-This is a long-horizon compounding goal. Everything we build should reduce avoidable risk, improve decision quality, and increase the probability of steady, repeatable growth.
+This is a long-horizon goal, and an experiment: everything we build should reduce avoidable risk, improve decision quality, and be justified by measured evidence rather than assumption.
 
 **Principles**
 - Capital preservation comes first.

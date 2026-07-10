@@ -7,7 +7,9 @@ description: Rules governing how any coding agent (Gemini, Claude, or other) mus
 
 This skill defines the non-negotiable rules of engagement for any coding agent
 working on Value Steward. The goal is code that is **presentable, auditable, and
-marketable** — not just functional.
+maintainable** — not just functional. All prose (docs, comments, commit
+messages) must stay factual and objective: no self-praise, superlatives, or
+performance claims.
 
 ---
 

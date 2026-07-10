@@ -5,7 +5,7 @@ description: Process scripting and architectural design best practices for the V
 
 # Steward Engineering Standards
 
-This skill codifies the architectural principles and process scripting best practices for the Value Steward platform. Favour these patterns over generic "cobbled together" logic to ensure the system remains marketable and institutional-grade.
+This skill codifies the architectural principles and process scripting best practices for the Value Steward platform. Favour these patterns over generic "cobbled together" logic to keep the system maintainable and well-structured.
 
 ## 1. Data Integrity & Persistence
 

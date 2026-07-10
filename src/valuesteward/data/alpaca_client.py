@@ -46,7 +46,7 @@ def _is_noisy_asset(asset: Any) -> bool:
     return False
 
 def retry_alpaca(retries: int = 3, backoff: float = 1.0) -> Callable:
-    """Decorator for institutional-grade exponential backoff."""
+    """Decorator adding exponential-backoff retries to Alpaca calls."""
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

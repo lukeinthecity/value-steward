@@ -1,9 +1,9 @@
 # Value Steward System Mechanics (Pre-LLM Integration)
 
-Value Steward is an institutional-grade automated trading agent designed to "turn one dollar into two" through systematic momentum capture and rigorous risk management. This document explains the core deterministic mechanics of the system as of Phase 1.5.
+Value Steward is an automated trading agent that ranks assets by momentum, volatility, and drawdown and trades within hard risk limits on a paper account. This document explains the core deterministic mechanics of the system as of Phase 1.5.
 
 ## 1. Architectural Foundation
-The system uses a **Hybrid Hybrid-State Architecture**:
+The system uses a **Hybrid-Language, Unified-State Architecture**:
 - **Node.js Infrastructure:** Manages data collection (RSS feeds), hardware interfaces (GPIO), systemd automation, and high-level health monitoring.
 - **Python Decision Brain:** Handles complex signal generation, portfolio math, risk-mode switching, and Alpaca API execution.
 - **Unified State (`data/steward-state.json`):** A shared source of truth that ensures both languages operate on the same daily equity baseline, operational mode, and safety toggles.

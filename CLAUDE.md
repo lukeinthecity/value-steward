@@ -1,9 +1,15 @@
 # Value Steward — Claude Code project guide
 
-Value Steward is an institutional-grade automated trading agent on a Python +
+Value Steward is an automated trading agent on a Python +
 Node.js hybrid architecture. It runs a live Alpaca **paper-trading** loop on a
-schedule. The goal is code that is **presentable, auditable, and marketable** —
+schedule. The goal is code that is **presentable, auditable, and maintainable** —
 not merely functional.
+
+**Prose must be factual and objective.** No self-praise, superlatives, or
+performance claims anywhere in docs, comments, or commit messages —
+"institutional-grade", "high-precision", "professional", "sophisticated",
+"turn one dollar into two" and the like are banned vocabulary. Describe what
+the code does; let the reader judge quality.
 
 Start with `docs/MISSION.md` (philosophy), `SYSTEM_MECHANICS.md` (how the parts
 fit), and `skills/steward-engineering-standards/SKILL.md` (architectural
@@ -37,6 +43,21 @@ patterns). Operating discipline lives in `docs/SESSION_BRIEF.md` and
 - **Runnable scripts must guard `main()`** behind an `import.meta`/`argv[1]`
   entrypoint check (see `scripts/worldRunScheduled.js`) so importing them for
   tests never executes real work against the live data tree.
+
+## Code style
+
+- JavaScript and JSON formatting is enforced automatically via Prettier
+  (`.prettierrc.json`); Python enforcement pending.
+- Indentation: strict 2 spaces.
+- Strings: double quotes (`"`), not single quotes.
+- Semicolons: always include trailing semicolons (`;`).
+
+## Automation guardrails
+
+- A `PostToolUse` lifecycle hook runs Prettier on disk immediately after any
+  file edit.
+- Do not attempt to revert or override spacing or quote adjustments made by
+  the environment.
 
 ---
 
