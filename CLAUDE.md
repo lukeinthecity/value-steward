@@ -44,6 +44,21 @@ patterns). Operating discipline lives in `docs/SESSION_BRIEF.md` and
   entrypoint check (see `scripts/worldRunScheduled.js`) so importing them for
   tests never executes real work against the live data tree.
 
+## Code style
+
+- JavaScript and JSON formatting is enforced automatically via Prettier
+  (`.prettierrc.json`); Python enforcement pending.
+- Indentation: strict 2 spaces.
+- Strings: double quotes (`"`), not single quotes.
+- Semicolons: always include trailing semicolons (`;`).
+
+## Automation guardrails
+
+- A `PostToolUse` lifecycle hook runs Prettier on disk immediately after any
+  file edit.
+- Do not attempt to revert or override spacing or quote adjustments made by
+  the environment.
+
 ---
 
 ## Agent discipline (non-negotiable)
