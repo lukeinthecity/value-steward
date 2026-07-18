@@ -8,16 +8,17 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-06-25 |
+| Last updated | 2026-07-18 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
-| Phase 1 RUN | **Run 2** (Run 1 archived 2026-05-29 after cap-breach-sell logic added mid-experiment) |
-| Phase 1 start | **2026-06-01 (Monday)** — Day 15 of 60 as of 2026-06-25 |
-| Phase 1 end (target) | 2026-07-31 |
+| Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
+| Phase 1 RUN | **Run 3** (Run 2 archived 2026-07-04 after the strict-OOS/version-semantics fix #65; Run-2 artifacts in `data/archive/run3/`) |
+| Phase 1 start | **2026-07-06 (Monday)** — Day 7 of 60 ran before the 7/15–7/17 outage; resumed 7/20 |
+| Phase 1 end (target) | ≈ 2026-09-28 (60 trading days; outage days extend the calendar) |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
-| Capital cap | `$20` deployed max, `$8` per-trade max, `$1` per-trade min, **two-way (cap_breach_sell active)** |
-| Equity (last seen) | $99,976 paper (~flat since start) |
-| Live positions | AFBI + PWV (2 positions, ~$20 deployed) — last fill 2026-06-11 |
+| Capital cap | `$2,000` deployed max, `$500` per-trade max, `$100` per-trade min, **two-way (cap_breach_sell active)** |
+| Equity (last seen) | $99,958 paper (as of 2026-07-14 snapshot) |
+| Live positions | KCCA (~$498) + SRHQ (~$1,483) — ~$1,981 deployed as of 2026-07-14 |
 
 ## Phase 1 Run 1 archive
 
@@ -25,7 +26,13 @@
 |---|---|
 | 2026-05-18 to 2026-05-29 | 10 calendar days, 2 outage days (5/21, 5/28), 1 holiday (5/25). Yielded 3 BUYs (MET ×2, OEF), 30+ counterfactual scorecard rows, first non-null OOS Sharpe (−1.217 on N=8). Archived in `data/archive/*-phase1-run1-2026-05-29.*` and `logs/archive/intent_log-phase1-run1-2026-05-29.jsonl`. Reset because the cap_breach_sell feature (PR #16) was a structural fix that fundamentally changed system behavior — old data and new data not comparable. |
 
-## Weekly review log (Phase 1 Run 2)
+## Weekly review log (Phase 1 Run 3)
+
+| Week ending | BUYs | Blocks | Notes |
+|---|---|---|---|
+| 2026-07-18 | (see Monday review) | — | Days 1–7 ran (7/6–7/14). **⚠️ OUTAGE: 7/15–7/17 (3 trading days) — Windows Update (Patch Tuesday) rebooted the PC at 22:44 ET on 7/14; WSL does not auto-start on boot, so cron (which lives inside WSL) never ran until WSL was next touched on Sat 7/18 at 11:33.** Two open positions (KCCA ~$498, SRHQ ~$1,483) were unmonitored during the gap — vol-stop and kill-switch offline. No retroactive action per the outage-recovery design: missed days = absent decisions, run continues. Mitigation: a Windows Scheduled Task now boots WSL at startup (fire-drill validation pending — see Known open items). Root-cause class: hobbyist-PC hosting; the planned Oracle Cloud migration eliminates it. |
+
+## Weekly review log (Phase 1 Run 2 — archived 2026-07-04)
 
 | Week ending | BUYs | Blocks | Notes |
 |---|---|---|---|
@@ -54,9 +61,11 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 
 ## Recent PRs (last 3)
 
-1. [#35](https://github.com/lukeinthecity/value-steward/pull/35) — feat(push): the 3 ntfy triggers (market-open / session-off / health alert)
-2. [#34](https://github.com/lukeinthecity/value-steward/pull/34) — feat(push): ntfy push-notification foundation (notifier + push:test + health)
-3. [#32](https://github.com/lukeinthecity/value-steward/pull/32) — fix(audit): corrupt-file guards + atomic writes + entrypoint guards (world + tick)
+1. [#71](https://github.com/lukeinthecity/value-steward/pull/71) — docs: objectivity pass (factual prose, paper-only deployment guide)
+2. [#70](https://github.com/lukeinthecity/value-steward/pull/70) — docs: pre-public polish (disclaimer banner, roadmap, CONTRIBUTING)
+3. [#69](https://github.com/lukeinthecity/value-steward/pull/69) — docs(ml): backlog refresh (shipped items marked, Run-3 context)
+
+(Full July arc: #52–#68 — ML audit, day-30 observation tooling, CI, code health, strict-OOS fix, Run-3 reset tooling. See `docs/ML_BACKLOG.md` shipped table.)
 
 ## ML feature flags (current state)
 
@@ -73,6 +82,7 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 
 ## Known open items
 
+- **⚠️ 2026-07-15 → 07-17 outage (3 trading days)** — Patch-Tuesday reboot killed WSL on 7/14 22:44 ET; nothing restarts WSL on Windows boot, so the whole loop (cron, ticks, health emails) was dark until 7/18. Health alerts could not fire — they run inside the same WSL that was down (monitoring shared the failure domain). **Mitigation installed 7/18:** Windows Scheduled Task "Start WSL (Value Steward)" at system startup. **Pending: fire-drill the task** (`wsl --shutdown` → run task → `wsl --list --running` shows Ubuntu); if the SYSTEM-account task doesn't start the user's distro, recreate it with `/ru <user>`. Durable fix remains the Oracle Cloud migration.
 - **Exploration enabled ε=0.05 (2026-06-25, Day 15)** — 0-trades-2wk activation criterion met. Experiment-safe (`BUY_EXPLORATION`-tagged → separable from policy OOS, unlike a cap/mode change). Caveat: the *dominant* block is **rel60** (positive-60d-momentum requirement), and exploration only probes *score* near-misses — so expect modest volume, not a flood (also a low-momentum tape). **Day-30 check:** did `BUY_EXPLORATION` picks beat the gate's blocks? → evidence to relax rel60 in Run 3. Bigger funnel levers (rel60 / cap / MEDIUM mode) stay frozen until then.
 - **⚠️ OOS Sharpe deteriorating (2026-06-22)** — rolling Sharpe +0.54 → −1.09 over 6/16–6/22 (n=20, equity flat). Champion-challenger enabled and ~1 cycle from auto-revert. **Watch; do not hand-tune** until the 3-week intervention bar or champion-challenger acts.
 - **Dead Nasdaq feeds retired (2026-06-22)** — nasdaq.com RSS (earnings/markets/stocks) times out since 6/16; disabled in `world/feeds.json`, replaced with CNBC Markets + Yahoo Finance + re-enabled investing-stocks (fetch-verified). `investing-sec-filings` borderline (Juneteenth/weekend lull) — recheck mid-week.
