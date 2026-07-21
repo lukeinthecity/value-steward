@@ -88,5 +88,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m venv .venv
+      # pip/setuptools are venv build tooling (not project deps) but pip-audit
+      # still flags them; keep them current so the audit reflects real
+      # application-dependency risk.
+      - run: .venv/bin/pip install --upgrade pip setuptools
       - run: .venv/bin/pip install -r requirements.txt pip-audit
       - run: .venv/bin/pip-audit
