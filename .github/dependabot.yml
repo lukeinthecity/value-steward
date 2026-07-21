@@ -7,9 +7,15 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Node dependencies (World layer + desktop app).
+  # Node dependencies (World layer, root).
   - package-ecosystem: "npm"
     directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Node dependencies for the Electron desktop app (separate manifest).
+  - package-ecosystem: "npm"
+    directory: "/desktop"
     schedule:
       interval: "weekly"
 

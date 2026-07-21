@@ -77,6 +77,13 @@ jobs:
       # High/critical only: complements Dependabot's version-bump PRs with a
       # hard gate against known-vulnerable dependencies on every PR.
       - run: npm audit --audit-level=high
+      # The desktop Electron app has its own package.json/lockfile; audit it
+      # too (--ignore-scripts skips Electron's binary download, unneeded here).
+      - name: Audit desktop app
+        working-directory: desktop
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
 
   audit-py:
     name: Dependency audit (pip-audit)
