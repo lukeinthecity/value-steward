@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Keep the GitHub Actions used in ci.yml current and get Dependabot alerts
+  # if an action we depend on ships a security advisory.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Node dependencies (World layer + desktop app).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Python dependencies (Brain/Execution layers).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -1,5 +1,15 @@
 # Security Audit Report
 
+> **⚠️ Likely stale — do not act on this without re-verifying against current code.**
+> Checked against `main` on 2026-07-21: every cited line number and finding below
+> contradicts the current `desktop/` implementation — `preload.js` is 10 lines (not
+> 523+), `sandbox: true` is set in `main.js` (report claims `false`), `index.html` has
+> a strict CSP (report claims none), and the one `innerHTML` use left in `renderer.js`
+> clears a node rather than injecting untrusted content (`scout_thesis` /
+> `scout_headlines` render via `.textContent`). This report may describe an earlier,
+> unhardened version of the desktop app. Re-audit current code before trusting any
+> finding here.
+
 ## Executive Summary
 
 The highest-risk area in this codebase is the Electron desktop surface. The renderer consumes untrusted data from world context, logs, and model output using HTML sinks, while the preload bridge exposes high-impact capabilities including plaintext secret access, `.env` mutation, local file reads, script execution, and manual order submission. In its current form, an XSS in the renderer is likely to become credential theft and trading-path abuse.

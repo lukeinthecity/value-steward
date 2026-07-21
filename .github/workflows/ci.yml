@@ -46,3 +46,47 @@ jobs:
       - run: npm run lint:py
       - run: npm run typecheck:py
       - run: npm run security:py
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Belt-and-suspenders on top of .gitignore: fails if a live API key
+      # (Alpaca, Gemini, SMTP) or other credential ever lands in a commit —
+      # scans full history on every push/PR, not just the current tree.
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  audit-js:
+    name: Dependency audit (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # High/critical only: complements Dependabot's version-bump PRs with a
+      # hard gate against known-vulnerable dependencies on every PR.
+      - run: npm audit --audit-level=high
+
+  audit-py:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -r requirements.txt pip-audit
+      - run: .venv/bin/pip-audit
