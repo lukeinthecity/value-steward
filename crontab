@@ -1,42 +1,45 @@
 # Value Steward Institutional Cron (LOCAL EDT TIMING)
 # Aligned to System Clock: EDT (UTC-4)
+#
+# Template: replace /home/YOUR_USER/value-steward and the npm path below with
+# your actual repo checkout and `which npm` output before installing.
 
 # world:run - Lead run at 8:30 AM ET and then every 30 mins during market hours
-30 08 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
-*/30 09-14 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
+30 08 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run world:run >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
+*/30 09-14 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run world:run >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # world:run - Lead run at 3:25 PM ET
-25 15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:run >> /home/lukes/value-steward/logs/cron.log 2>&1
+25 15 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run world:run >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # portfolio:refresh - Morning sync at 9:00 AM ET (Ensures fresh data for Monday open)
-0 09 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run portfolio:refresh >> /home/lukes/value-steward/logs/cron.log 2>&1
+0 09 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run portfolio:refresh >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # intraday observation snapshots - lean observational memory only
-0 10 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
-30 11 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
-30 13 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
-0 15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run intraday:observe:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+0 10 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run intraday:observe:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
+30 11 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run intraday:observe:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
+30 13 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run intraday:observe:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
+0 15 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run intraday:observe:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # world:health scheduler - refresh feed health/context twice daily, including weekends/holidays.
-5 6,18 * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run world:health:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+5 6,18 * * * cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run world:health:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # push notifications - market-open "VS live" notice at 9:25 AM ET (trading days only; script self-guards holidays + once/day)
-25 09 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run notify:open >> /home/lukes/value-steward/logs/cron.log 2>&1
+25 09 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run notify:open >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # push notifications - session "VS off" notice at 5:35 PM ET (after the post-close EOD window)
-35 17 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run notify:close >> /home/lukes/value-steward/logs/cron.log 2>&1
+35 17 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run notify:close >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # local:tick scheduler - runs every 5 minutes from 12:30 PM ET onward
-30-55/5 12 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
-*/5 13-15 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run local:tick:scheduled >> /home/lukes/value-steward/logs/cron.log 2>&1
+30-55/5 12 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run local:tick:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
+*/5 13-15 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run local:tick:scheduled >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # eod:run scheduler - runs every 5 minutes through the post-close window
-15-59/5 13 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
-*/5 14-16 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
-0-30/5 17 * * 1-5 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run eod:run:scheduled >> /home/lukes/value-steward/logs/eod.log 2>&1
+15-59/5 13 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run eod:run:scheduled >> /home/YOUR_USER/value-steward/logs/eod.log 2>&1
+*/5 14-16 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run eod:run:scheduled >> /home/YOUR_USER/value-steward/logs/eod.log 2>&1
+0-30/5 17 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run eod:run:scheduled >> /home/YOUR_USER/value-steward/logs/eod.log 2>&1
 
 # health:check - hourly
-0 * * * * cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run health:check >> /home/lukes/value-steward/logs/cron.log 2>&1
+0 * * * * cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run health:check >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
 
 # report:weekly - Sunday 6:00 PM ET
-0 18 * * 0 cd /home/lukes/value-steward && /home/lukes/.nvm/versions/node/v24.13.0/bin/npm run report:weekly -- --send-email >> /home/lukes/value-steward/logs/cron.log 2>&1
+0 18 * * 0 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run report:weekly -- --send-email >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1
