@@ -8,17 +8,17 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-07-18 |
+| Last updated | 2026-07-21 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
 | Phase 1 RUN | **Run 3** (Run 2 archived 2026-07-04 after the strict-OOS/version-semantics fix #65; Run-2 artifacts in `data/archive/run3/`) |
-| Phase 1 start | **2026-07-06 (Monday)** — Day 7 of 60 ran before the 7/15–7/17 outage; resumed 7/20 |
+| Phase 1 start | **2026-07-06 (Monday)** — Days 1–7 ran (7/6–7/14); outages 7/15–7/17 + 7/20; resumed 7/21 (Day 8) |
 | Phase 1 end (target) | ≈ 2026-09-28 (60 trading days; outage days extend the calendar) |
 | Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
 | Capital cap | `$2,000` deployed max, `$500` per-trade max, `$100` per-trade min, **two-way (cap_breach_sell active)** |
-| Equity (last seen) | $99,958 paper (as of 2026-07-14 snapshot) |
-| Live positions | KCCA (~$498) + SRHQ (~$1,483) — ~$1,981 deployed as of 2026-07-14 |
+| Equity (last seen) | $99,963 paper (reconciled 2026-07-21 08:51 ET) |
+| Live positions | KCCA (~$485) + SRHQ (~$1,501) — ~$1,986 deployed as of 2026-07-21 |
 
 ## Phase 1 Run 1 archive
 
@@ -30,7 +30,8 @@
 
 | Week ending | BUYs | Blocks | Notes |
 |---|---|---|---|
-| 2026-07-18 | (see Monday review) | — | Days 1–7 ran (7/6–7/14). **⚠️ OUTAGE: 7/15–7/17 (3 trading days) — Windows Update (Patch Tuesday) rebooted the PC at 22:44 ET on 7/14; WSL does not auto-start on boot, so cron (which lives inside WSL) never ran until WSL was next touched on Sat 7/18 at 11:33.** Two open positions (KCCA ~$498, SRHQ ~$1,483) were unmonitored during the gap — vol-stop and kill-switch offline. No retroactive action per the outage-recovery design: missed days = absent decisions, run continues. Mitigation: a Windows Scheduled Task now boots WSL at startup (fire-drill validation pending — see Known open items). Root-cause class: hobbyist-PC hosting; the planned Oracle Cloud migration eliminates it. |
+| 2026-07-18 | (see Monday review) | — | Days 1–7 ran (7/6–7/14). **⚠️ OUTAGE: 7/15–7/17 (3 trading days) — Windows Update (Patch Tuesday) rebooted the PC at 22:44 ET on 7/14; WSL does not auto-start on boot, so cron (which lives inside WSL) never ran until WSL was next touched on Sat 7/18 at 11:33.** Two open positions (KCCA ~$498, SRHQ ~$1,483) were unmonitored during the gap — vol-stop and kill-switch offline. No retroactive action per the outage-recovery design: missed days = absent decisions, run continues. Mitigation: a Windows Scheduled Task now boots WSL at startup. Root-cause class: hobbyist-PC hosting; the planned Oracle Cloud migration eliminates it. |
+| 2026-07-21 | — | — | **⚠️ 4th outage day: Mon 7/20 missed** — storm over the 7/18–19 weekend; PC left unplugged through Monday, powered back on Mon 21:29 ET. **The startup scheduled task passed its first real-world test:** WSL + cron came up at boot with no human touch — overnight health checks ran (6:06 world:health) and Tue's 8:30 world:run fired on schedule. Positions reconciled Tue 08:51: KCCA $484.61 (−2.7% over the gap), SRHQ $1,501.35 (+1.2%), equity $99,963 (+$4.93) — no vol-stop-worthy moves occurred while unmonitored. Run continues; Tue 7/21 = Day 8. |
 
 ## Weekly review log (Phase 1 Run 2 — archived 2026-07-04)
 
@@ -82,7 +83,7 @@ The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Stat
 
 ## Known open items
 
-- **⚠️ 2026-07-15 → 07-17 outage (3 trading days)** — Patch-Tuesday reboot killed WSL on 7/14 22:44 ET; nothing restarts WSL on Windows boot, so the whole loop (cron, ticks, health emails) was dark until 7/18. Health alerts could not fire — they run inside the same WSL that was down (monitoring shared the failure domain). **Mitigation installed 7/18:** Windows Scheduled Task "Start WSL (Value Steward)" at system startup. **Pending: fire-drill the task** (`wsl --shutdown` → run task → `wsl --list --running` shows Ubuntu); if the SYSTEM-account task doesn't start the user's distro, recreate it with `/ru <user>`. Durable fix remains the Oracle Cloud migration.
+- **⚠️ 2026-07-15 → 07-17 outage (3 trading days)** — Patch-Tuesday reboot killed WSL on 7/14 22:44 ET; nothing restarts WSL on Windows boot, so the whole loop (cron, ticks, health emails) was dark until 7/18. Health alerts could not fire — they run inside the same WSL that was down (monitoring shared the failure domain). **Mitigation installed 7/18 and VALIDATED 7/20–21:** Windows Scheduled Task "Start WSL (Value Steward)" at system startup — after the 7/20 storm-outage boot (21:29 ET), WSL + cron came up unattended and next-morning crons ran on schedule. A 4th outage day (Mon 7/20, PC unplugged) preceded the validation. Durable fix remains the Oracle Cloud migration — now four lost trading days argue for scheduling it.
 - **Exploration enabled ε=0.05 (2026-06-25, Day 15)** — 0-trades-2wk activation criterion met. Experiment-safe (`BUY_EXPLORATION`-tagged → separable from policy OOS, unlike a cap/mode change). Caveat: the *dominant* block is **rel60** (positive-60d-momentum requirement), and exploration only probes *score* near-misses — so expect modest volume, not a flood (also a low-momentum tape). **Day-30 check:** did `BUY_EXPLORATION` picks beat the gate's blocks? → evidence to relax rel60 in Run 3. Bigger funnel levers (rel60 / cap / MEDIUM mode) stay frozen until then.
 - **⚠️ OOS Sharpe deteriorating (2026-06-22)** — rolling Sharpe +0.54 → −1.09 over 6/16–6/22 (n=20, equity flat). Champion-challenger enabled and ~1 cycle from auto-revert. **Watch; do not hand-tune** until the 3-week intervention bar or champion-challenger acts.
 - **Dead Nasdaq feeds retired (2026-06-22)** — nasdaq.com RSS (earnings/markets/stocks) times out since 6/16; disabled in `world/feeds.json`, replaced with CNBC Markets + Yahoo Finance + re-enabled investing-stocks (fetch-verified). `investing-sec-filings` borderline (Juneteenth/weekend lull) — recheck mid-week.
