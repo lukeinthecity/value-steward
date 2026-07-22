@@ -60,7 +60,7 @@ jobs:
       # (Alpaca, Gemini, SMTP) or other credential ever lands in a commit —
       # scans full history on every push/PR, not just the current tree.
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
