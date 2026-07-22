@@ -122,7 +122,7 @@ Run through this checklist:
 - [ ] OOS rolling_n ≥ 20 AND rolling_sharpe stable → **enable champion-challenger** (set env var, restart not required, takes effect next eod)
 - [ ] 0 BUYs for 2+ weeks → **enable exploration at ε=0.05** (env var)
 - [ ] ≥30 days of clean data → consider whether any **Tier 2** items in `ML_BACKLOG.md` have earned implementation
-- [ ] Phase 1 day count == 60 → **end-of-run review** triggers; revisit full `ML_BACKLOG.md`
+- [ ] Phase 1 day count == 60 → **end-of-run review** triggers; run [`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) in full
 
 ## Step 7 — Update SESSION_BRIEF
 
