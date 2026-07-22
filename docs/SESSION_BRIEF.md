@@ -56,7 +56,7 @@ tail -20 data/runtime.log  # historical compact JSON snapshots
 
 Run `runtime:status` first in any session — it replaces ~10 exploratory tool calls. It now includes an **Email Health** section (sourced from `data/email-health.json`) — a silent SMTP failure shows up here instead of going unnoticed (the only prior email alarm was email itself).
 
-**Known separate issue (not yet fixed):** the Gemini-powered "Steward's Insight" in emails has been falling back to the canned message for weeks. Root cause surfaced 2026-06-15: the `@google/genai` SDK uses the legacy Interactions API that Google deprecated May 2026 (`400 ... legacy Interactions API schema is no longer supported`). Needs an SDK upgrade to the `steps` schema — tracked as a standalone follow-up.
+**Gemini "Steward's Insight" — Interactions-API root cause resolved in code.** The 2026-06-15 root cause was the deprecated legacy Interactions API (`400 ... legacy Interactions API schema is no longer supported`). Commit `7ab820c` migrated both call sites (`core/emailNotifications.js`, `world/shadowObserver.js`) to the stable `client.models.generateContent` path; no Interactions-API or `steps`-schema call remains in `main`. The `@google/genai` SDK is bumped 1.44 → 2.13 via #92 (Dependabot; CI green — the `generateContent` / `{ googleSearch: {} }` / `response.text` surface was verified unchanged against 2.13). Remaining verification: confirm the email insight populates instead of falling back on the next successful send.
 
 The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Status** panel that auto-refreshes every 30 seconds (Phase 1 day count, missed days, mode, training/OOS recency, cron pulse pills).
 
