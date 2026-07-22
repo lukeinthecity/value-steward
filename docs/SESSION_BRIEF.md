@@ -58,8 +58,6 @@ Run `runtime:status` first in any session — it replaces ~10 exploratory tool c
 
 **Gemini "Steward's Insight" — Interactions-API root cause resolved in code.** The 2026-06-15 root cause was the deprecated legacy Interactions API (`400 ... legacy Interactions API schema is no longer supported`). Commit `7ab820c` migrated both call sites (`core/emailNotifications.js`, `world/shadowObserver.js`) to the stable `client.models.generateContent` path; no Interactions-API or `steps`-schema call remains in `main`. The `@google/genai` SDK is bumped 1.44 → 2.13 via #92 (Dependabot; CI green — the `generateContent` / `{ googleSearch: {} }` / `response.text` surface was verified unchanged against 2.13). Remaining verification: confirm the email insight populates instead of falling back on the next successful send.
 
-The **desktop app** (`npm start` from `desktop/`) also surfaces a **Runtime Status** panel that auto-refreshes every 30 seconds (Phase 1 day count, missed days, mode, training/OOS recency, cron pulse pills).
-
 ## Recent PRs (last 3)
 
 1. [#71](https://github.com/lukeinthecity/value-steward/pull/71) — docs: objectivity pass (factual prose, paper-only deployment guide)

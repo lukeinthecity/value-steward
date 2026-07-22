@@ -18,7 +18,7 @@ However, it is still old dependency surface and should be treated as maintenance
 
 Current JS-side usage surface
 -----------------------------
-The Node/Electron side uses only a small subset of the Alpaca SDK:
+The Node side uses only a small subset of the Alpaca SDK:
 - `getClock()`
 - `getAccount()`
 - `getPositions()`

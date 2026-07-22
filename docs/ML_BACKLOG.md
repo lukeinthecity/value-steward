@@ -417,7 +417,7 @@ These were considered and rejected to avoid hallucinated complexity:
 | 1 | OOS evaluation pipeline | ✅ Shipped (PR #9) |
 | 1 | Champion-challenger auto-rollback | ✅ Shipped (PR #9, behind `VS_CHAMPION_CHALLENGER_ENABLED`) |
 | 3.1 | Defer Phase 2c — partial | ✅ Default minSamples already 8; consider raising |
-| — | Runtime status report + log | ✅ Shipped (PRs #12, #13) — `npm run runtime:status`, watch mode, desktop panel |
+| — | Runtime status report + log | ✅ Shipped (PRs #12, #13) — `npm run runtime:status`, watch mode |
 | — | Two-way sandbox cap (cap_breach_sell) | ✅ Shipped (PR #16) — was structural; triggered Run 2 reset |
 | — | Phase 1 Run 1 → Run 2 reset | ✅ Done 2026-05-29 (PR #17) — Day 1 = 2026-06-01 |
 | — | Debug-scan fixes (SELL pollution in posteriors + cap_breach over-exit + exposure consistency) | ✅ Shipped (PR #18) |

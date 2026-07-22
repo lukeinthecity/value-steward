@@ -91,8 +91,6 @@ npm run runtime:append     # append a compact JSON line to data/runtime.log
 npm run email:test         # send a test email and verify SMTP + AI summary
 ```
 
-The **desktop app** (`npm start` from `desktop/`) mirrors this in a live-updating **Runtime Status** panel.
-
 Every email send outcome is recorded to `data/email-health.json` and surfaced in `runtime:status`, so credential or transport failures show up immediately.
 
 Operating discipline and the per-run review checklist live in [`docs/SESSION_BRIEF.md`](docs/SESSION_BRIEF.md) and [`docs/PLAYBOOK_WEEKLY_REVIEW.md`](docs/PLAYBOOK_WEEKLY_REVIEW.md).
