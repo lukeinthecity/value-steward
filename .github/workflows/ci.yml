@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: none of these jobs write anything (tests, lint, secret
+# scan, dependency audits are all read-only checks).
+permissions:
+  contents: read
+
 jobs:
   node:
     runs-on: ubuntu-latest
