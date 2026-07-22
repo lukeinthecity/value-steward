@@ -6,6 +6,8 @@ The thesis behind deferring everything below: it's the most common quant-shop mi
 
 **Evaluate every item below through the lens in [`docs/COUNTERFACTUAL_LEARNING.md`](COUNTERFACTUAL_LEARNING.md):** the system learns only from counterfactuals the market actually printed, never from assumed outcomes. Each item's "Layer" (per that doc) tells you whether its signal is ground truth or a hypothesis.
 
+**[`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) is the consolidated rubric** for the day this backlog unlocks — it collects every "decide this at the post-run review" marker below into one checklist alongside the actual pass/fail verdict criteria for the run itself. Read it first at Day 60; this file stays the source of detail for each item.
+
 **Run history.** Run 1 (2026-05-18 → 05-29) was reset after PR #16 added
 structural cap-breach sell logic mid-experiment. Run 2 (2026-06-01 → 07-04)
 was reset after the version-semantics fix (#65) restored the strict-OOS

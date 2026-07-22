@@ -14,7 +14,8 @@ the code does; let the reader judge quality.
 Start with `docs/MISSION.md` (philosophy), `SYSTEM_MECHANICS.md` (how the parts
 fit), and `skills/steward-engineering-standards/SKILL.md` (architectural
 patterns). Operating discipline lives in `docs/SESSION_BRIEF.md` and
-`docs/PLAYBOOK_WEEKLY_REVIEW.md`; the learning roadmap in `docs/ML_BACKLOG.md`.
+`docs/PLAYBOOK_WEEKLY_REVIEW.md`; the learning roadmap in `docs/ML_BACKLOG.md`;
+the end-of-run verdict criteria in `docs/POST_RUN_REVIEW.md`.
 
 ---
 
