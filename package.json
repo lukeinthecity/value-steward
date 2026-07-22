@@ -65,7 +65,7 @@
     "desktop": "node scripts/desktop.js"
   },
   "devDependencies": {
-    "eslint": "^8.57.0",
+    "eslint": "^10.7.0",
     "prettier": "^3.9.6"
   },
   "dependencies": {
