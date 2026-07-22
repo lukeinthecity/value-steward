@@ -22,16 +22,6 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # Node dependencies for the Electron desktop app (separate manifest).
-  - package-ecosystem: "npm"
-    directory: "/desktop"
-    schedule:
-      interval: "weekly"
-    groups:
-      desktop-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
   # Python dependencies (Brain/Execution layers).
   - package-ecosystem: "pip"
     directory: "/"

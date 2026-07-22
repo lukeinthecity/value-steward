@@ -1,6 +1,6 @@
 ---
 name: steward-engineering-standards
-description: Process scripting and architectural design best practices for the Value Steward project. Ensures unified standards for hybrid JS/Python systems, atomic data persistence, and secure desktop integration.
+description: Process scripting and architectural design best practices for the Value Steward project. Ensures unified standards for hybrid JS/Python systems and atomic data persistence.
 ---
 
 # Steward Engineering Standards
@@ -24,7 +24,7 @@ The system must have exactly ONE source of truth for operational state (`data/st
 
 ### Environment Loading (`.env`) on Entrypoints
 Every Node.js script that is a **runnable entrypoint** (anything launched directly by
-cron, systemd, `npm run`, or the desktop app — not a library that is only imported)
+cron, systemd, or `npm run` — not a library that is only imported)
 must load `.env` explicitly as its **first import**:
 ```js
 import "dotenv/config";
@@ -54,14 +54,6 @@ All external API calls (Alpaca, Gemini) must be wrapped in exponential backoff r
 ### Path-Agnostic Resolution
 Never use relative paths like `./data`. Always resolve relative to the project root using absolute path calculation (`path.resolve` or `Path(__file__)`).
 
-## 4. Desktop App (Electron) Safety
-
-### The Bridge Pattern
-- **Isolation:** Always keep `contextIsolation: true` and `nodeIntegration: false`.
-- **Hardened Bridge:** Only expose specific, sanitized functions through the `contextBridge`. 
-- **Initialization:** Dashboard logic must perform a handshake check to ensure the API bridge is connected before attempting data loads.
-
 ## Reference Guides
 
 - [Process Scripting Patterns](references/process_scripting.md) - Code examples for atomic I/O and retries.
-- [Desktop Integration](references/desktop_integration.md) - Best practices for Electron/Local file sync.

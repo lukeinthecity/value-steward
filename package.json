@@ -61,8 +61,7 @@
     "world:health:scheduled": "WORLD_FEED_AUTO_DISABLE=false node world/healthReport.js --refresh-if-stale",
     "world:run:scheduled": "node scripts/worldRunScheduled.js",
     "eod:run:scheduled": "node scripts/eodRunScheduled.js",
-    "report:weekly": "node scripts/weeklyReport.js",
-    "desktop": "node scripts/desktop.js"
+    "report:weekly": "node scripts/weeklyReport.js"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

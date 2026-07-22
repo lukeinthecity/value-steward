@@ -16,10 +16,9 @@ or mitigation will be pushed as soon as practical. Credit is welcome if you'd li
 
 ## Scope
 
-In scope: the Node.js (World layer, desktop app) and Python (Brain/Execution layers) code in
-this repo, and the CI/tooling around it. Credential handling, the Electron desktop bridge, and
-anything that could let untrusted input reach a trading action or exfiltrate a secret are all
-high priority.
+In scope: the Node.js (World layer) and Python (Brain/Execution layers) code in this repo, and
+the CI/tooling around it. Credential handling and anything that could let untrusted input reach
+a trading action or exfiltrate a secret are all high priority.
 
 Out of scope: Alpaca, Google Gemini, ntfy.sh, and any other third-party service this project
 integrates with — report issues in those upstream.
