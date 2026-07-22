@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@massive.com/client-js": "^10.7.0",
-    "electron": "^40.6.0",
+    "electron": "^43.2.0",
     "ws": "^8.18.1"
   }
 }
