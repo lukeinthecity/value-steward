@@ -1,26 +1,43 @@
 version: 2
 updates:
-  # Keep the GitHub Actions used in ci.yml current and get Dependabot alerts
-  # if an action we depend on ships a security advisory.
+  # GitHub Actions — batch all version bumps into a single weekly PR; action
+  # version bumps are low-risk and rarely need individual review.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
 
-  # Node dependencies (World layer, root).
+  # Node dependencies (World layer, root). Group minor + patch into one PR;
+  # majors stay individual so breaking bumps get their own review. Security
+  # updates are unaffected (they keep opening promptly, on their own).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Node dependencies for the Electron desktop app (separate manifest).
   - package-ecosystem: "npm"
     directory: "/desktop"
     schedule:
       interval: "weekly"
+    groups:
+      desktop-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Python dependencies (Brain/Execution layers).
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
