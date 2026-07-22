@@ -73,7 +73,7 @@
     "@massive.com/client-js": "^10.7.0",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.4.2",
-    "jsdom": "^24.0.0",
+    "jsdom": "^29.1.1",
     "nodemailer": "^9.0.3",
     "rss-parser": "^3.13.0",
     "sqlite3": "^6.0.1"
