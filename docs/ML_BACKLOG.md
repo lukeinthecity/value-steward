@@ -400,6 +400,63 @@ validation pass shows correlation with live results.
 
 ---
 
+### 3.5 Platform feature parity — trade whatever Alpaca supports
+
+**Current state:** Value Steward trades long-only US equities/ETFs via
+`TradingClient` market/mid-point-limit orders. No shorting, no options, no
+non-US markets. This wasn't a deliberate scope decision so much as "that's
+what Phase 1 needed" — the stated long-run intent is that the system
+should be able to act on any decision surface the platform exposes, not
+just the one it started with.
+
+**Issue:** Alpaca has shipped several genuinely new capabilities since
+Phase 1 Run 1 began (2026-05-18) that nothing in this codebase has a path
+to use:
+
+| Capability | Announced | What it is |
+|---|---|---|
+| Hard-to-borrow short selling | 2026-06-24 | Full API support to programmatically quote, reserve, track, and short HTB securities |
+| German equities (Deutsche Börse Xetra) | 2026-07-21 | New addressable market (SAP, Siemens, BMW, etc.) — still cash equities |
+| Index options paper trading | 2026-07-23 | SPX/SPXW/VIX/VIXW/DJX/XSP, cash-settled, European-style, multi-leg (`OrderClass.MLEG`) via `alpaca-py`; Level 3 strategies auto-enabled in paper accounts |
+
+Each is a different size of lift, not one feature:
+
+- **German equities** is the smallest — same asset type (cash equities),
+  so the existing signal engine (momentum/vol/drawdown ranks) plausibly
+  applies as-is. Needs FX/currency handling, a different market calendar
+  and trading hours, and sector-map coverage for German names.
+- **Short selling** reuses the same signal but needs a real risk-model
+  addition (borrow cost/availability, short-squeeze exposure, and —
+  unlike a long position — theoretically unlimited loss), plus a
+  sell-to-open path in `decision_engine.py` that doesn't exist today.
+- **Index options** is the biggest lift — a genuinely new asset class.
+  None of the existing rank features (momentum/vol/drawdown) translate
+  to strike/expiry/greeks selection; it needs its own signal model, its
+  own scorecard schema, and its own risk model given the leverage
+  involved.
+
+**Why deferred:** Every item here is decision-affecting and each deserves
+its own scoping pass, evidence bar, and test coverage — exactly what Tier
+3 "wait until end-of-run" is for. Adding more than one new asset class at
+once would also make the next post-run review impossible to attribute
+cleanly (the same reason structural changes have triggered full run
+resets before — see Run 1→2 and Run 2→3 history above).
+
+**Cost:** Unscoped — each sub-item needs its own design pass before a
+cost estimate is meaningful. Rough ordering by lift: German equities <
+short selling < index options.
+
+**Decision rule:** Revisit at the post-run review
+([`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md)). Pick at most one new
+asset class to prototype for Run 4, lowest-lift first, and treat it the
+same way `cap_breach_sell` (PR #16) was treated — a structural change big
+enough to warrant its own dedicated run rather than folding into an
+already-running experiment. Before starting any of these, re-check
+Alpaca's blog/changelog for what's shipped since this entry was written —
+by the post-run review this list will already be stale.
+
+---
+
 ## What's NOT on the backlog (deliberately)
 
 These were considered and rejected to avoid hallucinated complexity:
