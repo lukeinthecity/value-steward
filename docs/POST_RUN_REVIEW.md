@@ -153,6 +153,7 @@ several of these are conditional and may not have fired.
 | 12 | Regime-trainer sample floor (3.1) | If any regime triggered training with <~20 records in `policy.json` `signal_weights.by_regime` | ML_BACKLOG 3.1 |
 | 13 | Gate redundancy pruning (3.4) | Always — compute the gate-correlation matrix (`rel60`/`rel20`, `trend_strength`/`momentum_rank`); drop any gate with <5% incremental rejection over its neighbor | ML_BACKLOG 3.4 |
 | 14 | Guardian LLM-digest path (`WORLD_LLM_CMD`) | Only if a specific case surfaces where the rule-based keyword scorer *and* Scout both missed a real regime shift — see chat discussion 2026-07-22 | Not yet in ML_BACKLOG; add there if revisited |
+| 15 | Platform feature parity (short selling, German equities, index options) | Always — pick at most one new asset class to prototype for Run 4, lowest-lift first (German equities < short selling < options); re-check Alpaca's blog for what's shipped since, this list goes stale fast | ML_BACKLOG 3.5 |
 
 Not on this list: **3.3 transaction cost modeling** and **3.2 walk-forward
 backtest** — both have their own decision rules independent of the Day-60
@@ -222,3 +223,7 @@ changes are *expected*, not a violation of run discipline.
 - **2026-07-22** — Created. Verdict criteria locked in before Run 3's end
   date; consolidates 13 scattered `ML_BACKLOG.md` decision rules plus the
   Guardian LLM-digest question from that day's chat.
+- **2026-07-23** — Added item 15 (`ML_BACKLOG.md` 3.5, platform feature
+  parity) after reviewing Alpaca's blog/changelog for what's shipped since
+  Phase 1 began: hard-to-borrow short selling, German equities (Xetra),
+  and index options paper trading.
