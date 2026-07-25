@@ -32,11 +32,6 @@ def _load_macro_policy() -> Dict[str, Any]:
 
 
 def classify_macro_from_tags(tags: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Classify macro risk regime from raw tag signals into a score, label, and confidence.
-
-    Falls back to a null/"n/a" result with zero confidence when no tags are provided,
-    and degrades confidence as tag coverage drops rather than failing outright.
-    """
     policy = _load_macro_policy()
     required_tags = policy["required_tags"]
     weights = policy["weights"]
