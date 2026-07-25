@@ -16,15 +16,9 @@ const INBOX_PATH = path.join(process.cwd(), "data", "world-inbox.jsonl");
 const HYDRATED_PATH = path.join(process.cwd(), "data", "world-hydrated.jsonl");
 
 const WORLD_HYDRATE_MAX = Number(process.env.WORLD_HYDRATE_MAX ?? 20);
-const WORLD_HYDRATE_SLEEP_MS = Number(
-  process.env.WORLD_HYDRATE_SLEEP_MS ?? 1500,
-);
-const WORLD_HYDRATE_TIMEOUT_MS = Number(
-  process.env.WORLD_HYDRATE_TIMEOUT_MS ?? 15000,
-);
-const WORLD_HYDRATE_MAX_CHARS = Number(
-  process.env.WORLD_HYDRATE_MAX_CHARS ?? 15000,
-);
+const WORLD_HYDRATE_SLEEP_MS = Number(process.env.WORLD_HYDRATE_SLEEP_MS ?? 1500);
+const WORLD_HYDRATE_TIMEOUT_MS = Number(process.env.WORLD_HYDRATE_TIMEOUT_MS ?? 15000);
+const WORLD_HYDRATE_MAX_CHARS = Number(process.env.WORLD_HYDRATE_MAX_CHARS ?? 15000);
 
 const USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
@@ -60,7 +54,7 @@ function fallbackExtract(document) {
   const selectors = ["article", "main", "body"];
   const clone = document.cloneNode(true);
   const remove = clone.querySelectorAll(
-    "script,style,nav,header,footer,aside,form,svg,canvas",
+    "script,style,nav,header,footer,aside,form,svg,canvas"
   );
   remove.forEach((node) => node.remove());
 
@@ -93,10 +87,7 @@ function buildInlineHydration(entry, baseRecord) {
 
 async function fetchWithTimeout(url) {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    WORLD_HYDRATE_TIMEOUT_MS,
-  );
+  const timeout = setTimeout(() => controller.abort(), WORLD_HYDRATE_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -141,7 +132,7 @@ async function hydrateEntry(entry) {
   let res;
   try {
     res = await fetchWithTimeout(entry.link);
-  } catch (err) {
+  } catch {
     return { ...baseRecord, error: "timeout" };
   }
 
@@ -169,7 +160,7 @@ async function hydrateEntry(entry) {
   let html;
   try {
     html = await res.text();
-  } catch (err) {
+  } catch {
     return {
       ...baseRecord,
       status,
@@ -196,7 +187,7 @@ async function hydrateEntry(entry) {
       extracted = fallbackExtract(dom.window.document);
       extractor = "fallback";
     }
-  } catch (err) {
+  } catch {
     return {
       ...baseRecord,
       status,
@@ -240,9 +231,7 @@ async function main() {
   const hydrated = loadJsonl(HYDRATED_PATH);
   const hydratedKeys = new Set(hydrated.map(buildKey));
 
-  const candidates = inbox.filter(
-    (entry) => !hydratedKeys.has(buildKey(entry)),
-  );
+  const candidates = inbox.filter((entry) => !hydratedKeys.has(buildKey(entry)));
   const toProcess = candidates.slice(0, WORLD_HYDRATE_MAX);
   const stopSpinner = startSpinner("hydrate links", {
     total: toProcess.length,
@@ -266,17 +255,16 @@ async function main() {
   }
 
   stopSpinner(
-    `attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`,
+    `attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`
   );
   console.log(
-    `[world] hydrate attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`,
+    `[world] hydrate attempted=${attempted} ok=${okCount} failed=${failCount} inbox=${inbox.length}`
   );
 }
 
 // Only run when executed directly (cron/CLI), never on import.
 const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   main().catch((err) => {
