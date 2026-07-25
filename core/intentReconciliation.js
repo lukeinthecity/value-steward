@@ -91,9 +91,7 @@ function extractAttempts(intent) {
     const actions = Array.isArray(intent?.actions) ? intent.actions : [];
     for (const cid of clientIds) {
       const action = actions.find((a) => a?.order_client_id === cid) ?? null;
-      const symbol = normalizeSymbol(
-        action?.symbol ?? cid.slice(intentId.length + 1),
-      );
+      const symbol = normalizeSymbol(action?.symbol ?? cid.slice(intentId.length + 1));
       const side =
         normalizeSide(action?.side) ||
         (["BUY", "SELL"].includes(String(intent?.action_type))
@@ -205,9 +203,7 @@ function pickHeuristicOrder(bucket, intentTimestamp, consumed) {
     }))
     .filter((c) => Number.isFinite(c.delta));
   if (!candidates.length) return null;
-  const after = candidates
-    .filter((c) => c.delta >= 0)
-    .sort((a, b) => a.delta - b.delta);
+  const after = candidates.filter((c) => c.delta >= 0).sort((a, b) => a.delta - b.delta);
   const chosen = after.length
     ? after[0]
     : candidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))[0];
@@ -231,7 +227,7 @@ export function reconcileIntents({
 } = {}) {
   const today = toExchangeDate(now.toISOString());
   const cutoff = toExchangeDate(
-    new Date(now.getTime() - windowDays * 86400000).toISOString(),
+    new Date(now.getTime() - windowDays * 86400000).toISOString()
   );
 
   const byClientId = new Map();
@@ -254,7 +250,7 @@ export function reconcileIntents({
   for (const row of existingOutcomes ?? []) {
     latestOutcome.set(
       outcomeKey(row?.intent_id, row?.order_client_id, row?.symbol, row?.side),
-      row,
+      row
     );
   }
 
@@ -270,29 +266,23 @@ export function reconcileIntents({
         intent.id,
         attempt.orderClientId,
         attempt.symbol,
-        attempt.side,
+        attempt.side
       );
       const prior = latestOutcome.get(key);
       if (prior?.terminal) continue;
 
-      let order = null;
+      let order;
       if (attempt.orderClientId) {
         order = byClientId.get(attempt.orderClientId) ?? null;
       } else {
         order = pickHeuristicOrder(
-          bySymbolSideDate.get(
-            `${attempt.symbol}|${attempt.side}|${intentDate}`,
-          ),
+          bySymbolSideDate.get(`${attempt.symbol}|${attempt.side}|${intentDate}`),
           intent?.timestamp,
-          consumedOrders,
+          consumedOrders
         );
       }
 
-      const { fillStatus, terminal, reasonCode } = classify(
-        order,
-        intentDate,
-        today,
-      );
+      const { fillStatus, terminal, reasonCode } = classify(order, intentDate, today);
       if (
         prior &&
         prior.fill_status === fillStatus &&
@@ -333,7 +323,7 @@ export function summarizeFillAttempts(outcomes, exchangeDate) {
     if (row?.exchange_date !== exchangeDate) continue;
     latest.set(
       outcomeKey(row?.intent_id, row?.order_client_id, row?.symbol, row?.side),
-      row,
+      row
     );
   }
   const bySymbol = {};
@@ -345,8 +335,7 @@ export function summarizeFillAttempts(outcomes, exchangeDate) {
     bySymbol[symbol].attempts += 1;
     attempts += 1;
     const filled =
-      row.fill_status === "filled" ||
-      (safeNumber(row.filled_notional) ?? 0) > 0;
+      row.fill_status === "filled" || (safeNumber(row.filled_notional) ?? 0) > 0;
     if (filled) {
       bySymbol[symbol].fills += 1;
       fills += 1;
@@ -358,15 +347,10 @@ export function summarizeFillAttempts(outcomes, exchangeDate) {
 /**
  * Read the live artifacts, reconcile, and append any new outcome rows.
  */
-export function runIntentReconciliation({
-  now = new Date(),
-  windowDays = 7,
-} = {}) {
+export function runIntentReconciliation({ now = new Date(), windowDays = 7 } = {}) {
   const intents = readJsonl(getIntentLogPath());
   const portfolio = readJson(getPortfolioLivePath());
-  const orders = Array.isArray(portfolio?.recent_orders)
-    ? portfolio.recent_orders
-    : [];
+  const orders = Array.isArray(portfolio?.recent_orders) ? portfolio.recent_orders : [];
   const outcomesPath = getIntentOutcomesPath();
   const existingOutcomes = readJsonl(outcomesPath);
 

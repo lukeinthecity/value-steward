@@ -28,7 +28,7 @@ function loadMacroPolicy() {
   }
   try {
     return JSON.parse(fs.readFileSync(policyPath, "utf8"));
-  } catch (err) {
+  } catch {
     return {
       required_tags: [
         "macro_risk",
@@ -133,11 +133,7 @@ export function toWorldDateString(date) {
     const parts = fmt.formatToParts(d);
     const byType = {};
     for (const part of parts) {
-      if (
-        part.type === "year" ||
-        part.type === "month" ||
-        part.type === "day"
-      ) {
+      if (part.type === "year" || part.type === "month" || part.type === "day") {
         byType[part.type] = part.value;
       }
     }
@@ -189,7 +185,7 @@ export function classifyMacroFromTags(tags) {
   // Weighted blend of the key risks, clamped to [0,1]
   const rawScore = Object.entries(weights).reduce(
     (sum, [key, weight]) => sum + (values[key] || 0) * weight,
-    0,
+    0
   );
 
   const macroScore = Math.max(0, Math.min(1, rawScore));
@@ -200,13 +196,13 @@ export function classifyMacroFromTags(tags) {
   else if (macroScore >= thresholds.watchful) macroLabel = "watchful";
 
   const inputsUsed = reqTags.filter(
-    (key) => tags[key] !== null && tags[key] !== undefined,
+    (key) => tags[key] !== null && tags[key] !== undefined
   );
 
   const coverage = inputsUsed.length / reqTags.length;
 
-  let confidence = 0;
-  let coverageNote = "no tag signals";
+  let confidence;
+  let coverageNote;
   if (inputsUsed.length === 0) {
     confidence = 0;
     coverageNote = "no tag signals";
@@ -268,10 +264,8 @@ export function fuseMacroRegime({ macroView, scoutLabel, scoutScore }) {
     };
   }
 
-  const guardianSeverity =
-    guardianLabel !== null ? REGIME_SEVERITY[guardianLabel] : -1;
-  const scoutSeverity =
-    scoutNormLabel !== null ? REGIME_SEVERITY[scoutNormLabel] : -1;
+  const guardianSeverity = guardianLabel !== null ? REGIME_SEVERITY[guardianLabel] : -1;
+  const scoutSeverity = scoutNormLabel !== null ? REGIME_SEVERITY[scoutNormLabel] : -1;
 
   let finalLabel = guardianLabel ?? scoutNormLabel;
   let finalScore = guardianScore ?? scoutNormScore ?? null;
@@ -294,7 +288,7 @@ export function fuseMacroRegime({ macroView, scoutLabel, scoutScore }) {
       finalLabel = guardianLabel;
       finalScore = Math.max(
         guardianScore ?? Number.NEGATIVE_INFINITY,
-        scoutNormScore ?? Number.NEGATIVE_INFINITY,
+        scoutNormScore ?? Number.NEGATIVE_INFINITY
       );
       finalScore = Number.isFinite(finalScore) ? finalScore : null;
       source = "aligned";

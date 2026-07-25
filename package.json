@@ -64,7 +64,9 @@
     "report:weekly": "node scripts/weeklyReport.js"
   },
   "devDependencies": {
-    "eslint": "^8.57.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.7.0",
     "prettier": "^3.9.6"
   },
   "dependencies": {
