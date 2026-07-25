@@ -27,8 +27,8 @@ function sha256File(relativePath) {
 }
 
 function buildRuntimeExpectations() {
-  let gitHead = "";
-  let gitDirty = "";
+  let gitHead;
+  let gitDirty;
   try {
     gitHead = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: process.cwd(),
@@ -53,7 +53,7 @@ function buildRuntimeExpectations() {
     VS_EXPECTED_GIT_DIRTY: gitDirty,
     VS_EXPECTED_SHA_CLI_PY: sha256File("src/valuesteward/cli.py"),
     VS_EXPECTED_SHA_EXECUTION_ENGINE_PY: sha256File(
-      "src/valuesteward/core/execution_engine.py",
+      "src/valuesteward/core/execution_engine.py"
     ),
     VS_EXPECTED_SHA_CONFIG_PY: sha256File("src/valuesteward/config.py"),
     VS_EXPECTED_SHA_POLICY_PY: sha256File("src/valuesteward/policy.py"),
@@ -76,11 +76,7 @@ export function buildFallbackTickResult({
     ranAt: state.last_run_at ?? now,
     marketOpen: typeof marketOpen === "boolean" ? marketOpen : null,
     accountStatus:
-      typeof marketOpen === "boolean"
-        ? marketOpen
-          ? "UNKNOWN"
-          : "MARKET_CLOSED"
-        : null,
+      typeof marketOpen === "boolean" ? (marketOpen ? "UNKNOWN" : "MARKET_CLOSED") : null,
     equity: null,
     buyingPower: null,
     cash: null,
@@ -89,8 +85,7 @@ export function buildFallbackTickResult({
     mode: policy?.mode ?? null,
     agentMode: state.current_mode ?? null,
     risk_level: normalizedRiskLevel,
-    targetCashFraction:
-      normalizedRiskLevel === null ? null : 1 - normalizedRiskLevel,
+    targetCashFraction: normalizedRiskLevel === null ? null : 1 - normalizedRiskLevel,
     equityToBuyingPower: null,
     cashUtilization: null,
     numPositions: Array.isArray(state.last_known_positions)
@@ -130,17 +125,14 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
   // 2. Determine Mode
   const lastRun = state.last_run_at ? Date.parse(state.last_run_at) : null;
   const todayExchange = getExchangeDateString(new Date());
-  const lastRunExchange = lastRun
-    ? getExchangeDateString(new Date(lastRun))
-    : null;
+  const lastRunExchange = lastRun ? getExchangeDateString(new Date(lastRun)) : null;
 
   let nextMode = state.current_mode;
   if (!state.last_run_at) nextMode = MODES.INACTIVE;
-  else if (lastRunExchange && lastRunExchange !== todayExchange)
-    nextMode = MODES.CATCHUP;
+  else if (lastRunExchange && lastRunExchange !== todayExchange) nextMode = MODES.CATCHUP;
   else nextMode = MODES.LIVE;
 
-  state = await updateState((draft) => {
+  await updateState((draft) => {
     draft.current_mode = nextMode;
     return draft;
   });
@@ -280,7 +272,7 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
       },
     });
     console.warn(
-      `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`,
+      `[VS] Node enrichment degraded after Python tick: ${err?.message ?? err}`
     );
   }
 
@@ -292,14 +284,14 @@ export async function runTick({ alpacaConfig, marketOpen, clock }) {
         cycleId,
         policy,
         result: finalResult,
-      }),
+      })
     );
   } catch (err) {
     console.warn(`[VS] Failed to append history entry: ${err?.message ?? err}`);
   }
 
   console.log(
-    `[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`,
+    `[VS] tick complete (exit=${exitCode}). mode=${state.current_mode} tradingEnabled=${state.trading_enabled}`
   );
 
   return { policy, result: finalResult };
