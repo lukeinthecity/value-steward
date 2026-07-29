@@ -17,6 +17,13 @@ patterns). Operating discipline lives in `docs/SESSION_BRIEF.md` and
 `docs/PLAYBOOK_WEEKLY_REVIEW.md`; the learning roadmap in `docs/ML_BACKLOG.md`;
 the end-of-run verdict criteria in `docs/POST_RUN_REVIEW.md`.
 
+Also read [`agent-playbooks`](https://github.com/lukeinthecity/agent-playbooks)'s
+`INCIDENT-LOG.md` at the start of a session — a cross-session, cross-repo log of novel
+or alarming situations from real work across this account's projects (this repo's own
+untracked-`.prettierrc.json` and branch-protection-bypass incidents are both in there,
+generalized for other repos). Attach the repo (`add_repo` / `register_repo_root`) if
+it isn't already in session scope.
+
 ---
 
 ## Environment & workflow (read before running anything)
