@@ -70,11 +70,11 @@
     "prettier": "^3.9.6"
   },
   "dependencies": {
-    "@google/genai": "^2.13.0",
+    "@google/genai": "^2.15.0",
     "@massive.com/client-js": "^10.7.0",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.4.2",
-    "jsdom": "^30.0.0",
+    "jsdom": "^30.0.1",
     "nodemailer": "^9.0.3",
     "rss-parser": "^3.13.0",
     "sqlite3": "^6.0.1"
