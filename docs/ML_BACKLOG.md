@@ -506,10 +506,26 @@ The motivating idea (2026-08-06 discussion) is that the market can be
 read as a model of how human energy production and consumption are
 configured — so a thesis about physical build-out (AI compute →
 electricity demand → grid → copper, transformers, turbines, and the
-extraction feeding them) should have tradeable content. There is real
-literature behind the premise: Ayres & Warr on exergy explaining more
-post-1900 growth than capital/labor alone, Georgescu-Roegen on entropy
-economics, Hayek on prices as compressed distributed knowledge.
+extraction feeding them) should have tradeable content.
+
+There is real literature behind the premise. Leslie White states it most
+directly: "culture evolves as the amount of energy harnessed per capita
+per year is increased, or as the efficiency of the instrumental means of
+putting the energy to work is increased" (*Energy and the Evolution of
+Culture*, 1943; formalized as C = E × T). Ayres & Warr supply the modern
+quantitative version — exergy explaining more post-1900 growth than
+capital and labor alone. Georgescu-Roegen frames the thermodynamic
+constraint, and Hayek supplies the reason a price can carry any of this
+information at all: it compresses distributed knowledge no central
+modeler could assemble.
+
+The counterweight belongs in the same paragraph. Tainter argues that
+societal complexity shows declining marginal returns on energy invested.
+If that holds, an energy-intensive build-out is not automatically
+value-accretive — the same physical expansion can be either the growth
+engine (White) or the overhead that eventually eats the returns
+(Tainter), and price is where that disagreement gets settled. A
+thesis-testing tool has no business assuming which.
 
 Three problems make the naive version ("trade the thesis") untestable
 here, and they shape the design:
