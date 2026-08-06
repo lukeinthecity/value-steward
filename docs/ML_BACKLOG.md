@@ -500,6 +500,60 @@ not a new decision-affecting signal, at least not without a second,
 separate decision rule once something has actually cleared a
 significance bar repeatedly.
 
+#### The testable formulation: thesis as universe constructor
+
+The motivating idea (2026-08-06 discussion) is that the market can be
+read as a model of how human energy production and consumption are
+configured — so a thesis about physical build-out (AI compute →
+electricity demand → grid → copper, transformers, turbines, and the
+extraction feeding them) should have tradeable content. There is real
+literature behind the premise: Ayres & Warr on exergy explaining more
+post-1900 growth than capital/labor alone, Georgescu-Roegen on entropy
+economics, Hayek on prices as compressed distributed knowledge.
+
+Three problems make the naive version ("trade the thesis") untestable
+here, and they shape the design:
+
+1. **Markets price claims on future cash flows, not energy.** A utility
+   can grow output while its equity falls on a rate move. The energy
+   signal is present but convolved with financing conditions and
+   sentiment.
+2. **Horizon mismatch.** Scorecard horizons are 1d/5d/20d; a
+   civilizational thesis plays out over years. Sixty trading days can
+   never validate a decade-long structural claim, and pretending
+   otherwise would be the exact self-delusion `COUNTERFACTUAL_LEARNING.md`
+   exists to prevent.
+3. **Being right is not the same as being paid.** The consensus version
+   of any well-covered thesis is already in the price; the return comes
+   from deviation against what's priced. The system already encodes this
+   discipline — the training target is `excess_vs_benchmark`, not raw
+   return.
+
+The formulation that survives all three: **the thesis constructs the
+universe, the existing price machinery does the selection.** The thesis
+decides *where to fish* (narrow to implicated sector buckets and their
+supply chain); momentum / vol / drawdown ranks and the existing gates
+decide *when*. That converts an unfalsifiable multi-year claim into a
+Layer 1 question the market prints an answer to every day: **did the
+thesis-restricted universe produce better risk-adjusted excess return
+than the unrestricted one over the same window?** Both arms are
+observable, so the comparison is honest at any horizon — it just
+measures a narrower claim (did this constraint help *here*) than the
+thesis itself asserts.
+
+**Prior to beat — thematic restriction has a poor empirical track
+record.** Ben-David, Franzoni, Kim & Moussawi (*Competition for
+Attention in the ETF Space*, RFS 2023) find specialized/thematic ETFs
+lose roughly 30% risk-adjusted over their first five years, driven not
+by fees but by overvaluation of the underlying at launch — providers
+catering to extrapolative beliefs about attention-grabbing themes. The
+mechanism is directly relevant: a thesis salient enough to state in
+plain language is usually salient enough to already be bid up. Any
+universe-constructor result that looks good should be checked against
+this prior specifically — including whether the restricted universe is
+simply loading on recent past performance, which the momentum features
+already capture without needing a thesis at all.
+
 **Why deferred:** Depends on 2.2's pattern-significance audit and,
 usefully, on 2.6's tag-correlation report — no point building a
 thesis-testing layer before the underlying "does this tag/pattern
@@ -513,8 +567,11 @@ Scout's existing prompt/parsing plumbing versus needing new code.
 
 **Decision rule:** Revisit at the post-run review
 ([`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md)), after 2.2 and 2.6.
-Build the observation tool first; only consider feeding a validated
-thesis back into scoring as its own separate, later decision — same
+Build the observation tool first, in the universe-constructor form
+above — a restricted-vs-unrestricted comparison, reported with sample
+size and significance, never a verdict. Only consider feeding a
+validated thesis back into scoring as its own separate, later decision,
+and only after ruling out the Ben-David et al. failure mode — same
 two-step discipline already applied to 2.8 (fill-rate metric before
 execution-policy change).
 
