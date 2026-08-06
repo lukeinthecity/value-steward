@@ -457,6 +457,69 @@ by the post-run review this list will already be stale.
 
 ---
 
+### 3.6 User-directed thesis testing (LLM-mediated)
+
+**Current state:** Two things already exist that are most of the way to
+this: `core/patterns.py`'s pattern library, which auto-discovers
+world-tag combinations correlated with historical returns (see 2.2), and
+Scout (`world/shadowObserver.js`), an LLM that already reads world
+context and produces a regime read. Neither is user-directed — the
+pattern library only tests combinations it discovers itself, and Scout
+only answers "what's the macro regime," not "is this specific idea true."
+
+**Issue:** There's no way for the user to state a market thesis in plain
+language — "I think the AI buildout is going to keep benefiting
+utilities and materials over the next year" — and have the system check
+it against real data. Right now that only happens informally, inside a
+chat session like this one, ad hoc each time, with no fixed methodology
+or rigor bar.
+
+**Pitch:** A repeatable tool (CLI script, or an extension of the
+existing pattern-library machinery) that:
+1. Takes a natural-language thesis and maps it to concrete, testable
+   observables already in the data — implicated sector buckets
+   (`sector_map.py`), world tags, or specific symbols. Scout's existing
+   LLM plumbing is the natural place to do this translation, since it
+   already reads the same corpus.
+2. Runs the same significance methodology already used for the pattern
+   library and gate-calibration report (2.2, 2.4) — sample size, mean
+   forward return, t-statistic — restricted to Layer 1/2 counterfactuals
+   per `COUNTERFACTUAL_LEARNING.md` (declined-decision and execution
+   outcomes the market actually printed), never fabricated.
+3. Returns a report, not a verdict: what the data shows, the sample size
+   and whether it clears significance, and an explicit note on what part
+   of the thesis (if any) falls into Layer 3 — unobservable, a modeling
+   assumption, not a fact — the same honesty COUNTERFACTUAL_LEARNING.md
+   already demands of the pattern library.
+
+This is explicitly closer to 2.6 (tag-level correlation report) than to
+a new trading feature: same "observation only, no automatic feature
+addition" posture. The value here is largely educational — testing a
+thesis against real evidence and seeing where it holds up or doesn't —
+not a new decision-affecting signal, at least not without a second,
+separate decision rule once something has actually cleared a
+significance bar repeatedly.
+
+**Why deferred:** Depends on 2.2's pattern-significance audit and,
+usefully, on 2.6's tag-correlation report — no point building a
+thesis-testing layer before the underlying "does this tag/pattern
+predict returns" machinery has been validated. Also explicitly
+observation-only until proven otherwise, consistent with every other
+LLM-adjacent item on this list.
+
+**Cost:** Unscoped — depends heavily on 2.2/2.6 landing first and on
+how much of the natural-language-to-observable mapping can reuse
+Scout's existing prompt/parsing plumbing versus needing new code.
+
+**Decision rule:** Revisit at the post-run review
+([`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md)), after 2.2 and 2.6.
+Build the observation tool first; only consider feeding a validated
+thesis back into scoring as its own separate, later decision — same
+two-step discipline already applied to 2.8 (fill-rate metric before
+execution-policy change).
+
+---
+
 ## What's NOT on the backlog (deliberately)
 
 These were considered and rejected to avoid hallucinated complexity:
