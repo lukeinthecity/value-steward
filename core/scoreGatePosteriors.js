@@ -14,6 +14,8 @@
  * Posteriors are rebuilt from scratch each cycle for idempotency.
  */
 
+import { isBuyRelatedRecord } from "./scorecardSemantics.js";
+
 const VALID_TARGETS = new Set(["excess_vs_benchmark", "signed_return"]);
 
 function isFiniteNumber(value) {
@@ -26,24 +28,10 @@ function normalizeSymbol(value) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function isBuyRelatedRecord(record) {
-  // The Thompson posteriors drive the BUY gate. Only count rows whose
-  // outcome reflects "did buying this symbol work":
-  //   - real BUY/MULTI intents (we bought; did it pan out?)
-  //   - NO_ACTION rows whose reason_code starts with "BUY_" (counterfactual
-  //     would-have-bought; would it have worked?)
-  //
-  // SELL rows (rebalance sells, VOL_STOP, CAP_BREACH_SELL) have inverted
-  // signed_return semantics that would push β++ when the symbol actually
-  // went UP — the opposite of what we want for predicting BUY winners.
-  const action = String(record?.action_type ?? "").toUpperCase();
-  if (action === "BUY" || action === "MULTI") return true;
-  if (action === "NO_ACTION") {
-    const reason = String(record?.reason_code ?? "").toUpperCase();
-    return reason.startsWith("BUY_");
-  }
-  return false;
-}
+// The Thompson posteriors drive the BUY gate, so they deliberately pool both
+// taken and declined buy evidence ("did buying this symbol work?"). SELL rows
+// are excluded — their inverted signed_return semantics would push β++ when
+// the symbol actually went UP. See core/scorecardSemantics.js.
 
 /**
  * Build score-gate posteriors from a list of scorecard records.
@@ -66,9 +54,7 @@ export function buildScoreGatePosteriors({
   let skippedNoTarget = 0;
   let skippedNoSymbol = 0;
   let skippedNonBuy = 0;
-  const resolvedTarget = VALID_TARGETS.has(target)
-    ? target
-    : "excess_vs_benchmark";
+  const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
 
   if (!Array.isArray(records)) {
     return {

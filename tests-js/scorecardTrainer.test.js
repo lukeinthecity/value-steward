@@ -16,7 +16,7 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
   );
 }
 
@@ -57,9 +57,7 @@ async function importScorecardTrainer() {
 
 test("scorecard trainer updates from buy rows without dilution from no-action rows", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "vs-scorecard-trainer-"),
-  );
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-trainer-"));
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -102,17 +100,12 @@ test("scorecard trainer updates from buy rows without dilution from no-action ro
   assert.equal(result.reason, "scorecard_update");
   assert.equal(result.scorecardSummary.training.sampleCount, 1);
   assert.equal(result.scorecardSummary.noAction.sampleCount, 1);
-  assert.equal(
-    result.scorecardSummary.training.horizons["5"].avgExcessBenchmark,
-    0.02,
-  );
+  assert.equal(result.scorecardSummary.training.horizons["5"].avgExcessBenchmark, 0.02);
 });
 
 test("scorecard trainer ignores no-action rows that lack a trainable reason_code", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "vs-scorecard-buy-samples-"),
-  );
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-buy-samples-"));
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -161,9 +154,7 @@ test("scorecard trainer ignores no-action rows that lack a trainable reason_code
 
 test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "vs-scorecard-counterfactual-"),
-  );
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-counterfactual-"));
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -211,26 +202,22 @@ test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async
     force: true,
   });
 
-  assert.equal(
-    result.updated,
-    true,
-    "counterfactuals should drive a policy update",
-  );
+  assert.equal(result.updated, true, "counterfactuals should drive a policy update");
   assert.equal(result.reason, "scorecard_update");
   assert.equal(
     result.scorecardSummary.training.sampleCount,
     2,
-    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row",
+    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row"
   );
   assert.equal(
     result.scorecardSummary.buyBlockedCounterfactual.sampleCount,
     2,
-    "buyBlockedCounterfactual summary should show 2 rows",
+    "buyBlockedCounterfactual summary should show 2 rows"
   );
   // Positive avgExcessBenchmark on counterfactuals → trainer raises risk
   assert.ok(
     result.newRisk > result.oldRisk,
-    "positive counterfactual excess return should raise risk_level",
+    "positive counterfactual excess return should raise risk_level"
   );
 });
 
@@ -275,4 +262,72 @@ test("scorecard trainer respects custom trainingReasonPrefixes", async (t) => {
   assert.equal(result.updated, false);
   assert.equal(result.reason, "insufficient_buy_samples");
   assert.equal(result.scorecardSummary.training.sampleCount, 0);
+});
+
+function replicaRows({ symbol, actionType, reasonCode = null, excess5 }) {
+  // One decision as the four execution slots record it.
+  return ["30", "20", "10", "05"].map((slot) => ({
+    ...buildScorecardRecord({
+      intentId: symbol.toLowerCase() + "-" + slot,
+      actionType,
+      excess5,
+      excess20: excess5,
+      reasonCode,
+    }),
+    symbol,
+  }));
+}
+
+test("loadScorecardRecords collapses per-slot replicas by default", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-dedupe-"));
+  process.chdir(tmpDir);
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("data", "steward-state.json"), {
+    phase1_start_date: "2026-03-30",
+  });
+  writeJsonl(
+    path.join("data", "signal-scorecard.jsonl"),
+    replicaRows({
+      symbol: "SOVF",
+      actionType: "NO_ACTION",
+      reasonCode: "BUY_BLOCKED",
+      excess5: -0.01,
+    })
+  );
+
+  const { loadScorecardRecords } = await importScorecardTrainer();
+  assert.equal(loadScorecardRecords().length, 1, "four slots, one decision");
+  assert.equal(
+    loadScorecardRecords(undefined, { dedupe: false }).length,
+    4,
+    "escape hatch still returns every attempt"
+  );
+});
+
+test("dedupe restores the minSamples floor to real decisions", async (t) => {
+  const prevCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-floor-"));
+  process.chdir(tmpDir);
+  t.after(() => {
+    process.chdir(prevCwd);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  writeJson(path.join("data", "steward-state.json"), {
+    phase1_start_date: "2026-03-30",
+  });
+  // Pre-fix these four replicas counted as four samples, so a single day of
+  // evidence could clear a minSamples floor of 2 or 4.
+  writeJsonl(
+    path.join("data", "signal-scorecard.jsonl"),
+    replicaRows({ symbol: "CBK", actionType: "BUY", excess5: 0.02 })
+  );
+
+  const { loadScorecardRecords } = await importScorecardTrainer();
+  assert.equal(loadScorecardRecords().length, 1);
 });
