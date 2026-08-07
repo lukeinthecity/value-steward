@@ -2,17 +2,35 @@ import fs from "fs";
 import path from "path";
 
 import { filterPhase1Records, getPhase1StartDate } from "./phase1Window.js";
+import { dedupeScorecardRecords } from "./scorecardSemantics.js";
 import { loadStateSync } from "./stewardState.js";
 import { getExchangeDateString } from "./timeUtils.js";
 import { isTrainingModeAllowed } from "./trainingMode.js";
 
-const DEFAULT_SCORECARD_PATH = path.join(
-  process.cwd(),
-  "data",
-  "signal-scorecard.jsonl",
-);
+const DEFAULT_SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
 
-export function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
+/**
+ * Load Phase-1 scorecard records, collapsing per-slot replicas by default.
+ *
+ * The execution slots (VS_EXECUTION_SLOT_MINUTES_BEFORE_CLOSE, default
+ * [30,20,10,5]) emit one intent each, so a single decision produces up to four
+ * rows with identical forward returns. Every consumer of this loader is a
+ * statistical one, and none of them want replicas: left uncollapsed they divide
+ * each minSamples floor by ~4 and understate variance.
+ *
+ * Phase-1 filtering runs BEFORE de-duplication — otherwise a pre-window row
+ * could win its group and then be dropped, silently deleting an in-window
+ * decision.
+ *
+ * Pass `{ dedupe: false }` for an intent-level consumer that genuinely needs
+ * every attempt. Note that the current attempt-counting readers
+ * (executionQualityReport, gateCalibration) read the file directly and do not
+ * come through here.
+ */
+export function loadScorecardRecords(
+  scorecardPath = DEFAULT_SCORECARD_PATH,
+  { dedupe = true } = {}
+) {
   if (!fs.existsSync(scorecardPath)) return [];
   const raw = fs.readFileSync(scorecardPath, "utf8");
   const records = raw
@@ -26,25 +44,28 @@ export function loadScorecardRecords(scorecardPath = DEFAULT_SCORECARD_PATH) {
       }
     })
     .filter(Boolean);
-  return filterPhase1Records(records, { state: loadStateSync() });
+  const phase1Records = filterPhase1Records(records, {
+    state: loadStateSync(),
+  });
+  return dedupe ? dedupeScorecardRecords(phase1Records) : phase1Records;
 }
 
 function filterRecordsByActionTypes(records, actionTypes) {
   const allowed = new Set(
-    (actionTypes ?? []).map((value) => String(value).toUpperCase()),
+    (actionTypes ?? []).map((value) => String(value).toUpperCase())
   );
   if (allowed.size === 0) return records.slice();
   return records.filter((record) =>
-    allowed.has(String(record?.action_type ?? "").toUpperCase()),
+    allowed.has(String(record?.action_type ?? "").toUpperCase())
   );
 }
 
 function filterRecordsForTraining(records, actionTypes, reasonPrefixes) {
   const allowedActions = new Set(
-    (actionTypes ?? []).map((value) => String(value).toUpperCase()),
+    (actionTypes ?? []).map((value) => String(value).toUpperCase())
   );
   const allowedPrefixes = (reasonPrefixes ?? []).map((value) =>
-    String(value).toUpperCase(),
+    String(value).toUpperCase()
   );
   if (allowedActions.size === 0 && allowedPrefixes.length === 0) {
     return records.slice();
@@ -192,7 +213,7 @@ export function trainPolicyWithScorecard({
   if (lastScorecardAt && !force) {
     const minDaysBetween = Math.max(
       0,
-      Math.floor(parseNumber(process.env.VS_SCORECARD_MIN_DAYS_BETWEEN, 1)),
+      Math.floor(parseNumber(process.env.VS_SCORECARD_MIN_DAYS_BETWEEN, 1))
     );
     const daysSince = daysBetweenExchangeDates(lastScorecardAt, new Date());
     if (daysSince < minDaysBetween) {
@@ -214,13 +235,9 @@ export function trainPolicyWithScorecard({
   }
 
   const summary = summarizeScorecard(
-    filterRecordsForTraining(
-      records,
-      trainingActionTypes,
-      trainingReasonPrefixes,
-    ),
+    filterRecordsForTraining(records, trainingActionTypes, trainingReasonPrefixes),
     horizons,
-    window,
+    window
   );
   const scorecardSummary = {
     training: summary,
@@ -228,24 +245,18 @@ export function trainPolicyWithScorecard({
     noAction: summarizeScorecard(
       filterRecordsByActionTypes(records, ["NO_ACTION"]),
       horizons,
-      window,
+      window
     ),
     buyBlockedCounterfactual: summarizeScorecard(
       filterRecordsForTraining(records, [], ["BUY_"]),
       horizons,
-      window,
+      window
     ),
     trainingActionTypes: Array.from(
-      new Set(
-        (trainingActionTypes ?? []).map((value) => String(value).toUpperCase()),
-      ),
+      new Set((trainingActionTypes ?? []).map((value) => String(value).toUpperCase()))
     ),
     trainingReasonPrefixes: Array.from(
-      new Set(
-        (trainingReasonPrefixes ?? []).map((value) =>
-          String(value).toUpperCase(),
-        ),
-      ),
+      new Set((trainingReasonPrefixes ?? []).map((value) => String(value).toUpperCase()))
     ),
   };
   const horizonStats = summary.horizons;
@@ -266,15 +277,13 @@ export function trainPolicyWithScorecard({
   const positive = horizons.every((horizon) => {
     const stats = horizonStats[String(horizon)];
     return (
-      stats?.avgExcessBenchmark !== null &&
-      stats.avgExcessBenchmark > benchmarkThreshold
+      stats?.avgExcessBenchmark !== null && stats.avgExcessBenchmark > benchmarkThreshold
     );
   });
   const negative = horizons.every((horizon) => {
     const stats = horizonStats[String(horizon)];
     return (
-      stats?.avgExcessBenchmark !== null &&
-      stats.avgExcessBenchmark < -benchmarkThreshold
+      stats?.avgExcessBenchmark !== null && stats.avgExcessBenchmark < -benchmarkThreshold
     );
   });
 
@@ -289,18 +298,11 @@ export function trainPolicyWithScorecard({
   }
 
   const direction = positive ? 1 : -1;
-  const oldRisk =
-    typeof policy.risk_level === "number" ? policy.risk_level : 0.2;
+  const oldRisk = typeof policy.risk_level === "number" ? policy.risk_level : 0.2;
   const oldBuffer =
-    typeof policy.rebalance_buffer_pct === "number"
-      ? policy.rebalance_buffer_pct
-      : 0.02;
+    typeof policy.rebalance_buffer_pct === "number" ? policy.rebalance_buffer_pct : 0.02;
   const newRisk = clamp(oldRisk + direction * riskStep, minRisk, maxRisk);
-  const newBuffer = clamp(
-    oldBuffer - direction * bufferStep,
-    minBuffer,
-    maxBuffer,
-  );
+  const newBuffer = clamp(oldBuffer - direction * bufferStep, minBuffer, maxBuffer);
 
   if (newRisk === oldRisk && newBuffer === oldBuffer) {
     return {
