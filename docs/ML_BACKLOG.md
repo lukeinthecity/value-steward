@@ -859,6 +859,89 @@ cap has been masking.
 
 ---
 
+### 3.9 Aggregate reports repeat the OOS population bug — the Day-60 cross-check is affected
+
+**Found 2026-08-07, in a codebase audit run while Run 3 was halted.** #115 fixed
+the sign/population fault in `oosEvaluator`; the same fault survives in two
+aggregate reports, one of which the verdict rubric depends on.
+
+**a. `data/scorecard-summary.json` — this one gates the Day-60 verdict.**
+`src/valuesteward/cli.py` computes `avg_excess_benchmark` over `all_records`
+with no action filter, while `buy_correct` / `sell_correct` in the *same loop*
+are filtered correctly. It also reads the persisted rows directly rather than
+through the de-duplicating loader, so it is replica-weighted as well.
+[`POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) §1.1 names this file as the hit-rate
+**cross-check** for the Day-60 verdict — so the independent check on the
+primary metric is currently as broken as the primary metric was.
+
+**b. `core/promotionMetrics.js` `computeWeeklyPerformance`.**
+`avgExcessBenchmark` averages every record; `buyHitRate` eight lines below
+filters to `BUY`/`MULTI`. Same function, one metric filtered and one not. This
+feeds the weekly report email, so it is user-facing.
+
+Both mix populations whose `excess_vs_benchmark` answers different questions,
+and both are replica-weighted. Note the fix is *not* uniform: whether declined
+rows should be excluded or merely counted correctly depends on whether the
+metric is measuring **decision quality** (needs the #115 orientation) or
+**symbol behaviour** (declined rows are directly comparable — see 3.10).
+
+**Not decision-affecting** — both are reporting only. Safe to fix during a run.
+
+**Decision rule:** fix (a) **before the Day-60 review**, or the cross-check
+cannot be used. Fix (b) whenever convenient. Reuse
+`core/scorecardSemantics.js`; do not hand-roll new predicates.
+
+---
+
+### 3.10 SELL rows carry undocumented `excess` semantics
+
+**Found 2026-08-07, same audit.** `src/valuesteward/cli.py` sets
+`direction = -1` for SELL, so `signed = -sym_ret` and
+`excess_vs_benchmark = -sym_ret - bench_ret`. Separately
+`excess_vs_cash = signed = -sym_ret`, even though after selling the position
+*is* in cash and its excess versus cash should be ~0.
+
+Neither quantity is documented, and it is not obvious either is what a reader
+would assume. Only 4 live rows are affected and both #115 and #119 now exclude
+SELL from the metrics that consumed it, so there is no active damage — but
+backlog **2.5 (predictive sell-side trainer)** would build directly on this
+definition, so it needs settling first.
+
+**Decision rule:** define the intended semantics *before* any sell-side
+learning work starts. Until then SELL rows stay excluded from every metric.
+
+---
+
+### 3.11 Test fixtures model a population that has never existed
+
+**Found 2026-08-07, and this is the root cause of the 3.9 / #115 / #119
+family rather than a separate defect.**
+
+Live scorecards are roughly 73–80% `NO_ACTION`/`BUY_BLOCKED`. Yet
+`tests-js/signalWeightTrainer.test.js` hardcoded `action_type: "BUY"` in its
+fixture builder, and `tests-js/oosEvaluator.test.js` emitted no `action_type`
+at all. Every test passed, because each suite tested a world in which the bug
+is invisible.
+
+That is why one fault class survived in four separate modules simultaneously.
+Fixing the instances without fixing the fixtures means instance five arrives
+eventually.
+
+**Pitch:** a shared fixture helper that builds a realistic population mix
+(~3 taken buys : ~16 declined buys : ~3 SELL, matching observed live ratios),
+and a convention that any test touching scorecard statistics uses it rather
+than an idealised BUY-only list. `#119` parameterised
+`signalWeightTrainer.test.js` and `#115` fixed `oosEvaluator.test.js`; the
+remaining suites still use idealised fixtures.
+
+**Counter-example worth preserving:** `src/valuesteward/core/realized_alpha.py`
+filters to `BUY` correctly. The right pattern already exists in the codebase —
+these are oversights, not design.
+
+**Decision rule:** do this **before** re-enabling any learning flag. It is the
+only item on this list that prevents recurrence rather than fixing an instance.
+
+---
 ## What's NOT on the backlog (deliberately)
 
 These were considered and rejected to avoid hallucinated complexity:
