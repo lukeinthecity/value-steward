@@ -383,6 +383,28 @@ If the data shows high-conviction names consistently slipping, consider a **conv
 
 **Decision rule:** Build the metric at the 30-day mark. Act on execution policy only if fill rate on the top score-bucket is materially below the rest (e.g., <50% vs >70%) — concrete evidence the Fishing strategy is costing us our best ideas.
 
+> **✅ Measured 2026-08-06 (30d window) — the trigger condition is NOT met, and
+> the data runs the other way.** `npm run execution:quality`:
+>
+> | Conviction tercile | Fill rate |
+> |---|---|
+> | high | **3/5 (60%)** |
+> | mid | 2/5 (40%) |
+> | low | 1/5 (20%) |
+> | overall | 6/15 (40%) |
+>
+> High-conviction names fill **best**, not worst — the opposite of the KALV
+> anecdote that motivated this item. The premise ("the Fishing strategy is
+> systematically costing us our best ideas") is not supported; do not implement
+> the conviction-scaled execution change on the strength of that story.
+>
+> The same run surfaced the actual constraint: **15 attempts in 30 days ≈ 0.5/day**,
+> against ~42 daily `local:tick` opportunities (every 5 min, 12:30–15:55 ET).
+> Execution converts roughly 40% of what reaches it; the funnel is starved
+> upstream at the gate layer, not at the order layer. Re-check this table at the
+> post-run review with a larger sample before drawing a final conclusion — n=15
+> is still small — but the burden of proof has moved.
+
 ---
 
 ## Tier 3 — Wait until end-of-run
@@ -522,6 +544,76 @@ enough to warrant its own dedicated run rather than folding into an
 already-running experiment. Before starting any of these, re-check
 Alpaca's blog/changelog for what's shipped since this entry was written —
 by the post-run review this list will already be stale.
+
+---
+
+### 3.7 Complexity audit — the machinery outruns the evidence
+
+**Measured 2026-08-06 (Run 3, Day 20).** This entry exists because a single
+session surfaced five separate measurement or interpretation faults (strict-OOS
+empty, rolling-OOS sign, duplicate rows, commit/cron collision, 2.8's premise
+refuted). That is a pattern, not bad luck: there are more moving parts than the
+data can support, so faults have room to hide.
+
+**Evidence 1 — the learning mechanisms are mostly idle.** Reasons logged across
+all 20 Run-3 EOD cycles:
+
+| Trainer | Produced a signal | Idle |
+|---|---|---|
+| `scorecard` | 1 | **19** (`insufficient_buy_samples`) |
+| `signal_weights` | 2 | **18** (12 `no_significant_t_stat`, 6 `insufficient_samples`) |
+| `signal_weights_by_regime` | 3 | **17** (`no_regime_with_signal`) |
+| `score_gate_posteriors` | 10 rebuilt | 10 (5 `no_samples`, 5 `unchanged`) |
+| `champion_challenger` | 3 promote / 1 revert | 6 `skip_insufficient_data`, 8 hold |
+
+The concern is not idleness itself — correctly declining to act on thin data is
+the t-stat gate working. It is that the rare firings happen on marginal
+evidence and *do* change live behavior, so the policy absorbs noise it cannot
+later attribute.
+
+**Evidence 2 — many small unvalidated adjustments compose the score.**
+`signal_engine.py` builds `score` as the learned 3-feature rank blend, then
+applies in sequence:
+
+| Adjustment | Magnitude | Justified by |
+|---|---|---|
+| execution-quality blend | `0.90 * score + 0.10 * quality` | nothing documented |
+| realized-alpha prior | `+= 0.10 * (prior − 0.5)` | nothing documented |
+| intraday persistence | `+= 0.05 * (prior − 0.5)` | nothing documented |
+
+then `decision_engine._apply_pattern_bias` nudges exposure again (caps
+0.05/0.15), and the macro regime scales `min_signal` and size on top. Every one
+of these constants is already in the "hyperparameters without sensitivity
+analysis" inventory above. Collectively they can move the score by roughly a
+quarter of its range, and with **~0.5 executed decisions per day** there is no
+realistic sample that could attribute an outcome to any one of them.
+
+**Pitch — prune to what the evidence can carry.** At the post-run review, for
+each mechanism ask the same question the gate-calibration report asks of gates:
+*has this earned its place on measured evidence?* Candidates, cheapest first:
+
+1. **`signal_weights_by_regime`** — partitions an already-thin sample four ways
+   and reported `no_regime_with_signal` on 17 of 20 cycles. Strongest candidate
+   for removal; item 2.3 proposes a continuous macro feature as the replacement
+   if the regime split is genuinely wanted.
+2. **The three score nudges** — retire any that cannot be shown to help on a
+   one-at-a-time sweep. The execution-quality blend is the sharpest case: it
+   mixes an *execution* metric into a *selection* score, which is also why
+   `execution_quality.py` is flagged as decision-affecting above.
+3. **Pattern library `_apply_pattern_bias`** — already gated on the 2.2
+   significance audit; if <30% of patterns clear the bar, remove it.
+4. **Redundant gates** — item 3.4 (`rel60`/`rel20`, `trend_strength`/`momentum`).
+5. **Duplicate scorecard rows** — pure noise generation; see the duplication
+   entry under known limitations.
+
+**Why deferred:** every item is decision-affecting, and removing mechanisms
+mid-run destroys attribution exactly as adding them would.
+
+**Decision rule:** Run at the post-run review, *after* the OOS sign and
+duplication faults are fixed — otherwise the evidence used to judge each
+mechanism is itself unreliable. Bias toward removal: a mechanism that cannot be
+shown to help at this sample size is not neutral, it is unattributable noise
+plus surface area for the next fault to hide in.
 
 ---
 
