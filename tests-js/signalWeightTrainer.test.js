@@ -25,6 +25,8 @@ function buildRecord({
   excess5 = null,
   excess20 = null,
   intentId = "x",
+  actionType = "BUY",
+  reasonCode = null,
 }) {
   // When excess is not provided, mirror signed (back-compat).
   const e5 = excess5 === null ? signed5 : excess5;
@@ -32,7 +34,8 @@ function buildRecord({
   return {
     intent_id: intentId,
     timestamp: "2026-05-01T20:00:00.000Z",
-    action_type: "BUY",
+    action_type: actionType,
+    reason_code: reasonCode,
     signal_momentum_rank: momentum,
     signal_vol_rank: vol,
     signal_drawdown_rank: drawdown,
@@ -172,7 +175,7 @@ test("ridgeOls3: t-stats are large on strong signal, near zero on noise", () => 
   assert.ok(Math.abs(result.tStats[0]) > 5, `x1 t=${result.tStats[0]}`);
   assert.ok(
     Math.abs(result.tStats[1]) < Math.abs(result.tStats[0]),
-    `x2 t=${result.tStats[1]} not weaker than x1`,
+    `x2 t=${result.tStats[1]} not weaker than x1`
   );
 });
 
@@ -200,7 +203,7 @@ test("trainSignalWeights: insufficient_samples below minSamples", () => {
       drawdown: 0.5,
       signed5: 0.01,
       intentId: `r${i}`,
-    }),
+    })
   );
   const result = trainSignalWeights({ records, minSamples: 8 });
   assert.equal(result.updated, false);
@@ -246,7 +249,7 @@ test("trainSignalWeights: positive OLS coefficient raises corresponding weight",
   assert.ok(result.coefficients.momentum > 0);
   assert.ok(
     result.newWeights.momentum > result.oldWeights.momentum,
-    "momentum should increase given positive OLS coefficient",
+    "momentum should increase given positive OLS coefficient"
   );
 });
 
@@ -273,7 +276,7 @@ test("trainSignalWeights: negative OLS coefficient lowers corresponding weight",
   assert.ok(result.coefficients.vol < 0);
   assert.ok(
     result.newWeights.vol < result.oldWeights.vol,
-    "vol should decrease given negative OLS coefficient",
+    "vol should decrease given negative OLS coefficient"
   );
 });
 
@@ -300,10 +303,7 @@ test("trainSignalWeights: stepSize caps maximum delta on any weight", () => {
   // Largest possible delta on any weight = stepSize * 1 (normalized coef in [-1,1])
   for (const key of ["momentum", "vol", "drawdown"]) {
     const delta = Math.abs(result.newWeights[key] - result.oldWeights[key]);
-    assert.ok(
-      delta <= 0.05 + 1e-9,
-      `${key} delta=${delta} exceeded stepSize=0.05`,
-    );
+    assert.ok(delta <= 0.05 + 1e-9, `${key} delta=${delta} exceeded stepSize=0.05`);
   }
 });
 
@@ -353,7 +353,7 @@ test("trainSignalWeights: default target is excess_vs_benchmark (alpha)", () => 
   // Excess coefficient is negative → momentum weight DECREASES.
   assert.ok(
     result.newWeights.momentum < result.oldWeights.momentum,
-    `momentum should decrease (got ${result.newWeights.momentum} vs ${result.oldWeights.momentum})`,
+    `momentum should decrease (got ${result.newWeights.momentum} vs ${result.oldWeights.momentum})`
   );
 });
 
@@ -380,7 +380,7 @@ test("trainSignalWeights: honors target=signed_return override", () => {
   // Signed coefficient is positive → momentum weight INCREASES.
   assert.ok(
     result.newWeights.momentum > result.oldWeights.momentum,
-    "momentum should increase when signed_return target gives positive coef",
+    "momentum should increase when signed_return target gives positive coef"
   );
 });
 
@@ -407,14 +407,7 @@ test("trainSignalWeights: minMagnitude threshold blocks tiny updates", () => {
   assert.equal(result.diagnostics.maxAbsCoefficient !== undefined, true);
 });
 
-function buildRegimeRecord({
-  regime,
-  momentum,
-  vol,
-  drawdown,
-  excess5,
-  intentId,
-}) {
+function buildRegimeRecord({ regime, momentum, vol, drawdown, excess5, intentId }) {
   return {
     intent_id: intentId,
     timestamp: "2026-05-01T20:00:00.000Z",
@@ -443,7 +436,7 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
         drawdown: 0.5,
         excess5: m * 0.02,
         intentId: `calm-${i}`,
-      }),
+      })
     );
     records.push(
       buildRegimeRecord({
@@ -453,7 +446,7 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
         drawdown: 0.5,
         excess5: -m * 0.02,
         intentId: `watchful-${i}`,
-      }),
+      })
     );
   }
   const result = trainSignalWeightsByRegime({
@@ -466,13 +459,12 @@ test("trainSignalWeightsByRegime: groups records by regime and trains independen
   assert.equal(result.regimeOrder.includes("watchful"), true);
   // calm: momentum should INCREASE (positive coef)
   assert.ok(
-    result.byRegime.calm.newWeights.momentum >
-      result.byRegime.calm.oldWeights.momentum,
+    result.byRegime.calm.newWeights.momentum > result.byRegime.calm.oldWeights.momentum
   );
   // watchful: momentum should DECREASE (negative coef)
   assert.ok(
     result.byRegime.watchful.newWeights.momentum <
-      result.byRegime.watchful.oldWeights.momentum,
+      result.byRegime.watchful.oldWeights.momentum
   );
 });
 
@@ -505,7 +497,7 @@ test("trainSignalWeightsByRegime: uses existing regime weights as starting point
       drawdown: 0.5,
       excess5: (0.1 + i * 0.075) * 0.02,
       intentId: `r${i}`,
-    }),
+    })
   );
   const result = trainSignalWeightsByRegime({
     records,
@@ -534,7 +526,7 @@ test("trainSignalWeightsByRegime: respects the regimes whitelist parameter", () 
         drawdown: 0.5,
         excess5: 0.01,
         intentId: `c${i}`,
-      }),
+      })
     ),
     ...Array.from({ length: 10 }, (_, i) =>
       buildRegimeRecord({
@@ -544,7 +536,7 @@ test("trainSignalWeightsByRegime: respects the regimes whitelist parameter", () 
         drawdown: 0.5,
         excess5: 0.01,
         intentId: `s${i}`,
-      }),
+      })
     ),
   ];
   const result = trainSignalWeightsByRegime({
@@ -572,7 +564,7 @@ test("trainSignalWeights: minTStat blocks weight updates on insignificant signal
       signed5: (rand() - 0.5) * 0.001, // pure noise target
       excess5: (rand() - 0.5) * 0.001,
       intentId: `r${i}`,
-    }),
+    })
   );
   const result = trainSignalWeights({
     records,
@@ -586,7 +578,7 @@ test("trainSignalWeights: minTStat blocks weight updates on insignificant signal
   assert.ok(
     result.reason === "no_significant_t_stat" ||
       result.reason === "no_significant_signal",
-    `unexpected reason ${result.reason}`,
+    `unexpected reason ${result.reason}`
   );
   assert.ok(result.tStats !== null);
 });
@@ -607,7 +599,7 @@ test("trainSignalWeights: minTStat=0 disables significance gating", () => {
       signed5: (rand() - 0.5) * 0.001,
       excess5: (rand() - 0.5) * 0.001,
       intentId: `r${i}`,
-    }),
+    })
   );
   const result = trainSignalWeights({
     records,
@@ -673,4 +665,114 @@ test("trainSignalWeights: result includes Pearson correlations as diagnostics", 
   assert.ok(typeof result.correlations.momentum === "number");
   // Momentum strongly correlated with target → r close to 1.
   assert.ok(result.correlations.momentum > 0.9);
+});
+// --- population selection -------------------------------------------------
+// Live scorecards are ~73% NO_ACTION/BUY_BLOCKED and also contain SELL rows.
+// Every fixture above is a clean BUY-only population, which is precisely why
+// an unfiltered regression went unnoticed. These model production instead.
+
+function trainOver(records) {
+  return trainSignalWeights({
+    records,
+    currentSignalWeights: { momentum: 1.0, vol: 0.4, drawdown: 0.4 },
+    horizon: 5,
+    minSamples: 2,
+    minTStat: 0,
+    minMagnitude: 0,
+  });
+}
+
+test("extractSamples excludes SELL rows from the buy-signal regression", () => {
+  const { extractSamples } = _internals;
+  const records = [
+    buildRecord({ momentum: 0.9, vol: 0.5, drawdown: 0.5, signed5: 0.02 }),
+    buildRecord({
+      momentum: 0.1,
+      vol: 0.5,
+      drawdown: 0.5,
+      signed5: -0.04,
+      actionType: "SELL",
+      reasonCode: "ROTATION_SELL",
+    }),
+  ];
+  const out = extractSamples(records, 5, "excess_vs_benchmark");
+  assert.equal(out.sampleCount, 1, "SELL row must not enter the regression");
+  assert.equal(out.skippedNonBuy, 1);
+});
+
+test("extractSamples KEEPS declined buys un-flipped", () => {
+  // BUY and NO_ACTION/BUY_* both carry direction=+1 in cli.py, so both equal
+  // (sym_ret - bench_ret). The trainer learns which features predict a
+  // forward return for the symbol, so the two populations are directly
+  // comparable and must NOT be negated. Negating here would be the mirror of
+  // the OOS bug fixed in #115, which measures decision quality instead.
+  const { extractSamples } = _internals;
+  const records = [
+    buildRecord({ momentum: 0.9, vol: 0.5, drawdown: 0.5, signed5: 0.02 }),
+    buildRecord({
+      momentum: 0.8,
+      vol: 0.5,
+      drawdown: 0.5,
+      signed5: 0.03,
+      actionType: "NO_ACTION",
+      reasonCode: "BUY_BLOCKED",
+    }),
+  ];
+  const out = extractSamples(records, 5, "excess_vs_benchmark");
+  assert.equal(out.sampleCount, 2, "declined buys are valid training rows");
+  assert.equal(out.skippedNonBuy, 0);
+  assert.deepEqual(
+    out.targets.slice().sort((a, b) => a - b),
+    [0.02, 0.03],
+    "targets must keep their original sign",
+  );
+});
+
+test("extractSamples excludes NO_ACTION rows with a non-buy reason", () => {
+  // Those carry direction=0, so excess collapses to -bench_ret: pure noise.
+  const { extractSamples } = _internals;
+  const records = [
+    buildRecord({ momentum: 0.9, vol: 0.5, drawdown: 0.5, signed5: 0.02 }),
+    buildRecord({
+      momentum: 0.2,
+      vol: 0.5,
+      drawdown: 0.5,
+      signed5: -0.01,
+      actionType: "NO_ACTION",
+      reasonCode: "NO_SIGNAL",
+    }),
+  ];
+  const out = extractSamples(records, 5, "excess_vs_benchmark");
+  assert.equal(out.sampleCount, 1);
+  assert.equal(out.skippedNonBuy, 1);
+});
+
+test("a contaminating SELL row no longer moves the fitted weights", () => {
+  const clean = [
+    buildRecord({ momentum: 0.9, vol: 0.2, drawdown: 0.2, signed5: 0.03 }),
+    buildRecord({ momentum: 0.7, vol: 0.4, drawdown: 0.4, signed5: 0.02 }),
+    buildRecord({ momentum: 0.3, vol: 0.6, drawdown: 0.6, signed5: -0.01 }),
+    buildRecord({ momentum: 0.1, vol: 0.8, drawdown: 0.8, signed5: -0.02 }),
+  ];
+  // One SELL row carrying a large-magnitude inverted target, matching what
+  // live data showed: SELL mean -3.72% against -0.65% / -0.90% for the valid
+  // populations, so 3 of 22 rows exerted outsized leverage on the fit.
+  const contaminated = clean.concat(
+    buildRecord({
+      momentum: 0.95,
+      vol: 0.1,
+      drawdown: 0.1,
+      signed5: -0.0372,
+      actionType: "SELL",
+      reasonCode: "ROTATION_SELL",
+    }),
+  );
+
+  const a = trainOver(clean);
+  const b = trainOver(contaminated);
+  assert.deepEqual(
+    b.coefficients,
+    a.coefficients,
+    "SELL row must have no influence on the fit",
+  );
 });

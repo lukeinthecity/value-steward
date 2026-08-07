@@ -30,6 +30,8 @@
  * can sanity-check what the regression is responding to.
  */
 
+import { isBuyRelatedRecord } from "./scorecardSemantics.js";
+
 const VALID_TARGETS = new Set(["excess_vs_benchmark", "signed_return"]);
 
 const FEATURES = [
@@ -94,21 +96,9 @@ function invert3x3(m, epsilon = 1e-12) {
   if (!Number.isFinite(det) || Math.abs(det) < epsilon) return null;
   const invDet = 1 / det;
   return [
-    [
-      (e * i - f * h) * invDet,
-      (c * h - b * i) * invDet,
-      (b * f - c * e) * invDet,
-    ],
-    [
-      (f * g - d * i) * invDet,
-      (a * i - c * g) * invDet,
-      (c * d - a * f) * invDet,
-    ],
-    [
-      (d * h - e * g) * invDet,
-      (b * g - a * h) * invDet,
-      (a * e - b * d) * invDet,
-    ],
+    [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
+    [(f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet],
+    [(d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet],
   ];
 }
 
@@ -213,8 +203,22 @@ function extractSamples(records, horizon, targetKey) {
   const targets = [];
   let skippedMissingFeature = 0;
   let skippedMissingReturn = 0;
+  let skippedNonBuy = 0;
 
   for (const record of records) {
+    // Only rows whose target is "what did this symbol do next" belong in a
+    // buy-signal regression. `cli.py` assigns direction = +1 to both BUY/MULTI
+    // and NO_ACTION/BUY_* rows, so both equal (sym_ret - bench_ret) and are
+    // directly comparable — no sign flip is needed here, unlike the OOS
+    // evaluator, which measures decision quality rather than symbol behavior.
+    //
+    // SELL rows carry direction = -1 and NO_ACTION rows with other reasons
+    // carry direction = 0 (target collapses to -bench_ret). Both describe a
+    // different quantity and would fit the regression against noise.
+    if (!isBuyRelatedRecord(record)) {
+      skippedNonBuy += 1;
+      continue;
+    }
     const horizonData = record?.horizons?.[key];
     const targetValue = horizonData?.[targetKey];
     if (!isFiniteNumber(targetValue)) {
@@ -236,6 +240,7 @@ function extractSamples(records, horizon, targetKey) {
     sampleCount: targets.length,
     skippedMissingFeature,
     skippedMissingReturn,
+    skippedNonBuy,
   };
 }
 
@@ -260,6 +265,7 @@ function buildDiagnostics({
   lambda,
   skippedMissingFeature,
   skippedMissingReturn,
+  skippedNonBuy = 0,
   extras = {},
 }) {
   return {
@@ -269,6 +275,7 @@ function buildDiagnostics({
     ridgeLambda: lambda,
     skippedMissingFeature,
     skippedMissingReturn,
+    skippedNonBuy,
     ...extras,
   };
 }
@@ -308,13 +315,9 @@ export function trainSignalWeights({
   target = "excess_vs_benchmark",
 } = {}) {
   const oldWeights = resolveCurrentWeights(currentSignalWeights);
-  const resolvedTarget = VALID_TARGETS.has(target)
-    ? target
-    : "excess_vs_benchmark";
+  const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
   const lambda =
-    isFiniteNumber(ridgeLambda) && ridgeLambda >= 0
-      ? ridgeLambda
-      : DEFAULT_RIDGE_LAMBDA;
+    isFiniteNumber(ridgeLambda) && ridgeLambda >= 0 ? ridgeLambda : DEFAULT_RIDGE_LAMBDA;
 
   if (!Array.isArray(records) || records.length === 0) {
     return {
@@ -344,6 +347,7 @@ export function trainSignalWeights({
     sampleCount,
     skippedMissingFeature,
     skippedMissingReturn,
+    skippedNonBuy,
   } = extractSamples(records, horizon, resolvedTarget);
 
   if (sampleCount < minSamples) {
@@ -364,6 +368,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
       }),
     };
   }
@@ -394,6 +399,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
       }),
     };
   }
@@ -426,6 +432,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
         extras: { maxAbsCoefficient: maxAbs },
       }),
     };
@@ -452,11 +459,7 @@ export function trainSignalWeights({
       return;
     }
     const delta = stepSize * normalized[idx];
-    const updated = clamp(
-      oldWeights[policyKey] + delta,
-      WEIGHT_MIN,
-      WEIGHT_MAX,
-    );
+    const updated = clamp(oldWeights[policyKey] + delta, WEIGHT_MIN, WEIGHT_MAX);
     if (updated !== oldWeights[policyKey]) {
       newWeights[policyKey] = updated;
       anyUpdate = true;
@@ -485,6 +488,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
         extras: { minTStat, skippedTStat },
       }),
     };
