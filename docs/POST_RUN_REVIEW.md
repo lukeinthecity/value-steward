@@ -154,6 +154,7 @@ several of these are conditional and may not have fired.
 | 13 | Gate redundancy pruning (3.4) | Always — compute the gate-correlation matrix (`rel60`/`rel20`, `trend_strength`/`momentum_rank`); drop any gate with <5% incremental rejection over its neighbor | ML_BACKLOG 3.4 |
 | 14 | Guardian LLM-digest path (`WORLD_LLM_CMD`) | Only if a specific case surfaces where the rule-based keyword scorer *and* Scout both missed a real regime shift — see chat discussion 2026-07-22 | Not yet in ML_BACKLOG; add there if revisited |
 | 15 | Platform feature parity (short selling, German equities, index options) | Always — pick at most one new asset class to prototype for Run 4, lowest-lift first (German equities < short selling < options); re-check Alpaca's blog for what's shipped since, this list goes stale fast | ML_BACKLOG 3.5 |
+| 16 | User-directed thesis testing (LLM-mediated) | Only after 2.2 (pattern significance audit) and 2.6 (tag-correlation report) land — build as a **universe constructor** (thesis-restricted vs unrestricted excess return, a Layer 1 comparison), not as a signal; check any positive result against the Ben-David et al. thematic-ETF prior before believing it | ML_BACKLOG 3.6 |
 
 Not on this list: **3.3 transaction cost modeling** and **3.2 walk-forward
 backtest** — both have their own decision rules independent of the Day-60
@@ -227,3 +228,14 @@ changes are *expected*, not a violation of run discipline.
   parity) after reviewing Alpaca's blog/changelog for what's shipped since
   Phase 1 began: hard-to-borrow short selling, German equities (Xetra),
   and index options paper trading.
+- **2026-08-06** — Added item 16 (`ML_BACKLOG.md` 3.6, user-directed
+  thesis testing) from a Day-19 check-in conversation: the user wants to
+  state a market thesis in plain language and have it tested against
+  real data, largely for the educational value of seeing how a thesis
+  holds up against evidence. Scoped as an extension of the existing
+  pattern-library / tag-correlation machinery (2.2, 2.6), not a new
+  decision-affecting signal. Enriched the same day with the
+  universe-constructor formulation (thesis picks the universe, existing
+  price machinery picks entries) — the version that is actually
+  falsifiable at this system's horizons — plus the thematic-ETF
+  underperformance prior any positive result has to clear.
