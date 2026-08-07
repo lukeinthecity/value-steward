@@ -12,24 +12,37 @@
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
-| Phase 1 RUN | **BETWEEN RUNS.** Run 3 halted 2026-08-07 at Day ~21; Run 4 starts 2026-08-10. |
-| Trading state | ⛔ **`trading_enabled=false`** (`npm run controls:disable`, reason `manual_disable`). Positions liquidated 2026-08-07 — **account is flat**. |
-| Why Run 3 stopped | The rolling OOS metric scored most of its population backwards (fixed in #115), and champion-challenger had been promoting/reverting weights on that number — so the live policy was mutating on a broken reading. Freezing the learning would have left nothing worth running, so the run was ended. Raw scorecard rows stay valid and re-read correctly under the fix. |
-| Run 4 Day 1 | **2026-08-10 (Monday)** — a frozen clean baseline; see `ML_BACKLOG.md` run history for the full flag table |
-| Capital cap | `$2,000` deployed max, `$500` per-trade max, `$100` per-trade min, **two-way (cap_breach_sell active)** |
-| Equity (last seen) | ~$100,032 paper (2026-08-07, pre-liquidation; ~$1,567 was deployed in SRHQ + $0.29 KCCA dust) |
+| Phase 1 RUN | 🏁 **RETIRED FROM TRADING 2026-08-07**, after runs 1–3. Run 3 was halted at Day ~21; **Run 4 was cancelled, not started.** |
+| Trading state | ⛔ **Permanently halted.** `trading_enabled=false` **and** `force_no_trade=true`, and the trading cron jobs are removed. Positions liquidated 2026-08-07 — account is flat. |
+| Successor | **Value Steward 2** — `/home/lukes/value-steward-2`, `github.com/lukeinthecity/value-steward-2`. A 50-day moving-average crossover and nothing else. It **inherits this Alpaca paper account** (0 positions, $100,023.49 at handover). |
+| Why Run 3 stopped | The rolling OOS metric scored most of its population backwards (fixed in #115), and champion-challenger had been promoting/reverting weights on that number — so the live policy was mutating on a broken reading. Raw scorecard rows stay valid and re-read correctly under the fix. |
+| Why Run 4 was cancelled | It would have spent 60 trading days generating data from an instrument already judged untrustworthy. The frozen-baseline config was sound, but a clean read from code you have stopped trusting is still a read you will not act on. |
+| Equity, final | **$100,023.49** paper, all cash. Net **+$23.49** on $100,000 across three runs and fourteen months. |
 
-**Before Run 4 Day 1** — see the plan in `docs/ML_BACKLOG.md` (run history) and
-`docs/POST_RUN_REVIEW.md`:
-1. Config freeze in `.env` (all learning off, three score nudges to 0, universe uncapped).
-2. **Time one uncapped tick first** — removing the accidental 200-symbol cap is
-   a 15–25× increase in market-data calls; if runtime approaches the 5-minute
-   cadence, fall back to an explicit intermediate cap rather than back to 200.
-3. Hand-reset `risk_level` to `0.2` (`phase:reset` preserves it; it has drifted
-   to 0.20013…).
-4. `npm run phase:reset -- --label run4 --start-date 2026-08-10 --execute`
-   (dry-run first; **not** during a cron window).
-5. `npm run controls:enable` — the reset does not re-arm trading.
+⚠️ **Exactly one system may trade this account.** Both VS1 and VS2 read
+positions from the broker rather than from their own ledger
+(`src/valuesteward/data/alpaca_client.py:128`, `get_all_positions()`), so
+re-arming VS1 while VS2 is live would have VS1's vol-stop selling VS2's holdings
+and VS1's `risk_exposure_pct` reading the account as fully deployed. If VS1 is
+ever restarted, give it a **separate Alpaca paper account** — Alpaca supports
+several per login, each with its own keys.
+
+## What still runs
+
+The world-context pipeline only — `world:run` and `world:health:scheduled`. It
+contacts no broker, and its context and hydrated-item history is the dataset VS2
+needs for the world-state gating it has deferred. The crontab went from 18 jobs
+to 4; the previous one is saved at
+`/home/lukes/crontab-vs1-backup-20260807.txt`.
+
+**The crontab now pins `PATH` to Node 24.** `/usr/bin/node` is v20.20.0, and
+`jsdom@30` depends on `undici@8`, which requires `node >=22.19.0`. Without the
+pin, `world:hydrate` throws `webidl.util.markAsUncloneable is not a function`,
+and because `world:run` chains with `&&`, `world:build` and `world:rotate` never
+execute — so the context history silently stops growing while `world:fetch`
+keeps appending to the inbox. This ran undetected from 2026-08-06 15:26 until it
+was found on 2026-08-07; the visible symptom was only a stale
+`data/world-context.jsonl`.
 
 ## Phase 1 Run 1 archive
 

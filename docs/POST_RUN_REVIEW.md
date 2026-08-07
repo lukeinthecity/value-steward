@@ -1,5 +1,13 @@
 # Post-Run Review — Phase 1 Rubric
 
+> 🏁 **Never executed.** Value Steward was retired from trading on 2026-08-07,
+> before any run reached Day 60. Runs 1–3 all ended early — for a structural
+> change, and then twice for measurement faults — so this rubric was never
+> applied to a completed run. The verdict-criteria discipline it describes
+> (fixing the noise floor before looking at results, deciding what would count
+> as success before the data exists) carries forward to Value Steward 2. See
+> `SESSION_BRIEF.md`.
+
 **Status:** Living reference document. Created 2026-07-22, before Run 3's
 end date, specifically so the verdict criteria are locked in *before* the
 data that will be judged against them exists. Update this document as the
