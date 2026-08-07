@@ -126,7 +126,10 @@ function loadMarketHolidays() {
   if (_holidayCache !== null) return _holidayCache;
   _holidayCache = new Set();
   try {
-    const raw = fs.readFileSync(path.join(ROOT, "data", "market-holidays.json"), "utf8");
+    const raw = fs.readFileSync(
+      path.join(ROOT, "data", "market-holidays.json"),
+      "utf8",
+    );
     const parsed = JSON.parse(raw);
     const list = Array.isArray(parsed?.holidays) ? parsed.holidays : [];
     for (const h of list) {
@@ -152,7 +155,7 @@ function listMissedTradingDays(phase1Start, today) {
   // phase1Start and today that have no training-log entry.
   const trainingEntries = readJsonlTail(
     path.join(ROOT, "data", "training-log.jsonl"),
-    500
+    500,
   );
   const ranDays = new Set();
   for (const entry of trainingEntries) {
@@ -176,18 +179,30 @@ function collectSnapshot() {
 
   const state = readJsonSafe(path.join(ROOT, "data", "steward-state.json"), {});
   const policy = readJsonSafe(path.join(ROOT, "config", "policy.json"), {});
-  const portfolio = readJsonSafe(path.join(ROOT, "data", "portfolio-live.json"), null);
-  const latestTick = readJsonSafe(path.join(ROOT, "data", "latest-tick.json"), null);
+  const portfolio = readJsonSafe(
+    path.join(ROOT, "data", "portfolio-live.json"),
+    null,
+  );
+  const latestTick = readJsonSafe(
+    path.join(ROOT, "data", "latest-tick.json"),
+    null,
+  );
 
   const trainingEntries = readJsonlTail(
     path.join(ROOT, "data", "training-log.jsonl"),
-    25
+    25,
   );
-  const oosEntries = readJsonlTail(path.join(ROOT, "data", "oos-eval.jsonl"), 10);
-  const intentEntries = readJsonlTail(path.join(ROOT, "logs", "intent_log.jsonl"), 25);
+  const oosEntries = readJsonlTail(
+    path.join(ROOT, "data", "oos-eval.jsonl"),
+    10,
+  );
+  const intentEntries = readJsonlTail(
+    path.join(ROOT, "logs", "intent_log.jsonl"),
+    25,
+  );
   const fillsToday = summarizeFillAttempts(
     readJsonlTail(path.join(ROOT, "logs", "intent_outcomes.jsonl"), 300),
-    today
+    today,
   );
 
   const pulseFiles = {
@@ -205,7 +220,9 @@ function collectSnapshot() {
   }
 
   const phase1Start = state.phase1_start_date || null;
-  const missedDays = phase1Start ? listMissedTradingDays(phase1Start, today) : [];
+  const missedDays = phase1Start
+    ? listMissedTradingDays(phase1Start, today)
+    : [];
 
   // Phase 1 day count (trading days since start, inclusive — excludes
   // weekends AND market holidays so the count matches actual run progress).
@@ -220,9 +237,15 @@ function collectSnapshot() {
     phase1Day = count;
   }
 
-  const emailHealth = readJsonSafe(path.join(ROOT, "data", "email-health.json"), {});
+  const emailHealth = readJsonSafe(
+    path.join(ROOT, "data", "email-health.json"),
+    {},
+  );
 
-  const pushHealth = readJsonSafe(path.join(ROOT, "data", "push-health.json"), {});
+  const pushHealth = readJsonSafe(
+    path.join(ROOT, "data", "push-health.json"),
+    {},
+  );
 
   return {
     generatedAt: now.toISOString(),
@@ -257,11 +280,13 @@ function renderHuman(snap) {
   lines.push(`Generated:         ${snap.exchangeNow} ET`);
   lines.push(`Exchange date:     ${snap.today} (${snap.todayName})`);
   if (snap.phase1Day && snap.phase1Start) {
-    lines.push(`Phase 1:           Day ${snap.phase1Day} (started ${snap.phase1Start})`);
+    lines.push(
+      `Phase 1:           Day ${snap.phase1Day} (started ${snap.phase1Start})`,
+    );
   }
   if (snap.missedDays.length) {
     lines.push(
-      `Missed days:       ${snap.missedDays.length} — ${snap.missedDays.join(", ")}`
+      `Missed days:       ${snap.missedDays.length} — ${snap.missedDays.join(", ")}`,
     );
   }
   lines.push("");
@@ -313,7 +338,7 @@ function renderHuman(snap) {
     for (const t of trades) {
       const ts = (t.timestamp || "").slice(0, 19);
       lines.push(
-        `  ${ts}  ${(t.action_type ?? "?").padEnd(5)}  ${(t.symbol ?? "-").padEnd(6)}  ${t.reason_code ?? ""}`
+        `  ${ts}  ${(t.action_type ?? "?").padEnd(5)}  ${(t.symbol ?? "-").padEnd(6)}  ${t.reason_code ?? ""}`,
       );
     }
   }
@@ -323,7 +348,9 @@ function renderHuman(snap) {
   if (!snap.fillsToday?.attempts) {
     lines.push("  (no reconciled attempts today)");
   } else {
-    lines.push(`  total: ${snap.fillsToday.fills}/${snap.fillsToday.attempts} filled`);
+    lines.push(
+      `  total: ${snap.fillsToday.fills}/${snap.fillsToday.attempts} filled`,
+    );
     for (const [sym, s] of Object.entries(snap.fillsToday.bySymbol)) {
       lines.push(`  ${sym}: ${s.attempts} attempts, ${s.fills} filled`);
     }
@@ -332,7 +359,10 @@ function renderHuman(snap) {
 
   lines.push("Recent Blocks (last 5 BUY_BLOCKED):");
   const blocks = snap.intentEntries
-    .filter((e) => e?.action_type === "NO_ACTION" && /^BUY_/.test(e?.reason_code || ""))
+    .filter(
+      (e) =>
+        e?.action_type === "NO_ACTION" && /^BUY_/.test(e?.reason_code || ""),
+    )
     .slice(-5);
   if (blocks.length === 0) {
     lines.push("  (none in window)");
@@ -362,7 +392,7 @@ function renderHuman(snap) {
       typeof rolling.sharpe === "number" ? rolling.sharpe.toFixed(3) : "null";
     lines.push(
       `  ${ts}  pv=${(e.policyVersion ?? "?").toString().padStart(3)}  ` +
-        `rolling_n=${(rolling.sampleCount ?? 0).toString().padStart(3)}  sharpe=${sharpe}`
+        `rolling_n=${(rolling.sampleCount ?? 0).toString().padStart(3)}  sharpe=${sharpe}`,
     );
   }
   if (snap.oosEntries.length === 0) lines.push("  (no entries)");
@@ -432,10 +462,10 @@ function renderHuman(snap) {
 function renderJsonl(snap) {
   // Compact one-line snapshot for the historical runtime.log.
   const trades = snap.intentEntries.filter((e) =>
-    ["BUY", "SELL", "MULTI"].includes(String(e?.action_type))
+    ["BUY", "SELL", "MULTI"].includes(String(e?.action_type)),
   );
   const blocks = snap.intentEntries.filter(
-    (e) => e?.action_type === "NO_ACTION" && /^BUY_/.test(e?.reason_code || "")
+    (e) => e?.action_type === "NO_ACTION" && /^BUY_/.test(e?.reason_code || ""),
   );
   const lastTraining = snap.trainingEntries.at(-1) || null;
   const lastOos = snap.oosEntries.at(-1) || null;
@@ -445,7 +475,9 @@ function renderJsonl(snap) {
     today: snap.today,
     phase1Day: snap.phase1Day,
     missedDays: snap.missedDays,
-    pulse: Object.fromEntries(Object.entries(snap.pulse).map(([k, v]) => [k, v.ran])),
+    pulse: Object.fromEntries(
+      Object.entries(snap.pulse).map(([k, v]) => [k, v.ran]),
+    ),
     operational: {
       mode: snap.state.current_mode ?? null,
       trading_enabled: snap.state.trading_enabled ?? null,
@@ -459,12 +491,17 @@ function renderJsonl(snap) {
     },
     lastTrainingAt: lastTraining?.ranAt ?? null,
     lastOosRollingSharpe:
-      typeof lastOos?.rolling?.sharpe === "number" ? lastOos.rolling.sharpe : null,
+      typeof lastOos?.rolling?.sharpe === "number"
+        ? lastOos.rolling.sharpe
+        : null,
     emailHealth: Object.fromEntries(
-      Object.entries(snap.emailHealth || {}).map(([k, v]) => [k, v?.last_outcome ?? null])
+      Object.entries(snap.emailHealth || {}).map(([k, v]) => [
+        k,
+        v?.last_outcome ?? null,
+      ]),
     ),
     emailAnyError: Object.values(snap.emailHealth || {}).some(
-      (v) => v?.last_outcome === "error"
+      (v) => v?.last_outcome === "error",
     ),
   };
   return JSON.stringify(compact);
@@ -477,7 +514,8 @@ function parseArgs(argv) {
     else if (a === "--append") args.append = true;
     else if (a.startsWith("--watch=")) {
       const n = Number(a.slice("--watch=".length));
-      if (Number.isFinite(n) && n > 0) args.watchSeconds = Math.max(1, Math.floor(n));
+      if (Number.isFinite(n) && n > 0)
+        args.watchSeconds = Math.max(1, Math.floor(n));
     } else if (a === "--watch") {
       args.watchSeconds = 10; // default refresh cadence
     }
@@ -535,7 +573,8 @@ export function runRuntimeStatus(argv = process.argv.slice(2)) {
 }
 
 const isDirectExecution =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirectExecution) {
   runRuntimeStatus();

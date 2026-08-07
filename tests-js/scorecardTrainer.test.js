@@ -16,7 +16,7 @@ function writeJsonl(filePath, entries) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
     filePath,
-    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n"
+    entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
   );
 }
 
@@ -57,7 +57,9 @@ async function importScorecardTrainer() {
 
 test("scorecard trainer updates from buy rows without dilution from no-action rows", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-trainer-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-trainer-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -100,12 +102,17 @@ test("scorecard trainer updates from buy rows without dilution from no-action ro
   assert.equal(result.reason, "scorecard_update");
   assert.equal(result.scorecardSummary.training.sampleCount, 1);
   assert.equal(result.scorecardSummary.noAction.sampleCount, 1);
-  assert.equal(result.scorecardSummary.training.horizons["5"].avgExcessBenchmark, 0.02);
+  assert.equal(
+    result.scorecardSummary.training.horizons["5"].avgExcessBenchmark,
+    0.02,
+  );
 });
 
 test("scorecard trainer ignores no-action rows that lack a trainable reason_code", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-buy-samples-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-buy-samples-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -154,7 +161,9 @@ test("scorecard trainer ignores no-action rows that lack a trainable reason_code
 
 test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async (t) => {
   const prevCwd = process.cwd();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vs-scorecard-counterfactual-"));
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "vs-scorecard-counterfactual-"),
+  );
   process.chdir(tmpDir);
 
   t.after(() => {
@@ -202,22 +211,26 @@ test("scorecard trainer includes BUY_BLOCKED counterfactuals in training", async
     force: true,
   });
 
-  assert.equal(result.updated, true, "counterfactuals should drive a policy update");
+  assert.equal(
+    result.updated,
+    true,
+    "counterfactuals should drive a policy update",
+  );
   assert.equal(result.reason, "scorecard_update");
   assert.equal(
     result.scorecardSummary.training.sampleCount,
     2,
-    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row"
+    "only BUY_BLOCKED rows should be in training, not the NO_SIGNAL row",
   );
   assert.equal(
     result.scorecardSummary.buyBlockedCounterfactual.sampleCount,
     2,
-    "buyBlockedCounterfactual summary should show 2 rows"
+    "buyBlockedCounterfactual summary should show 2 rows",
   );
   // Positive avgExcessBenchmark on counterfactuals → trainer raises risk
   assert.ok(
     result.newRisk > result.oldRisk,
-    "positive counterfactual excess return should raise risk_level"
+    "positive counterfactual excess return should raise risk_level",
   );
 });
 
@@ -297,7 +310,7 @@ test("loadScorecardRecords collapses per-slot replicas by default", async (t) =>
       actionType: "NO_ACTION",
       reasonCode: "BUY_BLOCKED",
       excess5: -0.01,
-    })
+    }),
   );
 
   const { loadScorecardRecords } = await importScorecardTrainer();
@@ -305,7 +318,7 @@ test("loadScorecardRecords collapses per-slot replicas by default", async (t) =>
   assert.equal(
     loadScorecardRecords(undefined, { dedupe: false }).length,
     4,
-    "escape hatch still returns every attempt"
+    "escape hatch still returns every attempt",
   );
 });
 
@@ -325,7 +338,7 @@ test("dedupe restores the minSamples floor to real decisions", async (t) => {
   // evidence could clear a minSamples floor of 2 or 4.
   writeJsonl(
     path.join("data", "signal-scorecard.jsonl"),
-    replicaRows({ symbol: "CBK", actionType: "BUY", excess5: 0.02 })
+    replicaRows({ symbol: "CBK", actionType: "BUY", excess5: 0.02 }),
   );
 
   const { loadScorecardRecords } = await importScorecardTrainer();

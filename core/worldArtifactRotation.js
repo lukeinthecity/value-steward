@@ -41,7 +41,7 @@ function envInt(name, fallback) {
  */
 export function rotateJsonlByAge(
   entries,
-  { retainDays, now = new Date(), tsField = "ts" } = {}
+  { retainDays, now = new Date(), tsField = "ts" } = {},
 ) {
   const cutoffMs = now.getTime() - retainDays * 86400000;
   const kept = [];
@@ -62,7 +62,11 @@ export function rotateJsonlByAge(
  * data/archive/<name>-YYYYMMDD.jsonl, then atomically rewrite the working
  * file with only the kept entries.
  */
-export function rotateWorldArtifact({ fileName, retainDays, now = new Date() }) {
+export function rotateWorldArtifact({
+  fileName,
+  retainDays,
+  now = new Date(),
+}) {
   if (!ROTATABLE_FILES.has(fileName)) {
     throw new Error(`Refusing to rotate non-allowlisted artifact: ${fileName}`);
   }
@@ -82,7 +86,7 @@ export function rotateWorldArtifact({ fileName, retainDays, now = new Date() }) 
     process.cwd(),
     "data",
     "archive",
-    `${fileName.replace(/\.jsonl$/, "")}-${stamp}.jsonl`
+    `${fileName.replace(/\.jsonl$/, "")}-${stamp}.jsonl`,
   );
   // Append (not overwrite) so multiple rotations on one day accumulate.
   for (const entry of trimmed) {
@@ -102,10 +106,13 @@ export function rotateWorldArtifact({ fileName, retainDays, now = new Date() }) 
  * (WORLD_INBOX_RETAIN_DAYS / WORLD_HYDRATED_RETAIN_DAYS).
  */
 export function runWorldArtifactRotation({ now = new Date() } = {}) {
-  const inboxDays = envInt("WORLD_INBOX_RETAIN_DAYS", DEFAULT_INBOX_RETAIN_DAYS);
+  const inboxDays = envInt(
+    "WORLD_INBOX_RETAIN_DAYS",
+    DEFAULT_INBOX_RETAIN_DAYS,
+  );
   const hydratedDays = Math.max(
     envInt("WORLD_HYDRATED_RETAIN_DAYS", DEFAULT_HYDRATED_RETAIN_DAYS),
-    inboxDays
+    inboxDays,
   );
   return [
     rotateWorldArtifact({

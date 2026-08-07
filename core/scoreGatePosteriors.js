@@ -54,7 +54,9 @@ export function buildScoreGatePosteriors({
   let skippedNoTarget = 0;
   let skippedNoSymbol = 0;
   let skippedNonBuy = 0;
-  const resolvedTarget = VALID_TARGETS.has(target) ? target : "excess_vs_benchmark";
+  const resolvedTarget = VALID_TARGETS.has(target)
+    ? target
+    : "excess_vs_benchmark";
 
   if (!Array.isArray(records)) {
     return {

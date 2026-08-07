@@ -5,8 +5,14 @@ import { filterPhase1Records } from "./phase1Window.js";
 import { normalizePolicySnapshot } from "./policySnapshot.js";
 import { trainPolicyWithMetrics } from "./deepTrainer.js";
 import { appendJsonlLineSync, writeJsonAtomic } from "./runtimeArtifacts.js";
-import { loadScorecardRecords, trainPolicyWithScorecard } from "./scorecardTrainer.js";
-import { trainSignalWeights, trainSignalWeightsByRegime } from "./signalWeightTrainer.js";
+import {
+  loadScorecardRecords,
+  trainPolicyWithScorecard,
+} from "./scorecardTrainer.js";
+import {
+  trainSignalWeights,
+  trainSignalWeightsByRegime,
+} from "./signalWeightTrainer.js";
 import { buildScoreGatePosteriors } from "./scoreGatePosteriors.js";
 import { evaluateOos } from "./oosEvaluator.js";
 import { evaluateChampionChallenger } from "./championChallenger.js";
@@ -14,8 +20,16 @@ import { getExchangeDateString } from "./timeUtils.js";
 
 const POLICY_PATH = path.join(process.cwd(), "config", "policy.json");
 const HISTORY_PATH = path.join(process.cwd(), "data", "history.jsonl");
-const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
-const TRAINING_LOG_PATH = path.join(process.cwd(), "data", "training-log.jsonl");
+const SCORECARD_PATH = path.join(
+  process.cwd(),
+  "data",
+  "signal-scorecard.jsonl",
+);
+const TRAINING_LOG_PATH = path.join(
+  process.cwd(),
+  "data",
+  "training-log.jsonl",
+);
 const OOS_EVAL_PATH = path.join(process.cwd(), "data", "oos-eval.jsonl");
 
 function loadPolicy() {
@@ -44,7 +58,10 @@ function appendTrainingLog(entry) {
 
 function loadLatestTrainingEntryBySource(source) {
   if (!fs.existsSync(TRAINING_LOG_PATH)) return null;
-  const lines = fs.readFileSync(TRAINING_LOG_PATH, "utf8").split("\n").filter(Boolean);
+  const lines = fs
+    .readFileSync(TRAINING_LOG_PATH, "utf8")
+    .split("\n")
+    .filter(Boolean);
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
       const entry = JSON.parse(lines[index]);
@@ -102,7 +119,7 @@ function maybeRunOosAndChampionChallenger({
   preChainVersion = null,
 }) {
   const enabled = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase()
+    String(process.env.VS_OOS_EVAL_ENABLED ?? "true").toLowerCase(),
   );
   if (!enabled) return baselinePolicy;
 
@@ -127,7 +144,7 @@ function maybeRunOosAndChampionChallenger({
   // Champion-challenger only acts if explicitly enabled (default off until
   // we have meaningful OOS samples — the OOS log itself runs in shadow).
   const ccEnabled = ["1", "true", "yes", "on"].includes(
-    String(process.env.VS_CHAMPION_CHALLENGER_ENABLED ?? "false").toLowerCase()
+    String(process.env.VS_CHAMPION_CHALLENGER_ENABLED ?? "false").toLowerCase(),
   );
   if (!ccEnabled) {
     return baselinePolicy;
@@ -190,7 +207,8 @@ function maybeRunOosAndChampionChallenger({
         ? (baselinePolicy.version ?? 1) + 1
         : (baselinePolicy.version ?? 1),
     signal_weights: updatedSignalWeights,
-    lastTrainedAt: ccResult.action === "revert" ? nowIso : baselinePolicy.lastTrainedAt,
+    lastTrainedAt:
+      ccResult.action === "revert" ? nowIso : baselinePolicy.lastTrainedAt,
     lastTrainingReason:
       ccResult.action === "revert"
         ? "champion_challenger_revert"
@@ -202,7 +220,7 @@ function maybeRunOosAndChampionChallenger({
 
 function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
   const weightLearningDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SIGNAL_WEIGHT_LEARN ?? "true").toLowerCase(),
   );
   if (weightLearningDisabled) return baselinePolicy;
 
@@ -216,7 +234,9 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
     minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
     minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
-    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+    target: (
+      process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark"
+    ).trim(),
   });
 
   const nowIso = new Date().toISOString();
@@ -268,7 +288,7 @@ function maybeTrainSignalWeights({ baselinePolicy, worldContext }) {
 
 function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
   const regimeDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SIGNAL_WEIGHT_REGIME_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SIGNAL_WEIGHT_REGIME_LEARN ?? "true").toLowerCase(),
   );
   if (regimeDisabled) return baselinePolicy;
 
@@ -280,7 +300,9 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
     minMagnitude: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_MAGNITUDE, 1e-6),
     minTStat: parseNumber(process.env.VS_SIGNAL_WEIGHT_MIN_T_STAT, 2.0),
     ridgeLambda: parseNumber(process.env.VS_SIGNAL_WEIGHT_RIDGE_LAMBDA, 0.01),
-    target: (process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark").trim(),
+    target: (
+      process.env.VS_SIGNAL_WEIGHT_TARGET || "excess_vs_benchmark"
+    ).trim(),
   };
 
   const regimeResult = trainSignalWeightsByRegime({
@@ -294,7 +316,9 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
     ranAt: nowIso,
     source: "signal_weights_by_regime",
     decision: regimeResult.anyUpdated ? "update" : "no_update",
-    reason: regimeResult.anyUpdated ? "regime_weights_updated" : "no_regime_with_signal",
+    reason: regimeResult.anyUpdated
+      ? "regime_weights_updated"
+      : "no_regime_with_signal",
     regimeSampleCounts: regimeResult.regimeSampleCounts,
     perRegimeResults: Object.fromEntries(
       Object.entries(regimeResult.byRegime).map(([regime, result]) => [
@@ -307,7 +331,7 @@ function maybeTrainSignalWeightsByRegime({ baselinePolicy, worldContext }) {
           newWeights: result.newWeights,
           coefficients: result.coefficients,
         },
-      ])
+      ]),
     ),
     policyVersionBefore: baselinePolicy.version ?? 1,
     policyVersionAfter: regimeResult.anyUpdated
@@ -377,7 +401,7 @@ function posteriorsEqual(a, b) {
 
 function maybeBuildScoreGatePosteriors({ baselinePolicy, worldContext }) {
   const posteriorsDisabled = ["0", "false", "no", "off"].includes(
-    String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase()
+    String(process.env.VS_SCORE_GATE_POSTERIORS_LEARN ?? "true").toLowerCase(),
   );
   if (posteriorsDisabled) return baselinePolicy;
 
@@ -474,16 +498,17 @@ export function trainPolicyFromHistoryLocal({
   }
 
   const oncePerDay = !["0", "false", "no", "off"].includes(
-    String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase()
+    String(process.env.VS_TRAIN_ONCE_PER_DAY ?? "true").toLowerCase(),
   );
 
   const scorecardEnabled =
     allowScorecard &&
     !["0", "false", "no", "off"].includes(
-      String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase()
+      String(process.env.VS_SCORECARD_LEARN ?? "true").toLowerCase(),
     );
   if (scorecardEnabled) {
-    const latestScorecardTraining = loadLatestTrainingEntryBySource("scorecard");
+    const latestScorecardTraining =
+      loadLatestTrainingEntryBySource("scorecard");
     if (
       !force &&
       oncePerDay &&
@@ -510,12 +535,15 @@ export function trainPolicyFromHistoryLocal({
       minSamples: parseNumber(process.env.VS_SCORECARD_MIN_SAMPLES, 5),
       trainingReasonPrefixes: parseReasonPrefixList(
         process.env.VS_SCORECARD_TRAINING_REASON_PREFIXES,
-        ["BUY_", "SELL_"]
+        ["BUY_", "SELL_"],
       ),
-      signedThreshold: parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0),
+      signedThreshold: parseNumber(
+        process.env.VS_SCORECARD_SIGNED_THRESHOLD,
+        0,
+      ),
       benchmarkThreshold: parseNumber(
         process.env.VS_SCORECARD_BENCHMARK_THRESHOLD,
-        parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0)
+        parseNumber(process.env.VS_SCORECARD_SIGNED_THRESHOLD, 0),
       ),
       riskStep: parseNumber(process.env.VS_SCORECARD_RISK_STEP, 0.01),
       bufferStep: parseNumber(process.env.VS_SCORECARD_BUFFER_STEP, 0.005),
@@ -535,8 +563,10 @@ export function trainPolicyFromHistoryLocal({
           : (policy.version ?? 1),
         oldRisk: scorecardTraining.oldRisk ?? policy.risk_level,
         newRisk: scorecardTraining.newRisk ?? policy.risk_level,
-        oldBuffer: scorecardTraining.oldBuffer ?? policy.rebalance_buffer_pct ?? null,
-        newBuffer: scorecardTraining.newBuffer ?? policy.rebalance_buffer_pct ?? null,
+        oldBuffer:
+          scorecardTraining.oldBuffer ?? policy.rebalance_buffer_pct ?? null,
+        newBuffer:
+          scorecardTraining.newBuffer ?? policy.rebalance_buffer_pct ?? null,
         decision: scorecardTraining.updated ? "update" : "no_update",
         reason: scorecardTraining.reason,
         source: scorecardTraining.source ?? "scorecard",
@@ -590,7 +620,10 @@ export function trainPolicyFromHistoryLocal({
         return scorecardTraining;
       }
 
-      if (blockFallbackReasons.has(scorecardTraining.reason) || history.length === 0) {
+      if (
+        blockFallbackReasons.has(scorecardTraining.reason) ||
+        history.length === 0
+      ) {
         return scorecardTraining;
       }
     }
@@ -629,11 +662,11 @@ export function trainPolicyFromHistoryLocal({
 
   const resolvedEquityDeltaThreshold = parseNumber(
     equityDeltaThreshold,
-    parseNumber(process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD, 0)
+    parseNumber(process.env.VS_TRAIN_EQUITY_DELTA_THRESHOLD, 0),
   );
   const resolvedMinRiskDelta = parseNumber(
     minRiskDelta,
-    parseNumber(process.env.VS_TRAIN_MIN_RISK_DELTA, 0)
+    parseNumber(process.env.VS_TRAIN_MIN_RISK_DELTA, 0),
   );
 
   const training = trainPolicyWithMetrics({
@@ -650,7 +683,9 @@ export function trainPolicyFromHistoryLocal({
   const entry = {
     ranAt: new Date().toISOString(),
     policyVersionBefore: policy.version ?? 1,
-    policyVersionAfter: training.updated ? training.policyVersion : (policy.version ?? 1),
+    policyVersionAfter: training.updated
+      ? training.policyVersion
+      : (policy.version ?? 1),
     oldRisk: training.oldRisk ?? policy.risk_level,
     newRisk: training.newRisk ?? policy.risk_level,
     oldBuffer: policy.rebalance_buffer_pct ?? null,

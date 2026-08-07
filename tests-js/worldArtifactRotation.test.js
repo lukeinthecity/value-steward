@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function importModule() {
-  const moduleUrl = `${pathToFileURL(
-    path.join(repoRoot, "core", "worldArtifactRotation.js")
-  ).href}?v=${Date.now()}-${Math.random()}`;
+  const moduleUrl = `${
+    pathToFileURL(path.join(repoRoot, "core", "worldArtifactRotation.js")).href
+  }?v=${Date.now()}-${Math.random()}`;
   return import(moduleUrl);
 }
 
@@ -31,11 +31,11 @@ test("rotateJsonlByAge splits on the boundary and keeps undated entries", async 
   });
   assert.deepEqual(
     trimmed.map((e) => e.id),
-    ["stale"]
+    ["stale"],
   );
   assert.deepEqual(
     kept.map((e) => e.id),
-    ["fresh", "boundary-keep", "undated", "unparseable"]
+    ["fresh", "boundary-keep", "undated", "unparseable"],
   );
 });
 
@@ -51,7 +51,7 @@ test("refuses to rotate anything outside the allowlist", async () => {
     assert.throws(
       () => rotateWorldArtifact({ fileName, retainDays: 30 }),
       /Refusing to rotate/,
-      fileName
+      fileName,
     );
   }
 });
@@ -71,7 +71,7 @@ function setupTmpCwd(t) {
 function writeJsonlFile(filePath, entries) {
   fs.writeFileSync(
     filePath,
-    entries.map((e) => JSON.stringify(e)).join("\n") + "\n"
+    entries.map((e) => JSON.stringify(e)).join("\n") + "\n",
   );
 }
 
@@ -101,7 +101,7 @@ test("rotation archives trimmed entries before truncating, idempotently", async 
     .map((line) => JSON.parse(line));
   assert.deepEqual(
     workingLines.map((e) => e.id),
-    ["fresh"]
+    ["fresh"],
   );
   const archiveLines = fs
     .readFileSync(first.archive, "utf8")
@@ -110,7 +110,7 @@ test("rotation archives trimmed entries before truncating, idempotently", async 
     .map((line) => JSON.parse(line));
   assert.deepEqual(
     archiveLines.map((e) => e.id),
-    ["old-1", "old-2"]
+    ["old-1", "old-2"],
   );
 
   // Second run trims nothing and writes no new archive.
@@ -161,6 +161,6 @@ test("missing files degrade to a no-op", async (t) => {
     [
       { kept: 0, trimmed: 0 },
       { kept: 0, trimmed: 0 },
-    ]
+    ],
   );
 });

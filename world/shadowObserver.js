@@ -17,7 +17,11 @@ const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 const MODEL_NAME = "gemini-3-flash-preview";
 const CONTEXT_PATH = path.join(process.cwd(), "data", "world-context.jsonl");
 const DB_PATH = path.join(process.cwd(), "data", "steward.db");
-const SCORECARD_PATH = path.join(process.cwd(), "data", "signal-scorecard.jsonl");
+const SCORECARD_PATH = path.join(
+  process.cwd(),
+  "data",
+  "signal-scorecard.jsonl",
+);
 const PATTERNS_PATH = path.join(process.cwd(), "data", "patterns.jsonl");
 const INTENT_LOG_PATH = path.join(process.cwd(), "logs", "intent_log.jsonl");
 
@@ -51,7 +55,9 @@ function pct(value) {
 function summarizeRecentIntents() {
   const intents = loadJsonl(INTENT_LOG_PATH);
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recent = intents.filter((entry) => Date.parse(entry.timestamp) >= cutoff);
+  const recent = intents.filter(
+    (entry) => Date.parse(entry.timestamp) >= cutoff,
+  );
   if (!recent.length) {
     return "Recent Intent Summary:\n- No recent intents found.";
   }
@@ -62,7 +68,8 @@ function summarizeRecentIntents() {
     const action = entry.action_type || "UNKNOWN";
     actionCounts[action] = (actionCounts[action] || 0) + 1;
     if (entry.reason_code) {
-      reasonCounts[entry.reason_code] = (reasonCounts[entry.reason_code] || 0) + 1;
+      reasonCounts[entry.reason_code] =
+        (reasonCounts[entry.reason_code] || 0) + 1;
     }
   });
   const topReasons = Object.entries(reasonCounts)
@@ -84,20 +91,26 @@ function summarizeRecentIntents() {
 function summarizeScorecard() {
   const records = loadJsonl(SCORECARD_PATH);
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recent = records.filter((entry) => Date.parse(entry.timestamp) >= cutoff);
+  const recent = records.filter(
+    (entry) => Date.parse(entry.timestamp) >= cutoff,
+  );
   if (!recent.length) {
     return "Scorecard Snapshot:\n- No recent scorecard records.";
   }
 
   const oneDay = recent.map((entry) => entry.horizons?.["1"]).filter(Boolean);
   const avgExcessBenchmark = average(
-    oneDay.map((entry) => Number(entry.excess_vs_benchmark))
+    oneDay.map((entry) => Number(entry.excess_vs_benchmark)),
   );
-  const avgExcessCash = average(oneDay.map((entry) => Number(entry.excess_vs_cash)));
+  const avgExcessCash = average(
+    oneDay.map((entry) => Number(entry.excess_vs_cash)),
+  );
   const buyRecords = recent.filter((entry) =>
-    ["BUY", "MULTI"].includes(entry.action_type)
+    ["BUY", "MULTI"].includes(entry.action_type),
   );
-  const noActionRecords = recent.filter((entry) => entry.action_type === "NO_ACTION");
+  const noActionRecords = recent.filter(
+    (entry) => entry.action_type === "NO_ACTION",
+  );
 
   return [
     "Scorecard Snapshot (Last 7 Days):",
@@ -122,8 +135,8 @@ function summarizePatterns() {
     ...patterns.map(
       (pattern) =>
         `- ${pattern.pattern_id}: samples=${pattern.sample_size} avg_return=${pct(
-          Number(pattern.avg_return)
-        )} max_drawdown=${pct(Number(pattern.max_drawdown))}`
+          Number(pattern.avg_return),
+        )} max_drawdown=${pct(Number(pattern.max_drawdown))}`,
     ),
   ].join("\n");
 }
@@ -150,7 +163,9 @@ function summarizeLatestArtifacts() {
   const latestTick = loadLatestTickSnapshot();
   const portfolio = loadPortfolioLiveSnapshot();
   const worldContexts = loadJsonl(CONTEXT_PATH);
-  const world = worldContexts.length ? worldContexts[worldContexts.length - 1] : null;
+  const world = worldContexts.length
+    ? worldContexts[worldContexts.length - 1]
+    : null;
 
   const tickPositions = Array.isArray(latestTick?.result?.positions)
     ? latestTick.result.positions.length
@@ -200,7 +215,9 @@ async function getHistoricalPerformance() {
     if (panics.length) {
       digest += "\nRecent Risk Events:\n";
       digest += panics
-        .map((p) => `- ${p.symbol} triggered ${p.reason_code} at ${p.timestamp}`)
+        .map(
+          (p) => `- ${p.symbol} triggered ${p.reason_code} at ${p.timestamp}`,
+        )
         .join("\n");
     }
     return digest;
@@ -230,7 +247,7 @@ export async function buildScoutAuditPacket() {
         `- Integrity pass: ${promotion.integrity?.pass ?? "n/a"}`,
         `- Cap compliance pass: ${promotion.cap_compliance?.pass ?? "n/a"}`,
         `- Reconciliation pass: ${promotion.reconciliation?.pass ?? "n/a"}`,
-      ].join("\n")
+      ].join("\n"),
     );
   } catch {
     sections.push("Promotion & Integrity:\n- Unavailable.");
@@ -295,7 +312,9 @@ function extractCachedScoutFields(entry) {
     scout_score: entry?.scout_score ?? null,
     scout_label: entry?.scout_label ?? "n/a",
     scout_thesis: entry?.scout_thesis ?? null,
-    scout_headlines: Array.isArray(entry?.scout_headlines) ? entry.scout_headlines : [],
+    scout_headlines: Array.isArray(entry?.scout_headlines)
+      ? entry.scout_headlines
+      : [],
     scout_tags:
       entry && typeof entry.scout_tags === "object" && entry.scout_tags !== null
         ? entry.scout_tags
@@ -340,10 +359,12 @@ export async function observeWorld({ baseContext }) {
   // 15-minute success cache
   if (latest && latest.scout_score !== null && latest.scout_generated_at) {
     const generatedAt = Date.parse(latest.scout_generated_at);
-    const ageMs = Number.isFinite(generatedAt) ? Date.now() - generatedAt : Infinity;
+    const ageMs = Number.isFinite(generatedAt)
+      ? Date.now() - generatedAt
+      : Infinity;
     if (ageMs / (1000 * 60) < 15) {
       console.log(
-        `[scout] Using cached successful analysis (age=${(ageMs / 60000).toFixed(1)}m)`
+        `[scout] Using cached successful analysis (age=${(ageMs / 60000).toFixed(1)}m)`,
       );
       return { ...extractCachedScoutFields(latest), scout_cached: true };
     }
@@ -371,7 +392,9 @@ export async function observeWorld({ baseContext }) {
     });
   }
 
-  console.log(`[scout] Calling Gemini API (Tier 1: Search) for ${baseContext.date}...`);
+  console.log(
+    `[scout] Calling Gemini API (Tier 1: Search) for ${baseContext.date}...`,
+  );
   try {
     const result = await callGemini({
       systemInstruction,
@@ -386,7 +409,9 @@ export async function observeWorld({ baseContext }) {
     };
   } catch (err) {
     if (err.message.includes("429") || err.message.includes("quota")) {
-      console.warn("[scout] Tier 1 Quota Hit. Falling back to Tier 2 (No Search)...");
+      console.warn(
+        "[scout] Tier 1 Quota Hit. Falling back to Tier 2 (No Search)...",
+      );
       try {
         const result = await callGemini({
           systemInstruction,

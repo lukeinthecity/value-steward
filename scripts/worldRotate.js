@@ -10,7 +10,7 @@ async function main() {
   for (const result of runWorldArtifactRotation()) {
     const archived = result.archive ? ` → ${result.archive}` : "";
     console.log(
-      `[world:rotate] ${result.file}: kept=${result.kept} trimmed=${result.trimmed}${archived}`
+      `[world:rotate] ${result.file}: kept=${result.kept} trimmed=${result.trimmed}${archived}`,
     );
   }
 }

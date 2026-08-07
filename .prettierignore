@@ -4,5 +4,6 @@ data/
 logs/
 config/policy.json
 world/feeds.json
+heartbeat.json
 package-lock.json
 .venv/
