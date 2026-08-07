@@ -13,10 +13,42 @@ structural cap-breach sell logic mid-experiment. Run 2 (2026-06-01 → 07-04)
 was reset after the version-semantics fix (#65) restored the strict-OOS
 metric, which had been structurally empty for its whole duration — so Run 2's
 evaluation could not cleanly attribute results to a policy version. **Run 3
-(Day 1 = 2026-07-06)** starts fresh with strict-OOS working, sandbox caps
+(Day 1 = 2026-07-06)** started fresh with strict-OOS working, sandbox caps
 raised to \$2,000 / \$500 / \$100 (was \$20 / \$8 / \$1), and Run-2 artifacts
 archived under `data/archive/run3/`. The three observation tools below
 (2.4 / 2.7 / 2.8) shipped just before Run 3 and collect data from Day 1.
+
+**Run 3 halted early on 2026-08-07 (Day ~21 of 60)** via
+`npm run controls:disable`, and positions were liquidated. Rationale: the
+rolling OOS metric was found to be scoring most of its population backwards
+(#115), and the champion-challenger had been promoting and reverting weights
+on that number — so the live policy was being mutated by a broken reading.
+Since the point of the run is the learning, freezing the learning would have
+left nothing worth running. Run-3 raw scorecard rows remain valid facts and
+re-read correctly under the #115 fix; it is the derived metrics and the
+policy drift they caused that are discarded.
+
+**Run 4 (Day 1 = 2026-08-17) is a deliberately frozen clean baseline.** It
+exists to answer one question: *does the 3-feature momentum/vol/drawdown
+ranking, with these gates, produce excess return?*
+
+| Aspect | Run 4 setting |
+|---|---|
+| Weight training | **off** (`VS_SIGNAL_WEIGHT_LEARN=false`) |
+| Regime weight training | **off** (`VS_SIGNAL_WEIGHT_REGIME_LEARN=false`) |
+| Score-gate posteriors | **off** (`VS_SCORE_GATE_POSTERIORS_LEARN=false`) |
+| Champion-challenger | **off** — no auto promote/revert |
+| Thompson gate | **off** (unchanged; see SESSION_BRIEF note) |
+| Exec-quality blend | **0** (`VS_SIGNAL_EXEC_QUALITY_WEIGHT`, added #116) |
+| Realized-alpha prior | **0** (`VS_SIGNAL_ALPHA_PRIOR_WEIGHT`) |
+| Intraday persistence | **0** (`VS_SIGNAL_INTRADAY_PERSISTENCE_WEIGHT`) |
+| Exploration ε | **0.05, kept** — the funnel is starved (~0.5 attempts/day) and exploration is half-size and separately tagged |
+| Universe | **uncapped** (`VS_SIGNAL_MAX_SYMBOLS=0`), resolving a duplicate-key bug that silently capped it at 200 |
+| Weekly-review auto-triggers | **disarmed** — record, do not act |
+
+Every disabled mechanism still logs its diagnostic fields to the scorecard,
+so each becomes a future experiment that can be priced against this baseline
+rather than remaining permanent unmeasured background.
 
 ---
 

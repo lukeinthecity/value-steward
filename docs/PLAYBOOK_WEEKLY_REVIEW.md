@@ -115,14 +115,35 @@ The Sunday 6 PM weekly report email summarizes:
 
 Confirm the email metrics are roughly consistent with what `oos-eval.jsonl` shows. Material discrepancy → investigate.
 
-## Step 6 — Decide on activation triggers
+## Step 6 — Activation triggers
 
-Run through this checklist:
+> ### ⛔ DISARMED FOR RUN 4 — observe and record only
+>
+> **Run 4 is a frozen clean baseline. Do not flip any flag during it.**
+>
+> These triggers are how Run 2 silently acquired ε=0.05 (Day 15) and
+> champion-challenger (Day ~11) with no explicit decision. A baseline whose
+> whole purpose is to measure one fixed policy for 60 days cannot survive
+> that — if a flag flips at week three, the run measures something nobody
+> designed and Day 60 is uninterpretable again.
+>
+> For Run 4: if a criterion below fires, **write it down in
+> `SESSION_BRIEF.md` and keep going.** A trigger firing is an observation
+> about the baseline, not an instruction. Any actual flag change requires an
+> explicit decision from the operator and, by definition, ends the baseline.
+>
+> Re-arm only when a run is deliberately adaptive again.
 
-- [ ] OOS rolling_n ≥ 20 AND rolling_sharpe stable → **enable champion-challenger** (set env var, restart not required, takes effect next eod)
-- [ ] 0 BUYs for 2+ weeks → **enable exploration at ε=0.05** (env var)
-- [ ] ≥30 days of clean data → consider whether any **Tier 2** items in `ML_BACKLOG.md` have earned implementation
-- [ ] Phase 1 day count == 60 → **end-of-run review** triggers; run [`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) in full
+Run through this checklist (Run 4: **record, do not act**):
+
+- [ ] OOS rolling_n ≥ 20 AND rolling_sharpe stable → *(would enable champion-challenger)*
+- [ ] 0 BUYs for 2+ weeks → *(would enable exploration at ε=0.05 — already on at 0.05 for Run 4)*
+- [ ] ≥30 days of clean data → *(would consider Tier 2 items in `ML_BACKLOG.md`)*
+- [ ] Phase 1 day count == 60 → **end-of-run review** triggers; run [`docs/POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) in full — **this one still acts**
+
+Steps 2–4 above carry the same standing: their "consider relaxing gates" /
+"consider raising the score floor" prompts are diagnostic during Run 4, not
+license to retune.
 
 ## Step 7 — Update SESSION_BRIEF
 

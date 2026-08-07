@@ -8,17 +8,28 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-07-21 |
+| Last updated | 2026-08-07 |
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
-| Phase 1 RUN | **Run 3** (Run 2 archived 2026-07-04 after the strict-OOS/version-semantics fix #65; Run-2 artifacts in `data/archive/run3/`) |
-| Phase 1 start | **2026-07-06 (Monday)** — Days 1–7 ran (7/6–7/14); outages 7/15–7/17 + 7/20; resumed 7/21 (Day 8) |
-| Phase 1 end (target) | ≈ 2026-09-28 (60 trading days; outage days extend the calendar) |
-| Trading state | `execution_armed=true`, `shadow_mode=false` — paper orders WILL submit |
+| Phase 1 RUN | **BETWEEN RUNS.** Run 3 halted 2026-08-07 at Day ~21; Run 4 starts 2026-08-17. |
+| Trading state | ⛔ **`trading_enabled=false`** (`npm run controls:disable`, reason `manual_disable`). Positions liquidated 2026-08-07 — **account is flat**. |
+| Why Run 3 stopped | The rolling OOS metric scored most of its population backwards (fixed in #115), and champion-challenger had been promoting/reverting weights on that number — so the live policy was mutating on a broken reading. Freezing the learning would have left nothing worth running, so the run was ended. Raw scorecard rows stay valid and re-read correctly under the fix. |
+| Run 4 Day 1 | **2026-08-17 (Monday)** — a frozen clean baseline; see `ML_BACKLOG.md` run history for the full flag table |
 | Capital cap | `$2,000` deployed max, `$500` per-trade max, `$100` per-trade min, **two-way (cap_breach_sell active)** |
-| Equity (last seen) | $99,963 paper (reconciled 2026-07-21 08:51 ET) |
-| Live positions | KCCA (~$485) + SRHQ (~$1,501) — ~$1,986 deployed as of 2026-07-21 |
+| Equity (last seen) | ~$100,032 paper (2026-08-07, pre-liquidation; ~$1,567 was deployed in SRHQ + $0.29 KCCA dust) |
+
+**Before Run 4 Day 1** — see the plan in `docs/ML_BACKLOG.md` (run history) and
+`docs/POST_RUN_REVIEW.md`:
+1. Config freeze in `.env` (all learning off, three score nudges to 0, universe uncapped).
+2. **Time one uncapped tick first** — removing the accidental 200-symbol cap is
+   a 15–25× increase in market-data calls; if runtime approaches the 5-minute
+   cadence, fall back to an explicit intermediate cap rather than back to 200.
+3. Hand-reset `risk_level` to `0.2` (`phase:reset` preserves it; it has drifted
+   to 0.20013…).
+4. `npm run phase:reset -- --label run4 --start-date 2026-08-17 --execute`
+   (dry-run first; **not** during a cron window).
+5. `npm run controls:enable` — the reset does not re-arm trading.
 
 ## Phase 1 Run 1 archive
 
@@ -74,7 +85,7 @@ Run `runtime:status` first in any session — it replaces ~10 exploratory tool c
 | `VS_SIGNAL_WEIGHT_MIN_T_STAT` | 2.0 | default | always |
 | `VS_OOS_EVAL_ENABLED` | on | default | always (shadow logs to `data/oos-eval.jsonl`) |
 | `VS_CHAMPION_CHALLENGER_ENABLED` | off | **true (enabled 2026-06-17)** | enabled — 20+ OOS rows reached; champion pinned 6/17, now guarding against the OOS slide |
-| `VS_SCORE_GATE_THOMPSON_ENABLED` | off | default | **enable** after Phase 1 ends (defer to Tier 2 review) |
+| `VS_SCORE_GATE_THOMPSON_ENABLED` | off | default | **STAYS OFF for Run 4.** The old note read "enable after Phase 1 ends," which Run 3 ending satisfies literally — that would have switched Thompson on for the clean baseline by accident. Revisit only at the Run-4 post-run review, and only after the posteriors it reads are shown to be sound (they were inflated ~4× by the scorecard replication fixed in #115). |
 | `VS_NEW_ENTRY_EXPLORATION_EPSILON` | 0.0 | **0.05 (enabled 2026-06-25)** | enabled — 0-trades-2wk criterion met (Day 15); probes score-gate near-misses (~1.425–1.50), half-size, tagged `BUY_EXPLORATION` (separable from policy OOS) |
 | `VS_ROTATION_SELL_ENABLED` | on | on | Buy-coupled rotation. Appreciation over the cap NEVER forces a sell (winners run). Only sells when a NEW candidate clears all gates but is blocked by cap headroom AND is stronger than the weakest holding — then exits that holding. Set `false` to disable (new buys just block at cap). |
 | `VS_ROTATION_MIN_SCORE_MARGIN` | 0.05 | default | Candidate must beat the weakest holding's signal score by this margin to trigger rotation (anti-churn / let-winners-run). Set 0 to rotate on any improvement. |
