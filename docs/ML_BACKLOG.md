@@ -56,6 +56,74 @@ as they touch version semantics (regression risk mid-run):
 Decision rule: address during the post-run review alongside any version-
 semantics cleanup. Do NOT change mid-run.
 
+### ⚠️ Rolling OOS grades declined candidates with an un-flipped sign
+
+**Found 2026-08-06 (Run 3, Day 20), while investigating an alarming-looking
+rolling Sharpe of −1.442 and hit rate of 0.00.**
+
+`oosEvaluator.evaluateOos` builds the rolling window with
+`collect(() => true, rollingWindow)` — no `action_type` filter — so it grades
+*every* scorecard row, and `summarize` counts a sample as a "hit" only when
+`excess_vs_benchmark > 0`.
+
+For a `BUY` row that is correct. For a `NO_ACTION` / `BUY_BLOCKED` row it is
+inverted: `excess_vs_benchmark` there is the forward return of a candidate the
+system **declined**, so a *negative* value means the decision was *right*.
+Those rows are counted as misses and drag the mean down.
+
+Measured composition of the live rolling-20 window on 2026-08-06
+(2026-07-23 → 07-30):
+
+| action_type | rows |
+|---|---|
+| `NO_ACTION` | 18 |
+| `SELL` | 2 |
+| `BUY` | **0** |
+
+Every one of the 20 values was negative — i.e. every declined candidate fell
+relative to the benchmark. Read correctly that is the gate layer working, and
+the independent gate-calibration report agrees (`rel_strength_60d`: n=37,
+mean −0.82%, t = −2.65, "justified"). Read through the current metric it
+renders as a 0.00 hit rate and a −1.442 Sharpe.
+
+Consequence: the headline rolling OOS metric is not currently measuring policy
+performance — with zero `BUY` rows in the window it is measuring declined
+candidates with the wrong sign, and **the champion-challenger consumes exactly
+this number** to promote and revert weights.
+
+Options, all decision-affecting: exclude non-BUY rows from the rolling window;
+or sign-flip declined rows so correct avoidance scores positive; or report the
+two populations as separate blocks (cleanest — "taken" vs "declined" are
+different questions and averaging them is what created the confusion).
+
+Decision rule: do NOT change mid-run — the champion-challenger is the only
+rollback guard and altering its input mid-experiment is precisely what forced
+the Run 1 and Run 2 resets. Fix at the post-run review, and treat Run 3's
+OOS-derived conclusions as suspect in the write-up. Note the precedent: Run 2
+was reset for a *different* OOS measurement flaw (#65). Two consecutive runs
+have now had their headline metric compromised.
+
+### ⚠️ Scorecard rows are duplicated per intraday slot, inflating OOS `n`
+
+**Found 2026-08-06, same investigation.**
+
+The intraday cron slots (19:30 / 19:40 / 19:50 / 19:55 UTC) each append a
+scorecard row for the same standing decision, with the same forward return.
+In the live rolling-20 window, `NATL`, `AFBI` and `BOXX` each appeared 4×
+and `RDAG` / `ZAUG` 2× — **20 rows, 9 distinct (symbol, day) decisions.**
+
+Because duplicates are perfectly correlated, they do not add information but
+do reduce the computed standard deviation, which inflates
+`sharpe = mean / std` in magnitude and makes any significance test on this
+population far too confident. This compounds with the overlapping-5-day-horizon
+problem already noted under the champion-challenger margin entry — the
+effective independent sample size is smaller than `n` by a wide margin.
+
+Decision rule: at the post-run review, de-duplicate by `(symbol, exchange_date,
+horizon)` before computing any OOS statistic, and re-derive the noise floor in
+[`POST_RUN_REVIEW.md`](POST_RUN_REVIEW.md) §1.1 from the de-duplicated count
+rather than raw `n`.
+
 ### Score-gate posteriors have no recency decay
 
 `scoreGatePosteriors.buildScoreGatePosteriors` rebuilds each symbol's

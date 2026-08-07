@@ -45,6 +45,28 @@ why Run 3 ended, only what the data says.
 
 ## Part 1 — The experiment verdict
 
+> **⚠️ Read before computing anything.** Three Run-3 data-integrity issues were
+> found on 2026-08-06 (Day 20). All three affect the primary metric:
+>
+> 1. **Rolling OOS grades declined candidates with an un-flipped sign** — the
+>    window has no `action_type` filter, so `NO_ACTION` rows (where a *negative*
+>    excess means a *correct* decision) are counted as misses. On 2026-08-06 the
+>    live rolling-20 window held 18 `NO_ACTION`, 2 `SELL`, and **0 `BUY`** rows.
+>    Any Sharpe/hit-rate from this period describes declined candidates, not
+>    policy performance. See `ML_BACKLOG.md`.
+> 2. **Scorecard rows are duplicated per intraday slot** — 20 rows in that same
+>    window were only 9 distinct decisions. De-duplicate by
+>    `(symbol, exchange_date, horizon)` *before* computing any statistic, and
+>    derive the noise floor below from the de-duplicated count, not raw `n`.
+> 3. **Two poisoned rows from a commit/cron collision.** An EOD run at
+>    `2026-08-06T20:15:11Z` executed while a `git commit` had the live
+>    `config/policy.json` stashed to its committed state (version 1, no champion
+>    block). It re-initialized the champion against a phantom empty champion.
+>    **Exclude the `2026-08-06T20:15:11Z` rows in `data/training-log.jsonl`
+>    (`source: champion_challenger`, `reason: "init: ..."`) and
+>    `data/oos-eval.jsonl` (`policyVersion: 1`) from all analysis.** They are
+>    artifacts, not observations. `config/policy.json` itself was not corrupted.
+
 ### 1.1 Primary metric: risk-adjusted return vs. baseline
 
 Source: `data/oos-eval.jsonl`, `rolling` block (the `strict` block only

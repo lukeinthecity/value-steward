@@ -48,6 +48,17 @@ it isn't already in session scope.
   (`config/policy.json`, `data/*.jsonl`, `data/steward-state.json`,
   `world/feeds.json`), so the working tree is never clean. **Stage code files
   explicitly; never `git add -A`.**
+- **Never commit while a cron cycle is running.** The pre-commit gate stashes
+  unstaged files, which briefly reverts live runtime files to their *committed*
+  state — and the committed `config/policy.json` is a stale snapshot (version 1,
+  no `signal_weights.champion` block). A trainer that reads policy during that
+  window sees a blank policy and acts on it. This happened on 2026-08-06: an EOD
+  run at 20:15:11Z landed inside a commit window and re-initialized the
+  champion-challenger against a phantom empty champion, writing junk rows to
+  `data/training-log.jsonl` and `data/oos-eval.jsonl` (the real champion block
+  survived, because the stash restore won the race). Cron cycles run on the
+  :30/:40/:50/:55 intraday slots and EOD at ~20:15 UTC — **check `date -u` and
+  the System Pulse in `npm run runtime:status` before committing.**
 - **Runnable scripts must guard `main()`** behind an `import.meta`/`argv[1]`
   entrypoint check (see `scripts/worldRunScheduled.js`) so importing them for
   tests never executes real work against the live data tree.
