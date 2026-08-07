@@ -12,10 +12,10 @@
 | Active branch | `main` |
 | HEAD commit | (see latest merge) |
 | Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
-| Phase 1 RUN | **BETWEEN RUNS.** Run 3 halted 2026-08-07 at Day ~21; Run 4 starts 2026-08-17. |
+| Phase 1 RUN | **BETWEEN RUNS.** Run 3 halted 2026-08-07 at Day ~21; Run 4 starts 2026-08-10. |
 | Trading state | ⛔ **`trading_enabled=false`** (`npm run controls:disable`, reason `manual_disable`). Positions liquidated 2026-08-07 — **account is flat**. |
 | Why Run 3 stopped | The rolling OOS metric scored most of its population backwards (fixed in #115), and champion-challenger had been promoting/reverting weights on that number — so the live policy was mutating on a broken reading. Freezing the learning would have left nothing worth running, so the run was ended. Raw scorecard rows stay valid and re-read correctly under the fix. |
-| Run 4 Day 1 | **2026-08-17 (Monday)** — a frozen clean baseline; see `ML_BACKLOG.md` run history for the full flag table |
+| Run 4 Day 1 | **2026-08-10 (Monday)** — a frozen clean baseline; see `ML_BACKLOG.md` run history for the full flag table |
 | Capital cap | `$2,000` deployed max, `$500` per-trade max, `$100` per-trade min, **two-way (cap_breach_sell active)** |
 | Equity (last seen) | ~$100,032 paper (2026-08-07, pre-liquidation; ~$1,567 was deployed in SRHQ + $0.29 KCCA dust) |
 
@@ -27,7 +27,7 @@
    cadence, fall back to an explicit intermediate cap rather than back to 200.
 3. Hand-reset `risk_level` to `0.2` (`phase:reset` preserves it; it has drifted
    to 0.20013…).
-4. `npm run phase:reset -- --label run4 --start-date 2026-08-17 --execute`
+4. `npm run phase:reset -- --label run4 --start-date 2026-08-10 --execute`
    (dry-run first; **not** during a cron window).
 5. `npm run controls:enable` — the reset does not re-arm trading.
 

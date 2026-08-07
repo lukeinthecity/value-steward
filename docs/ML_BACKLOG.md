@@ -28,7 +28,7 @@ left nothing worth running. Run-3 raw scorecard rows remain valid facts and
 re-read correctly under the #115 fix; it is the derived metrics and the
 policy drift they caused that are discarded.
 
-**Run 4 (Day 1 = 2026-08-17) is a deliberately frozen clean baseline.** It
+**Run 4 (Day 1 = 2026-08-10) is a deliberately frozen clean baseline.** It
 exists to answer one question: *does the 3-feature momentum/vol/drawdown
 ranking, with these gates, produce excess return?*
 
@@ -43,7 +43,7 @@ ranking, with these gates, produce excess return?*
 | Realized-alpha prior | **0** (`VS_SIGNAL_ALPHA_PRIOR_WEIGHT`) |
 | Intraday persistence | **0** (`VS_SIGNAL_INTRADAY_PERSISTENCE_WEIGHT`) |
 | Exploration ε | **0.05, kept** — the funnel is starved (~0.5 attempts/day) and exploration is half-size and separately tagged |
-| Universe | **uncapped** (`VS_SIGNAL_MAX_SYMBOLS=0`), resolving a duplicate-key bug that silently capped it at 200 |
+| Universe | **`VS_SIGNAL_MAX_SYMBOLS=800`** — 4× the effective 200 today, and a single key (a duplicate-key bug had `0` and `200` both defined, with `200` silently winning). Full uncapping was the original intent but is **not operable** — see 3.8 |
 | Weekly-review auto-triggers | **disarmed** — record, do not act |
 
 Every disabled mechanism still logs its diagnostic fields to the scorecard,
@@ -88,7 +88,20 @@ as they touch version semantics (regression risk mid-run):
 Decision rule: address during the post-run review alongside any version-
 semantics cleanup. Do NOT change mid-run.
 
-### ⚠️ Rolling OOS grades declined candidates with an un-flipped sign
+### ~~Rolling OOS grades declined candidates with an un-flipped sign~~ — ✅ RESOLVED (#115, 2026-08-07)
+
+**Fixed.** `evaluateOos` now restricts both slices to buy-related rows and
+negates declined values before `summarize()`, so positive always means "the
+decision helped" and mean/std/Sharpe are corrected — not just `hitRate`. It
+also emits `taken` and `declined` as an exact partition of the rolling window,
+plus `metricVersion: 2` (archived rows carry no version and are **not**
+comparable) and an `excluded` count. Vocabulary lives in
+`core/scorecardSemantics.js`.
+
+On the live 75-row scorecard the headline moved from **−1.4415 Sharpe / 0.000
+hit rate** to **+0.3150 / 0.526** — with `taken` (n=3) at −0.29 and `declined`
+(n=16) at +0.44, i.e. the blocks were adding value all along. Original
+observation preserved below for the record.
 
 **Found 2026-08-06 (Run 3, Day 20), while investigating an alarming-looking
 rolling Sharpe of −1.442 and hit rate of 0.00.**
@@ -135,7 +148,20 @@ OOS-derived conclusions as suspect in the write-up. Note the precedent: Run 2
 was reset for a *different* OOS measurement flaw (#65). Two consecutive runs
 have now had their headline metric compromised.
 
-### ⚠️ Scorecard rows are duplicated per intraday slot, inflating OOS `n`
+### ~~Scorecard rows are duplicated per intraday slot, inflating OOS `n`~~ — ✅ RESOLVED (#115, 2026-08-07)
+
+**Fixed.** `loadScorecardRecords` now de-duplicates by `(symbol, entry_date)`
+by default, with a `{ dedupe: false }` escape hatch. The key deliberately
+omits `action_type`: on 2026-07-14 `KCCA` was `BUY` at the 19:30 slot and
+`BUY_BLOCKED` at 19:40, and keeping both would give one forward return two
+opposite signs after orientation. Attempt-counting readers
+(`executionQualityReport`, `gateCalibration`) read the file directly and are
+unaffected.
+
+Effect on the live file: 75 rows → 30 decisions. This mattered in the opposite
+direction to the sign fix — orientation alone would have reported a Sharpe of
++1.135, and de-duplication brought it to a more honest +0.315. Original
+observation preserved below.
 
 **Found 2026-08-06, same investigation.**
 
@@ -782,6 +808,54 @@ validated thesis back into scoring as its own separate, later decision,
 and only after ruling out the Ben-David et al. failure mode — same
 two-step discipline already applied to 2.8 (fill-rate metric before
 execution-policy change).
+
+---
+
+### 3.8 Correlation matrix is O(n²) over the whole universe — the cap is a symptom
+
+**Measured 2026-08-07, while sizing `VS_SIGNAL_MAX_SYMBOLS` for Run 4.**
+
+`signal_engine.build_signals` ends with
+`self.build_correlations(signals, all_returns)` — passing the **entire ranked
+list**. `build_correlations` is pairwise, so cost grows as n²/2.
+
+Measured `build_signals` runtime (pre-market, against the live paper account):
+
+| Universe cap | Evaluated | Runtime | % of the 300s tick cadence |
+|---|---|---|---|
+| 200 (the accidental live cap) | 193 | 6.6s | 2% |
+| 600 | 581 | 39.1s | 13% |
+| 1200 | 1174 | 148.7s | 50% |
+
+Fitting `t = a·n + b·n²` gives **a ≈ 0.0065 s/symbol** (I/O) and
+**b ≈ 9.8e-5 s/symbol²** (correlations). Extrapolated to the full
+tradable-and-fractionable universe of **6,535 symbols**: ~42s of I/O plus
+~4,181s of correlation ≈ **70 minutes per tick**. The I/O is ~2% of the cost;
+the correlation matrix is the other 98% (~21M pairs).
+
+**Why this matters beyond speed.** It is the binding constraint on universe
+size, and universe size is a live hypothesis for the starved funnel
+(~0.5 attempts/day). Spacing the ticks out does not rescue it: execution slots
+fire at 30/20/10/5 minutes before the close, so a 70-minute computation would
+have to start over an hour early and every order would act on a stale signal.
+
+**Pitch:** correlations only matter among candidates that could actually be
+bought together. Restrict `build_correlations` to the top-ranked slice —
+`VS_SIGNAL_TOP_PERFORMERS` (currently 100) suggests that was the original
+intent. Projected effect: 6,535 symbols in **under a minute**, at the existing
+5-minute cadence, with no scheduling change.
+
+**Why deferred:** correlation feeds the diversification gate, so this is
+decision-affecting and must not land inside the frozen baseline.
+
+**Cost:** small — one call site and a slice, plus a test that the
+diversification gate still rejects the pairs it used to.
+
+**Decision rule:** **the recommended first experiment after the Run-4
+baseline.** Land it, verify the diversification gate is unchanged on the
+retained pairs, then raise `VS_SIGNAL_MAX_SYMBOLS` and measure whether a wider
+universe actually improves opportunity volume — that is the real question the
+cap has been masking.
 
 ---
 
