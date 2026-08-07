@@ -1,9 +1,21 @@
 # Value Steward — Claude Code project guide
 
 Value Steward is an automated trading agent on a Python +
-Node.js hybrid architecture. It runs a live Alpaca **paper-trading** loop on a
-schedule. The goal is code that is **presentable, auditable, and maintainable** —
-not merely functional.
+Node.js hybrid architecture. It ran a live Alpaca **paper-trading** loop on a
+schedule from May to August 2026. The goal is code that is **presentable,
+auditable, and maintainable** — not merely functional.
+
+> 🏁 **Retired from trading 2026-08-07.** `trading_enabled=false`,
+> `force_no_trade=true`, and the trading cron jobs are removed. Only the
+> world-context pipeline still runs. The successor is **Value Steward 2** at
+> `/home/lukes/value-steward-2`. Read `docs/SESSION_BRIEF.md` for the handover,
+> and `docs/VS1_MECHANISM_NOTES.md` **in the VS2 repo** for what this system
+> taught about structuring mechanisms.
+>
+> **Do not re-arm trading here.** VS2 now trades this Alpaca paper account, and
+> both systems read positions from the broker rather than their own ledger — so
+> re-arming VS1 would have its vol-stop selling VS2's holdings. If VS1 is ever
+> restarted, give it a separate Alpaca paper account.
 
 **Prose must be factual and objective.** No self-praise, superlatives, or
 performance claims anywhere in docs, comments, or commit messages —
@@ -56,9 +68,20 @@ it isn't already in session scope.
   run at 20:15:11Z landed inside a commit window and re-initialized the
   champion-challenger against a phantom empty champion, writing junk rows to
   `data/training-log.jsonl` and `data/oos-eval.jsonl` (the real champion block
-  survived, because the stash restore won the race). Cron cycles run on the
-  :30/:40/:50/:55 intraday slots and EOD at ~20:15 UTC — **check `date -u` and
-  the System Pulse in `npm run runtime:status` before committing.**
+  survived, because the stash restore won the race).
+  **Since the 2026-08-07 retirement the trading cron jobs are gone**, so that
+  specific hazard retired with them. What remains is `world:run` on the hour and
+  half-hour (13:00–18:00 UTC, weekdays) plus `world:health` at 06:05/18:05 UTC,
+  which write the tracked `world/feeds.json` and `data/world-context.jsonl` —
+  still worth a `date -u` check before committing, at lower stakes.
+- **The installed crontab pins `PATH` to Node 24.** `/usr/bin/node` is v20.20.0
+  and `jsdom@30` depends on `undici@8`, which requires `node >=22.19.0`. Without
+  the pin `world:hydrate` throws `webidl.util.markAsUncloneable is not a
+  function`, and because `world:run` chains with `&&`, `world:build` and
+  `world:rotate` never execute — the context history silently stops growing
+  while `world:fetch` keeps appending to the inbox. This ran undetected for a
+  day before being found on 2026-08-07. The tracked `crontab` template in this
+  repo does **not** carry the `PATH` line; preserve it if regenerating.
 - **Runnable scripts must guard `main()`** behind an `import.meta`/`argv[1]`
   entrypoint check (see `scripts/worldRunScheduled.js`) so importing them for
   tests never executes real work against the live data tree.

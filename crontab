@@ -1,8 +1,22 @@
-# Value Steward Institutional Cron (LOCAL EDT TIMING)
+# Value Steward Cron (LOCAL EDT TIMING)
 # Aligned to System Clock: EDT (UTC-4)
 #
 # Template: replace /home/YOUR_USER/value-steward and the npm path below with
 # your actual repo checkout and `which npm` output before installing.
+#
+# NOTE: this template describes the full system as it ran until 2026-08-07.
+# Trading was retired on that date and the installed crontab now contains only
+# the world:run and world:health:scheduled jobs. See docs/SESSION_BRIEF.md.
+#
+# PATH must resolve to Node >=22.19.0. Pointing the npm path at an nvm install
+# is not sufficient: npm resolves `node` from PATH, and cron's default PATH
+# finds the system node. jsdom@30 depends on undici@8, which requires
+# node >=22.19.0, so on an older node world:hydrate throws
+# "webidl.util.markAsUncloneable is not a function" — and because world:run
+# chains with &&, world:build and world:rotate never execute. The failure is
+# quiet: world:fetch keeps appending to the inbox while the context history
+# stops growing.
+PATH=/home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin:/usr/local/bin:/usr/bin:/bin
 
 # world:run - Lead run at 8:30 AM ET and then every 30 mins during market hours
 30 08 * * 1-5 cd /home/YOUR_USER/value-steward && /home/YOUR_USER/.nvm/versions/node/vX.Y.Z/bin/npm run world:run >> /home/YOUR_USER/value-steward/logs/cron.log 2>&1

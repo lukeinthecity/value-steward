@@ -28,8 +28,35 @@ left nothing worth running. Run-3 raw scorecard rows remain valid facts and
 re-read correctly under the #115 fix; it is the derived metrics and the
 policy drift they caused that are discarded.
 
-**Run 4 (Day 1 = 2026-08-10) is a deliberately frozen clean baseline.** It
-exists to answer one question: *does the 3-feature momentum/vol/drawdown
+**Run 4 was cancelled on 2026-08-07 and never started. The system was retired
+from trading the same day.** Everything below this paragraph is the design it
+would have run under, kept as a record.
+
+The frozen-baseline design was sound and the enabling fixes had landed (#115,
+#116, #119). It was cancelled for a reason outside its own design: it would
+have spent 60 trading days generating data from an instrument already judged
+untrustworthy, and a clean read from code you have stopped trusting is still a
+read you will not act on. Three runs had by then ended for structural or
+measurement reasons rather than for results, and the accumulated judgment was
+that the machinery had outrun the evidence beyond what one more run could
+settle.
+
+The successor is **Value Steward 2** (`github.com/lukeinthecity/value-steward-2`),
+built around a 50-day moving-average crossover and nothing else, inheriting
+this system's paper account. What this backlog and this repository are now
+useful for is recorded in `docs/VS1_MECHANISM_NOTES.md` there: each mechanism,
+what it was for, what happened to it, and the structural rule that follows.
+
+**Final state.** Paper equity $100,023.49, all cash, net +$23.49 on $100,000
+across three runs. 214 scorecard rows total (56 / 83 / 75), roughly 130 unique
+decisions after accounting for 4× intraday-slot duplication. Trading cron jobs
+removed, `trading_enabled=false`, `force_no_trade=true`. The world-context
+pipeline continues to run; it contacts no broker.
+
+<details>
+<summary>Run 4 design as frozen (cancelled, kept for the record)</summary>
+
+It would have answered one question: *does the 3-feature momentum/vol/drawdown
 ranking, with these gates, produce excess return?*
 
 | Aspect | Run 4 setting |
@@ -49,6 +76,8 @@ ranking, with these gates, produce excess return?*
 Every disabled mechanism still logs its diagnostic fields to the scorecard,
 so each becomes a future experiment that can be priced against this baseline
 rather than remaining permanent unmeasured background.
+
+</details>
 
 ---
 

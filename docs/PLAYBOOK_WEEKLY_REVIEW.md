@@ -1,5 +1,9 @@
 # Weekly Review Playbook
 
+> 🏁 **Not in use.** Value Steward was retired from trading on 2026-08-07 and
+> the weekly report cron job was removed, so no report email lands. Kept as a
+> record of the review discipline. See `SESSION_BRIEF.md`.
+
 **Run this every Sunday after the 6 PM ET weekly report email lands.** Pre-defined checklist so Claude doesn't reinvent the workflow each week.
 
 Discipline: **review and triage anomalies. Do NOT tune weights or hand-edit policy based on weekly data.** Only act on (a) something genuinely broken, or (b) a pre-defined activation criterion firing.
