@@ -342,6 +342,10 @@ class SignalEngine:
         intraday_persistence_weight = get_env_float(
             "VS_SIGNAL_INTRADAY_PERSISTENCE_WEIGHT", 0.05
         )
+        # Execution quality is an EXECUTION metric blended into a SELECTION
+        # score. Default 0.10 preserves the historical 0.90/0.10 split; set to
+        # 0 to rank on the price signal alone. See docs/ML_BACKLOG.md 3.7.
+        exec_quality_weight = get_env_float("VS_SIGNAL_EXEC_QUALITY_WEIGHT", 0.10)
 
         m_ranks = self._percentile_ranks([s.momentum_raw for s in signals], True)
         v_ranks = self._percentile_ranks([s.volatility for s in signals], False)
@@ -364,7 +368,10 @@ class SignalEngine:
                 s.expire_rate = quality.expire_rate
                 s.submission_rate = quality.submission_rate
                 s.repeat_attempt_penalty = quality.repeat_attempt_penalty
-                s.score = (0.90 * s.score) + (0.10 * quality.quality_score)
+                if exec_quality_weight:
+                    s.score = (1.0 - exec_quality_weight) * s.score + (
+                        exec_quality_weight * quality.quality_score
+                    )
             else:
                 s.execution_quality_score = 0.5
                 s.fill_rate = 0.5

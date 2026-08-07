@@ -159,3 +159,93 @@ def test_noisy_asset_filter_excludes_spacs_and_defined_outcome_products():
     assert not _is_noisy_asset(
         SimpleNamespace(symbol="PPL", name="PPL Corporation")
     )
+
+
+def _build_engine_with_exec_quality(monkeypatch, quality_score: float):
+    """Engine whose only non-neutral input is execution quality for AAA."""
+
+    class DummyAlpacaClient:
+        def list_tradable_symbols(self):
+            return ["AAA"]
+
+    class DummyMarketDataClient:
+        def get_daily_bars(self, symbols, lookback_days):
+            closes = [100 + i for i in range(70)]
+            now = datetime.now(timezone.utc)
+            bars = [
+                SimpleNamespace(
+                    close=float(close),
+                    timestamp=(now - timedelta(days=(69 - idx))).isoformat(),
+                )
+                for idx, close in enumerate(closes)
+            ]
+            return {symbol: list(bars) for symbol in symbols}
+
+    monkeypatch.setattr(
+        signal_engine_module,
+        "load_execution_quality_map",
+        lambda symbols: {
+            "AAA": SimpleNamespace(
+                quality_score=quality_score,
+                fill_rate=1.0,
+                expire_rate=0.0,
+                submission_rate=1.0,
+                repeat_attempt_penalty=0.0,
+            )
+        },
+    )
+    # Neutral priors so the exec-quality blend is the only mover.
+    monkeypatch.setattr(
+        signal_engine_module, "load_realized_alpha_prior_map", lambda symbols: {}
+    )
+    monkeypatch.setattr(
+        signal_engine_module,
+        "load_intraday_persistence_map",
+        lambda symbols, lookback_days=5: {},
+    )
+
+    settings = ValueStewardSettings(
+        alpaca_api_key_id="test-key",
+        alpaca_secret_key="test-secret",
+    )
+    engine = SignalEngine(
+        alpaca_client=DummyAlpacaClient(),
+        data_client=DummyMarketDataClient(),
+        settings=settings,
+    )
+    monkeypatch.setattr(
+        engine,
+        "_percentile_ranks",
+        lambda values, higher_is_better=True: {idx: 0.5 for idx, _ in enumerate(values)},
+    )
+    return engine
+
+
+def test_exec_quality_blend_defaults_to_the_historical_ninety_ten(monkeypatch):
+    monkeypatch.delenv("VS_SIGNAL_EXEC_QUALITY_WEIGHT", raising=False)
+    engine = _build_engine_with_exec_quality(monkeypatch, quality_score=1.0)
+
+    signal = engine.build_signals().by_symbol["AAA"]
+
+    assert signal.score == 0.90 * signal.score_raw + 0.10 * 1.0
+
+
+def test_exec_quality_blend_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("VS_SIGNAL_EXEC_QUALITY_WEIGHT", "0")
+    engine = _build_engine_with_exec_quality(monkeypatch, quality_score=1.0)
+
+    signal = engine.build_signals().by_symbol["AAA"]
+
+    # Ranking falls back to the price signal alone...
+    assert signal.score == signal.score_raw
+    # ...but the diagnostic field is still logged for offline evaluation.
+    assert signal.execution_quality_score == 1.0
+
+
+def test_exec_quality_blend_weight_is_configurable(monkeypatch):
+    monkeypatch.setenv("VS_SIGNAL_EXEC_QUALITY_WEIGHT", "0.5")
+    engine = _build_engine_with_exec_quality(monkeypatch, quality_score=1.0)
+
+    signal = engine.build_signals().by_symbol["AAA"]
+
+    assert signal.score == 0.5 * signal.score_raw + 0.5 * 1.0
