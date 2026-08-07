@@ -265,6 +265,7 @@ function buildDiagnostics({
   lambda,
   skippedMissingFeature,
   skippedMissingReturn,
+  skippedNonBuy = 0,
   extras = {},
 }) {
   return {
@@ -274,6 +275,7 @@ function buildDiagnostics({
     ridgeLambda: lambda,
     skippedMissingFeature,
     skippedMissingReturn,
+    skippedNonBuy,
     ...extras,
   };
 }
@@ -345,6 +347,7 @@ export function trainSignalWeights({
     sampleCount,
     skippedMissingFeature,
     skippedMissingReturn,
+    skippedNonBuy,
   } = extractSamples(records, horizon, resolvedTarget);
 
   if (sampleCount < minSamples) {
@@ -365,6 +368,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
       }),
     };
   }
@@ -395,6 +399,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
       }),
     };
   }
@@ -427,6 +432,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
         extras: { maxAbsCoefficient: maxAbs },
       }),
     };
@@ -482,6 +488,7 @@ export function trainSignalWeights({
         lambda,
         skippedMissingFeature,
         skippedMissingReturn,
+        skippedNonBuy,
         extras: { minTStat, skippedTStat },
       }),
     };
