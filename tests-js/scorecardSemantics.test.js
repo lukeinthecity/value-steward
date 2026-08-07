@@ -15,7 +15,7 @@ test("isTakenBuyRecord matches executed buys only", () => {
   assert.equal(isTakenBuyRecord({ action_type: "buy" }), true);
   assert.equal(
     isTakenBuyRecord({ action_type: "NO_ACTION", reason_code: "BUY_BLOCKED" }),
-    false
+    false,
   );
   assert.equal(isTakenBuyRecord({ action_type: "SELL" }), false);
   assert.equal(isTakenBuyRecord({}), false);
@@ -23,16 +23,22 @@ test("isTakenBuyRecord matches executed buys only", () => {
 
 test("isDeclinedBuyRecord matches only NO_ACTION rows with a BUY_ reason", () => {
   assert.equal(
-    isDeclinedBuyRecord({ action_type: "NO_ACTION", reason_code: "BUY_BLOCKED" }),
-    true
+    isDeclinedBuyRecord({
+      action_type: "NO_ACTION",
+      reason_code: "BUY_BLOCKED",
+    }),
+    true,
   );
   assert.equal(
-    isDeclinedBuyRecord({ action_type: "no_action", reason_code: "buy_blocked" }),
-    true
+    isDeclinedBuyRecord({
+      action_type: "no_action",
+      reason_code: "buy_blocked",
+    }),
+    true,
   );
   assert.equal(
     isDeclinedBuyRecord({ action_type: "NO_ACTION", reason_code: "NO_SIGNAL" }),
-    false
+    false,
   );
   assert.equal(isDeclinedBuyRecord({ action_type: "NO_ACTION" }), false);
   assert.equal(isDeclinedBuyRecord({ action_type: "BUY" }), false);
@@ -51,12 +57,12 @@ test("taken and declined are mutually exclusive and partition buy-related", () =
     assert.equal(
       isTakenBuyRecord(row) && isDeclinedBuyRecord(row),
       false,
-      "no row may be both taken and declined"
+      "no row may be both taken and declined",
     );
     assert.equal(
       isBuyRelatedRecord(row),
       isTakenBuyRecord(row) || isDeclinedBuyRecord(row),
-      "buy-related must be exactly the union"
+      "buy-related must be exactly the union",
     );
   }
 });
@@ -111,8 +117,16 @@ test("rows without symbol or entry_date are never treated as replicas", () => {
   // Guards existing fixtures in scorecardTrainer.test.js, which set no symbol
   // and share an entry_date. Do not "improve" this into an intent_id fallback.
   const rows = [
-    { intent_id: "blocked-1", entry_date: "2026-04-28", action_type: "NO_ACTION" },
-    { intent_id: "blocked-2", entry_date: "2026-04-28", action_type: "NO_ACTION" },
+    {
+      intent_id: "blocked-1",
+      entry_date: "2026-04-28",
+      action_type: "NO_ACTION",
+    },
+    {
+      intent_id: "blocked-2",
+      entry_date: "2026-04-28",
+      action_type: "NO_ACTION",
+    },
   ];
   assert.equal(dedupeScorecardRecords(rows).length, 2);
 
@@ -126,11 +140,36 @@ test("rows without symbol or entry_date are never treated as replicas", () => {
 test("dedupe preserves chronological order so recency walks stay correct", () => {
   // Mirrors real slot interleaving: each slot emits a row per candidate.
   const rows = [
-    { intent_id: "a1", symbol: "AAA", entry_date: "2026-07-01", action_type: "BUY" },
-    { intent_id: "b1", symbol: "BBB", entry_date: "2026-07-01", action_type: "BUY" },
-    { intent_id: "a2", symbol: "AAA", entry_date: "2026-07-01", action_type: "BUY" },
-    { intent_id: "b2", symbol: "BBB", entry_date: "2026-07-01", action_type: "BUY" },
-    { intent_id: "a3", symbol: "AAA", entry_date: "2026-07-02", action_type: "BUY" },
+    {
+      intent_id: "a1",
+      symbol: "AAA",
+      entry_date: "2026-07-01",
+      action_type: "BUY",
+    },
+    {
+      intent_id: "b1",
+      symbol: "BBB",
+      entry_date: "2026-07-01",
+      action_type: "BUY",
+    },
+    {
+      intent_id: "a2",
+      symbol: "AAA",
+      entry_date: "2026-07-01",
+      action_type: "BUY",
+    },
+    {
+      intent_id: "b2",
+      symbol: "BBB",
+      entry_date: "2026-07-01",
+      action_type: "BUY",
+    },
+    {
+      intent_id: "a3",
+      symbol: "AAA",
+      entry_date: "2026-07-02",
+      action_type: "BUY",
+    },
   ];
   const deduped = dedupeScorecardRecords(rows);
   assert.equal(deduped.length, 3, "two symbol-days on 07-01, one on 07-02");
@@ -138,13 +177,27 @@ test("dedupe preserves chronological order so recency walks stay correct", () =>
   // recency, so a reordering here would silently corrupt the rolling window.
   assert.equal(deduped[deduped.length - 1].entry_date, "2026-07-02");
   const dates = deduped.map((r) => r.entry_date);
-  assert.deepEqual([...dates].sort(), dates, "entry_date must be non-decreasing");
+  assert.deepEqual(
+    [...dates].sort(),
+    dates,
+    "entry_date must be non-decreasing",
+  );
 });
 
 test("same symbol on different days stays distinct", () => {
   const rows = [
-    { intent_id: "1", symbol: "AAA", entry_date: "2026-07-01", action_type: "BUY" },
-    { intent_id: "2", symbol: "AAA", entry_date: "2026-07-02", action_type: "BUY" },
+    {
+      intent_id: "1",
+      symbol: "AAA",
+      entry_date: "2026-07-01",
+      action_type: "BUY",
+    },
+    {
+      intent_id: "2",
+      symbol: "AAA",
+      entry_date: "2026-07-02",
+      action_type: "BUY",
+    },
   ];
   assert.equal(dedupeScorecardRecords(rows).length, 2);
 });
@@ -158,7 +211,7 @@ test("dedupe degrades gracefully on bad input", () => {
 test("scorecardDecisionKey falls back to a per-row key without identity", () => {
   assert.equal(
     scorecardDecisionKey({ symbol: "AAA", entry_date: "2026-07-01" }, 3),
-    "decision:AAA|2026-07-01"
+    "decision:AAA|2026-07-01",
   );
   assert.equal(scorecardDecisionKey({ entry_date: "2026-07-01" }, 3), "row:3");
   assert.equal(scorecardDecisionKey({ symbol: "AAA" }, 7), "row:7");

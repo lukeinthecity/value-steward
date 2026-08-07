@@ -6,10 +6,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 
 function resolvePath(filePath) {
-  const abs = path.isAbsolute(filePath) ? filePath : path.resolve(REPO_ROOT, filePath);
+  const abs = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(REPO_ROOT, filePath);
 
   if (!abs.startsWith(REPO_ROOT)) {
-    throw new Error(`Security Error: Path traversal attempt blocked: ${filePath}`);
+    throw new Error(
+      `Security Error: Path traversal attempt blocked: ${filePath}`,
+    );
   }
   return abs;
 }

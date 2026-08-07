@@ -141,7 +141,9 @@ export function evaluateOos({
   const strict = summarize(orientedValues(strictRows));
   const rolling = summarize(orientedValues(rollingRows));
   const taken = summarize(orientedValues(rollingRows.filter(isTakenBuyRecord)));
-  const declined = summarize(orientedValues(rollingRows.filter(isDeclinedBuyRecord)));
+  const declined = summarize(
+    orientedValues(rollingRows.filter(isDeclinedBuyRecord)),
+  );
 
   // Auditability: a reader of oos-eval.jsonl can see exactly what was dropped
   // and why, rather than inferring it from a count mismatch.

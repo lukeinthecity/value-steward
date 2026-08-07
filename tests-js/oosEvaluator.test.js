@@ -84,7 +84,7 @@ test("evaluateOos: rolling block ignores policy_version, uses recency", () => {
       policyVersion: i,
       excess5: i * 0.001,
       intentId: `r${i}`,
-    })
+    }),
   );
   const oos = evaluateOos({
     records,
@@ -114,7 +114,9 @@ test("evaluateOos: missing horizon values are skipped silently", () => {
 });
 
 test("evaluateOos: minSamples flag marks insufficient blocks", () => {
-  const records = [buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" })];
+  const records = [
+    buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" }),
+  ];
   const oos = evaluateOos({
     records,
     currentPolicyVersion: 1,
@@ -125,7 +127,9 @@ test("evaluateOos: minSamples flag marks insufficient blocks", () => {
 });
 
 test("evaluateOos: handles null currentPolicyVersion gracefully", () => {
-  const records = [buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" })];
+  const records = [
+    buildRow({ policyVersion: 1, excess5: 0.01, intentId: "1" }),
+  ];
   const oos = evaluateOos({ records, currentPolicyVersion: null });
   assert.equal(oos.strict.sampleCount, 0);
   // Rolling still works.
@@ -180,7 +184,10 @@ test("evaluateOos: taken and declined partition the rolling window", () => {
   const oos = evaluateOos({ records, currentPolicyVersion: 1, minSamples: 1 });
   assert.equal(oos.taken.sampleCount, 2);
   assert.equal(oos.declined.sampleCount, 1);
-  assert.equal(oos.taken.sampleCount + oos.declined.sampleCount, oos.rolling.sampleCount);
+  assert.equal(
+    oos.taken.sampleCount + oos.declined.sampleCount,
+    oos.rolling.sampleCount,
+  );
 });
 
 test("evaluateOos: SELL and non-buy NO_ACTION rows are excluded and counted", () => {
