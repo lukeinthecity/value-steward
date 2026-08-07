@@ -14,10 +14,10 @@
 | Repo visibility | **Public** since 2026-07 (see README status banner + Disclaimer) |
 | Phase 1 RUN | 🏁 **RETIRED FROM TRADING 2026-08-07**, after runs 1–3. Run 3 was halted at Day ~21; **Run 4 was cancelled, not started.** |
 | Trading state | ⛔ **Permanently halted.** `trading_enabled=false` **and** `force_no_trade=true`, and the trading cron jobs are removed. Positions liquidated 2026-08-07 — account is flat. |
-| Successor | **Value Steward 2** — `/home/lukes/value-steward-2`, `github.com/lukeinthecity/value-steward-2`. A 50-day moving-average crossover and nothing else. It **inherits this Alpaca paper account** (0 positions, $100,023.49 at handover). |
+| Successor | **Value Steward mk II** — `/home/lukes/value-steward-2` locally, `github.com/lukeinthecity/value-steward-mk-ii`. A 50-day moving-average crossover and nothing else. It **inherits this Alpaca paper account** (0 positions, $100,023.49 at handover). |
 | Why Run 3 stopped | The rolling OOS metric scored most of its population backwards (fixed in #115), and champion-challenger had been promoting/reverting weights on that number — so the live policy was mutating on a broken reading. Raw scorecard rows stay valid and re-read correctly under the fix. |
 | Why Run 4 was cancelled | It would have spent 60 trading days generating data from an instrument already judged untrustworthy. The frozen-baseline config was sound, but a clean read from code you have stopped trusting is still a read you will not act on. |
-| Equity, final | **$100,023.49** paper, all cash. Net **+$23.49** on $100,000 across three runs and fourteen months. |
+| Equity, final | **$100,023.49** paper, all cash. Net **+$23.49** on $100,000 across three runs spanning 2026-05-18 to 2026-08-07 (82 calendar days). |
 
 ⚠️ **Exactly one system may trade this account.** Both VS1 and VS2 read
 positions from the broker rather than from their own ledger

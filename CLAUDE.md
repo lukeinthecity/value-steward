@@ -8,7 +8,8 @@ auditable, and maintainable** — not merely functional.
 > 🏁 **Retired from trading 2026-08-07.** `trading_enabled=false`,
 > `force_no_trade=true`, and the trading cron jobs are removed. Only the
 > world-context pipeline still runs. The successor is **Value Steward 2** at
-> `/home/lukes/value-steward-2`. Read `docs/SESSION_BRIEF.md` for the handover,
+> `/home/lukes/value-steward-2` (`github.com/lukeinthecity/value-steward-mk-ii`).
+> Read `docs/SESSION_BRIEF.md` for the handover,
 > and `docs/VS1_MECHANISM_NOTES.md` **in the VS2 repo** for what this system
 > taught about structuring mechanisms.
 >

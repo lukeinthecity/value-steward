@@ -41,7 +41,7 @@ measurement reasons rather than for results, and the accumulated judgment was
 that the machinery had outrun the evidence beyond what one more run could
 settle.
 
-The successor is **Value Steward 2** (`github.com/lukeinthecity/value-steward-2`),
+The successor is **Value Steward mk II** (`github.com/lukeinthecity/value-steward-mk-ii`),
 built around a 50-day moving-average crossover and nothing else, inheriting
 this system's paper account. What this backlog and this repository are now
 useful for is recorded in `docs/VS1_MECHANISM_NOTES.md` there: each mechanism,

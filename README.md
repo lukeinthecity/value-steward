@@ -6,22 +6,22 @@
 
 Value Steward is an automated trading agent that ranks assets by momentum, volatility, and drawdown, sizes positions within hard risk limits, and learns from the forward returns of its own past decisions — including the trades it chose *not* to make. It pairs a news-derived macro-context layer with a rule-based decision engine, and ran on a live paper-trading schedule from May 2026 to August 2026.
 
-> 🏁 **Status: retired from trading on 2026-08-07, after three runs.**
-> Across fourteen months it never produced a readable answer about whether its
-> strategy worked. Runs 2 and 3 were both ended for faults in the measurement
-> rather than for results, and the planned run 4 was cancelled rather than
-> started. Final paper equity was $100,023.49 on $100,000.
+> 🏁 **Status: retired from trading on 2026-08-07, after three runs**
+> (2026-05-18 to 2026-08-07, 82 calendar days). It never produced a readable
+> answer about whether its strategy worked. Runs 2 and 3 were both ended for
+> faults in the measurement rather than for results, and the planned run 4 was
+> cancelled rather than started. Final paper equity was $100,023.49 on $100,000.
 >
-> The successor is [**Value Steward 2**](https://github.com/lukeinthecity/value-steward-2),
+> The successor is [**Value Steward mk II**](https://github.com/lukeinthecity/value-steward-mk-ii),
 > which is built around a 50-day moving-average crossover and nothing else, and
 > which inherits this system's paper account. The most useful thing to come out
 > of this repository is the write-up of how each of its mechanisms was
 > structured and how each one failed — see
-> [`VS1_MECHANISM_NOTES.md`](https://github.com/lukeinthecity/value-steward-2/blob/main/docs/VS1_MECHANISM_NOTES.md)
+> [`VS1_MECHANISM_NOTES.md`](https://github.com/lukeinthecity/value-steward-mk-ii/blob/main/docs/VS1_MECHANISM_NOTES.md)
 > in that repository.
 >
 > The world-context pipeline still runs, because it contacts no broker and
-> builds the dataset VS2 needs later.
+> builds the dataset the successor needs later.
 
 > ⚠️ **Paper trading only.**
 > Value Steward was a personal engineering + machine-learning learning project
