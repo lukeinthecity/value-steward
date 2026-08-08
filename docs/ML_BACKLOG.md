@@ -48,8 +48,9 @@ useful for is recorded in `docs/VS1_MECHANISM_NOTES.md` there: each mechanism,
 what it was for, what happened to it, and the structural rule that follows.
 
 **Final state.** Paper equity $100,023.49, all cash, net +$23.49 on $100,000
-across three runs. 214 scorecard rows total (56 / 83 / 75), roughly 130 unique
-decisions after accounting for 4× intraday-slot duplication. Trading cron jobs
+across three runs. 214 scorecard rows total (56 / 83 / 75), collapsing to 104
+unique decisions (29 / 45 / 30) once keyed on `(symbol, entry_date)` to remove
+intraday-slot duplication. Trading cron jobs
 removed, `trading_enabled=false`, `force_no_trade=true`. The world-context
 pipeline continues to run; it contacts no broker.
 
