@@ -65,17 +65,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.8.0",
-    "globals": "^17.8.0",
+    "eslint": "^10.8.1",
+    "globals": "^17.9.0",
     "prettier": "^3.9.6"
   },
   "dependencies": {
-    "@google/genai": "^2.15.0",
+    "@google/genai": "^2.16.0",
     "@massive.com/client-js": "^10.7.0",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.4.2",
     "jsdom": "^30.0.1",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.0.5",
     "rss-parser": "^3.13.0",
     "sqlite3": "^6.0.1"
   }
