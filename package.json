@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
-    "@massive.com/client-js": "^10.7.0",
+    "@massive.com/client-js": "^10.8.0",
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^17.4.2",
     "jsdom": "^30.0.1",
